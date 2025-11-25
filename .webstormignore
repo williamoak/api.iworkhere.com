@@ -1,0 +1,26 @@
+# Backend dependencies & build output
+node_modules/
+dist/
+build/
+.cache/
+.temp/
+.tmp/
+
+# Server runtime data
+logs/
+*.log
+
+# Environment & secrets
+.env
+.env.*
+*.env
+
+# CockroachDB certs and mTLS keys
+cockroach/
+certs/
+*.crt
+*.key
+*.pem
+
+# JetBrains internal
+.idea/system/

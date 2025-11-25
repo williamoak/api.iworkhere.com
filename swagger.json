@@ -1,0 +1,177 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "API Documentation",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "helpers"
+    },
+    {
+      "name": "api"
+    },
+    {
+      "name": ""
+    },
+    {
+      "name": "health"
+    }
+  ],
+  "paths": {
+    "src/helpers/config.ts": {
+      "post": {
+        "summary": "Centralized environment configuration loader and accessor.",
+        "description": "*   Loads and merges .env files using a layered precedence model:",
+        "tags": [
+          "helpers"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "src/loaders/routeLoader.ts": {
+      "post": {
+        "summary": "Recursively loads API routes from src/routes/v1 and registers them with Express.",
+        "description": "*   This loader:",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "src/types/health.ts": {
+      "post": {
+        "summary": "Shared TypeScript interfaces for health endpoints.",
+        "description": "*   Standard response shape for all health check endpoints.",
+        "tags": [
+          ""
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "src/routes/v1/health/GET.ts": {
+      "post": {
+        "summary": "Health index, schema listing, and aggregator (standardized format).",
+        "description": "*   Behaviors:",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "src/routes/v1/health/api/GET.ts": {
+      "post": {
+        "summary": "API-only health check (standard health format).",
+        "description": "*   Returns basic health information about the API server,",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "GET /v1/health/memory": {
+      "post": {
+        "summary": "Returns Node.js process memory metrics and system memory metrics.",
+        "description": "*   Provides standardized health information about both the Node.js process",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "src/server.ts": {
+      "post": {
+        "summary": "HTTPS API server (TLS-only). Internal requests use Undici dispatcher.",
+        "description": "*   Provides:",
+        "tags": [
+          "api"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
