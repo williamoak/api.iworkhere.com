@@ -1,7 +1,8 @@
-import { describe, it, expect } from "@jest/globals";
-import { emptyWarframe, toWarframeDTO } from "@src/dto/warframe.ts";
+import { describe, it, expect } from "vitest";
+import { emptyWarframe, toWarframeDTO } from "@src/dto/warframe";
 
 describe("Warframe DTO", () => {
+
     describe("emptyWarframe()", () => {
         it("returns a fully initialized empty DTO", () => {
             const dto = emptyWarframe();

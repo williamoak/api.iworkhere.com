@@ -189,3 +189,9 @@ export default async function handler(
         return res.status(500).json(failure);
     }
 }
+
+export const __test__ = {
+    normalizeNodeBuildInfo,
+    extractVersion,
+    isInternalInvocation
+};

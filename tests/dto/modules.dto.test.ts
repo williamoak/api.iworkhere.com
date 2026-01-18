@@ -1,7 +1,8 @@
-import { describe, it, expect } from "@jest/globals";
-import { emptyModule, toModuleDTO } from "@src/dto/module.ts";
+import { describe, it, expect } from "vitest";
+import { emptyModule, toModuleDTO } from "@src/dto/module";
 
 describe("Module DTO", () => {
+
     describe("emptyModule()", () => {
         it("returns a fully initialized empty DTO", () => {
             const dto = emptyModule();

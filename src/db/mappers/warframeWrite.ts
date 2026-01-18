@@ -57,46 +57,46 @@ export function toWarframeWrite(input: WarframeWriteInput) {
         ...rest
     } = input as any;
 
-    return {
-        ...rest,
+    const result: any = { ...rest };
 
-        baseHealth: base_health,
-        effectiveHealth: effective_health,
-        baseShield: base_shield,
-        effectiveShield: effective_shield,
-        baseArmour: base_armour,
-        effectiveArmour: effective_armour,
-        baseEnergy: base_energy,
-        effectiveEnergy: effective_energy,
+    if (base_health !== undefined) result.baseHealth = base_health;
+    if (effective_health !== undefined) result.effectiveHealth = effective_health;
+    if (base_shield !== undefined) result.baseShield = base_shield;
+    if (effective_shield !== undefined) result.effectiveShield = effective_shield;
+    if (base_armour !== undefined) result.baseArmour = base_armour;
+    if (effective_armour !== undefined) result.effectiveArmour = effective_armour;
+    if (base_energy !== undefined) result.baseEnergy = base_energy;
+    if (effective_energy !== undefined) result.effectiveEnergy = effective_energy;
 
-        baseAbilityStrength: base_ability_strength,
-        effectiveAbilityStrength: effective_ability_strength,
-        baseRange: base_range,
-        effectiveRange: effective_range,
-        baseDuration: base_duration,
-        effectiveDuration: effective_duration,
-        baseAbilityEfficiency: base_ability_efficiency,
-        effectiveAbilityEfficiency: effective_ability_efficiency,
-        baseSprintSpeed: base_sprint_speed,
-        effectiveSprintSpeed: effective_sprint_speed,
-        baseCapacity: base_capacity,
-        effectiveCapacity: effective_capacity,
+    if (base_ability_strength !== undefined) result.baseAbilityStrength = base_ability_strength;
+    if (effective_ability_strength !== undefined) result.effectiveAbilityStrength = effective_ability_strength;
+    if (base_range !== undefined) result.baseRange = base_range;
+    if (effective_range !== undefined) result.effectiveRange = effective_range;
+    if (base_duration !== undefined) result.baseDuration = base_duration;
+    if (effective_duration !== undefined) result.effectiveDuration = effective_duration;
+    if (base_ability_efficiency !== undefined) result.baseAbilityEfficiency = base_ability_efficiency;
+    if (effective_ability_efficiency !== undefined) result.effectiveAbilityEfficiency = effective_ability_efficiency;
+    if (base_sprint_speed !== undefined) result.baseSprintSpeed = base_sprint_speed;
+    if (effective_sprint_speed !== undefined) result.effectiveSprintSpeed = effective_sprint_speed;
+    if (base_capacity !== undefined) result.baseCapacity = base_capacity;
+    if (effective_capacity !== undefined) result.effectiveCapacity = effective_capacity;
 
-        maxPassives: max_passives,
-        currentPassives: current_passives,
-        maxAbilities: max_abilities,
-        currentAbilities: current_abilities,
-        maxMods: max_mods,
-        currentMods: current_mods,
-        maxAuraMods: max_aura_mods,
-        currentAuraMods: current_aura_mods,
-        maxExilusMods: max_exilus_mods,
-        currentExilusMods: current_exilus_mods,
-        maxArcanes: max_arcanes,
-        currentArcanes: current_arcanes,
-        maxShards: max_shards,
-        currentShards: current_shards,
+    if (max_passives !== undefined) result.maxPassives = max_passives;
+    if (current_passives !== undefined) result.currentPassives = current_passives;
+    if (max_abilities !== undefined) result.maxAbilities = max_abilities;
+    if (current_abilities !== undefined) result.currentAbilities = current_abilities;
+    if (max_mods !== undefined) result.maxMods = max_mods;
+    if (current_mods !== undefined) result.currentMods = current_mods;
+    if (max_aura_mods !== undefined) result.maxAuraMods = max_aura_mods;
+    if (current_aura_mods !== undefined) result.currentAuraMods = current_aura_mods;
+    if (max_exilus_mods !== undefined) result.maxExilusMods = max_exilus_mods;
+    if (current_exilus_mods !== undefined) result.currentExilusMods = current_exilus_mods;
+    if (max_arcanes !== undefined) result.maxArcanes = max_arcanes;
+    if (current_arcanes !== undefined) result.currentArcanes = current_arcanes;
+    if (max_shards !== undefined) result.maxShards = max_shards;
+    if (current_shards !== undefined) result.currentShards = current_shards;
 
-        weaponsLoadout: weapons_loadout,
-    };
+    if (weapons_loadout !== undefined) result.weaponsLoadout = weapons_loadout;
+
+    return result;
 }

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "@jest/globals";
-import { overlayDto } from "@src/dto/dtoOverlay.ts";
+import { describe, it, expect } from "vitest";
+import { overlayDto } from "@src/dto/dtoOverlay";
 
 describe("overlayDto", () => {
     const emptyFactory = () => ({

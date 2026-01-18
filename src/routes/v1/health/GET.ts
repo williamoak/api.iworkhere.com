@@ -289,3 +289,10 @@ export default async function handler(req: Request) {
         data: { endpoints }
     };
 }
+
+export const __test__ = {
+    generateSchemaFromValue,
+    getHealthNode,
+    listChildEndpoints,
+    executeChildHealth
+};

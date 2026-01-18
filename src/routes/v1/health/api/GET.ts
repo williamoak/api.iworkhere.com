@@ -84,3 +84,7 @@ export default async function handler(
     //
     return res.json(response);
 }
+
+export const __test__ = {
+    isInternalInvocation
+};

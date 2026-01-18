@@ -7,8 +7,10 @@
     "dev": "tsx src/start.ts",
     "build": "tsc",
     "start": "node dist/start.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "swagger:gen": "tsx src/helpers/swaggerGen.ts"
+    "swagger:gen": "tsx src/helpers/swaggerGen.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -21,18 +23,20 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
-    "@swc/jest": "^0.2.39",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.3",
     "@types/pg": "^8.16.0",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/ui": "^4.0.17",
     "drizzle-kit": "^0.31.8",
-    "jest": "^30.2.0",
+    "mock-fs": "^5.5.0",
     "ts-jest": "^29.4.6",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "vitest": "^4.0.17"
   }
 }

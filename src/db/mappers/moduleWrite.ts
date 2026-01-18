@@ -15,21 +15,20 @@ type ModuleWriteInput = ModuleInsertInput | ModuleUpdateInput;
 export function toModuleWrite(input: ModuleWriteInput) {
     const {
         mod_id,
-
         slot_type,
         max_rank,
         current_rank,
         rank_upgrades,
-
         ...rest
     } = input as any;
 
-    return {
-        ...rest,
+    const result: any = { ...rest };
 
-        slotType: slot_type,
-        maxRank: max_rank,
-        currentRank: current_rank,
-        rankUpgrades: rank_upgrades,
-    };
+    if (slot_type !== undefined) result.slotType = slot_type;
+    if (max_rank !== undefined) result.maxRank = max_rank;
+    if (current_rank !== undefined) result.currentRank = current_rank;
+    if (rank_upgrades !== undefined) result.rankUpgrades = rank_upgrades;
+
+    return result;
 }
+

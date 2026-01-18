@@ -83,10 +83,6 @@ import { cacheMiddleware } from "@middleware/cacheMiddleware";
 import { throttleMiddleware } from "@middleware/throttleMiddleware";
 import { Application, Request, Response, NextFunction } from "express";
 
-const MAX_CONCURRENT_REQUESTS = Number(
-    configGet("MAX_CONCURRENT_REQUESTS") ?? "10"
-);
-
 // Supported method filenames
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"] as const;
 const METHOD_FILES = HTTP_METHODS.map((m) => `${m}.ts`);
@@ -116,6 +112,11 @@ export async function loadRoutes(app: Application): Promise<void> {
     app.locals.routeTree = routeTree;
 
     const API_VERSION = configGet("API_VERSION") ?? "v1";
+
+    const MAX_CONCURRENT_REQUESTS = Number(
+        configGet("MAX_CONCURRENT_REQUESTS") ?? "10"
+    );
+
     const baseDir = path.join(
         process.cwd(),
         "src",
@@ -125,7 +126,7 @@ export async function loadRoutes(app: Application): Promise<void> {
 
     await scanDirectory(baseDir, `/${API_VERSION}`, routeTree);
 
-    bindExpress(app, routeTree);
+    bindExpress(app, routeTree,MAX_CONCURRENT_REQUESTS);
 
     const routeCount = Object.keys(routeTree).length;
     console.log(`RouteLoader: Registered ${routeCount} routes`);
@@ -204,7 +205,8 @@ async function scanDirectory(
  */
 function bindExpress(
     app: Application,
-    routeTree: Record<string, RouteNode>
+    routeTree: Record<string, RouteNode>,
+    maxConcurrentRequests: number
 ): void {
 
     // Sort routes by path depth: shallow → deep (ensures correct override behavior)
@@ -234,7 +236,7 @@ function bindExpress(
                 validator.request,
 
                 // 2. Concurrency throttling (before cache / DB)
-                throttleMiddleware(MAX_CONCURRENT_REQUESTS),
+                throttleMiddleware(maxConcurrentRequests),
 
                 // 3. Centralized cache enforcement (method-aware)
                 cacheMiddleware(),
@@ -288,3 +290,8 @@ function register405(
         });
     });
 }
+
+export const __test__ = {
+    scanDirectory,
+    bindExpress,
+};

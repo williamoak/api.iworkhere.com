@@ -1,7 +1,8 @@
-import { describe, it, expect } from "@jest/globals";
-import { emptyWeapon, toWeaponDTO } from "@src/dto/weapon.ts";
+import { describe, it, expect } from "vitest";
+import { emptyWeapon, toWeaponDTO } from "@src/dto/weapon";
 
 describe("Weapon DTO", () => {
+
     describe("emptyWeapon()", () => {
         it("returns a fully initialized empty DTO", () => {
             const dto = emptyWeapon();

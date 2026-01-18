@@ -71,6 +71,10 @@ const OUTPUT_FILE = path.join(PROJECT_ROOT, "swagger.json");
 // Helpers
 // ---------------------------------------------------------------------------
 
+// NOTE:
+// getAllTSFiles() is intentionally excluded from unit tests.
+// It performs real filesystem traversal and is only used by the CLI runner.
+// Covered indirectly via integration usage.
 function getAllTSFiles(dir: string): string[] {
     let list: string[] = [];
 
@@ -110,8 +114,7 @@ function getSingleLineTag(raw: string, label: string): string {
 
 function getBlockTag(raw: string, label: string): string | null {
     const r = new RegExp(
-        `@${label}\\s*([\\s\\S]*?)(?=\\n\\s*\\*\\s*@\\w+|$)`,
-        "m"
+        `@${label}[\\s\\r\\n]*([\\s\\S]*?)(?=\\n\\s*\\*\\s*@\\w+|\\n\\s*\\*/|$)`
     );
 
     const m = raw.match(r);
@@ -317,4 +320,20 @@ function run() {
     console.log(`✅ Swagger file written to: ${OUTPUT_FILE}`);
 }
 
-run();
+if (import.meta.url === `file://${process.argv[1]}`) {
+    run();
+}
+
+// At bottom of swaggerGen.ts
+export const __test__ = {
+    extractDocBlock,
+    hasExternalMarker,
+    getSingleLineTag,
+    getBlockTag,
+    inferHttpMethodFromFile,
+    derivePathFromFile,
+    normalizePath,
+    extractJsonObject,
+    buildQueryParameters,
+    convertToSwagger,
+};
