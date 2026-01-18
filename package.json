@@ -1,39 +1,38 @@
 {
   "name": "api.iworkhere.com",
-  "version": "1.0.0",
+  "private": true,
+  "version": "0.0.0",
   "type": "module",
-
   "scripts": {
-    "dev": "nodemon --watch src --ext ts,js,json --exec \"tsx -r tsconfig-paths/register src/server.ts\"",
+    "dev": "tsx src/start.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
-    "swaggerGen": "tsx -r tsconfig-paths/register ./src/helpers/swaggerGen.ts",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "start": "node dist/start.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "swagger:gen": "tsx src/helpers/swaggerGen.ts"
   },
-
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
     "pg": "^8.16.3",
-    "undici": "^7.16.0"
+    "swagger-ui-express": "^5.0.1",
+    "undici": "^7.16.0",
+    "zod": "^4.3.5"
   },
-
   "devDependencies": {
+    "@swc/jest": "^0.2.39",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.5",
-    "@types/node": "^24.10.1",
-    "@types/pg": "^8.15.6",
-    "@types/supertest": "^6.0.3",
-    "@vitest/coverage-v8": "^4.0.13",
-    "@vitest/ui": "^4.0.13",
-    "nodemon": "^3.1.11",
-    "supertest": "^7.1.4",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.0.13"
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.3",
+    "@types/pg": "^8.16.0",
+    "@types/swagger-ui-express": "^4.1.8",
+    "drizzle-kit": "^0.31.8",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.2.2"
   }
 }

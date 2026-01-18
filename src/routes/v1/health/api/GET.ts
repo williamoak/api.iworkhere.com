@@ -1,42 +1,86 @@
 /**
+ * @myDocBlock v2.2
  * @file GET.ts
- * @external none
+ * @external
  * @module HealthApi
  * @tag health
- * @version 2.0.0
- * @path src/routes/v1/health/api/GET.ts
- * @summary API-only health check (standard health format).
+ * @version 3.0.0
+ * @path /v1/health/api
+ * @summary Basic API server health check (uptime only).
  * @description
- *   Returns basic health information about the API server,
- *   using the NEW standard health shape:
+ *   Provides a minimal API health endpoint reporting process uptime.
  *
+ *   Supports dual-mode execution:
+ *     1) Internal invocation by the /v1/health aggregator
+ *     2) External HTTP invocation via Express
+ *
+ *   Internal mode:
+ *     - Handler returns a HealthResponse object directly
+ *
+ *   External mode:
+ *     - Handler responds via res.json(HealthResponse)
+ *
+ * @query
+ *   {}
+ *
+ * @requestExample
  *   {
- *     status: "ok" | "warn" | "fail",
- *     name:   string,
- *     data:   object
+ *     "method": "GET",
+ *     "url": "/v1/health/api"
  *   }
  *
- * @requestExample none
  * @response
- * {
- *   "status": "ok",
- *   "name": "api",
- *   "data": {
- *     "uptime": 123.45
+ *   {
+ *     "status": "ok",
+ *     "name": "api",
+ *     "data": {
+ *       "uptime": 123.45
+ *     }
  *   }
- * }
- * @requires none
+ *
+ * @requires
+ *   {
+ *     "runtime": [
+ *       "process.uptime"
+ *     ]
+ *   }
+ *
+ * @author william.r.oak@gmail.com
  */
 
 import { Request, Response } from "express";
 import { HealthResponse } from "@models/health";
 
-export default async function handler(req: Request, res: Response): Promise<HealthResponse> {
-    return {
+/**
+ * Detect internal invocation:
+ *   - fakeRes from the aggregator does NOT include json()
+ */
+function isInternalInvocation(res: Response): boolean {
+    return typeof (res as any).json !== "function";
+}
+
+export default async function handler(
+    _req: Request,
+    res: Response
+): Promise<HealthResponse | void | Response> {
+
+    const response: HealthResponse = {
         status: "ok",
         name: "api",
         data: {
             uptime: process.uptime()
         }
     };
+
+    //
+    // INTERNAL call (from /v1/health aggregator)
+    //
+    if (isInternalInvocation(res)) {
+        return response;
+    }
+
+    //
+    // EXTERNAL call (normal HTTP request)
+    //
+    return res.json(response);
 }

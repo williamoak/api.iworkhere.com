@@ -1,142 +1,233 @@
 /// <reference types="node" />
 /**
+ * @myDocBlock v2.2
  * @file GET.ts
- * @external none
+ * @external
+ * @author william.r.oak@gmail.com
  * @module HealthIndex
  * @tag health
- * @version 2.0.0
- * @path src/routes/v1/health/GET.ts
- * @summary Health index, schema listing, and aggregator (standardized format).
+ * @version 4.0.0
+ * @path /v1/health
+ * @summary Health index, schema enumerator, and aggregator using in-memory route metadata.
  * @description
- *   Behaviors:
+ *   Provides a dynamic health index endpoint with automatic runtime schema
+ *   generation for all child health endpoints.
  *
- *   1) GET /v1/health
- *        → Returns only endpoint names.
+ *   No Zod, no manual schemas, and no filesystem scanning are used. Instead,
+ *   child endpoints are executed once (in internal mode) and their returned
+ *   JSON structures are walked recursively to infer response schemas.
  *
- *   2) GET /v1/health?all
- *        → Returns endpoint names + schema.response shapes.
+ *   Resolution behavior:
  *
- *   3) GET /v1/health?complete
- *        → Executes each endpoint and returns live values using
- *          the standard health shape.
+ *     1) GET /v1/health
+ *          → Returns only child endpoint names.
+ *
+ *     2) GET /v1/health?all
+ *          → Executes each child endpoint ONCE and returns a generated
+ *            response-schema tree for each.
+ *
+ *     3) GET /v1/health?complete
+ *          → Executes all child endpoints and returns full health results.
+ *
+ * @query
+ *   {
+ *     "all": {
+ *       "type": "boolean",
+ *       "optional": true,
+ *       "description": "Generate and return response schema metadata for all child health endpoints"
+ *     },
+ *     "complete": {
+ *       "type": "boolean",
+ *       "optional": true,
+ *       "description": "Execute all child health endpoints and return full results"
+ *     }
+ *   }
+ *
+ * @requestExample
+ *   {
+ *     "method": "GET",
+ *     "url": "/v1/health?all"
+ *   }
+ *
+ * @response
+ *   {
+ *     "status": "ok",
+ *     "name": "health-index",
+ *     "data": {
+ *       "endpoints": [
+ *         {
+ *           "name": "api",
+ *           "responseSchema": {
+ *             "uptime": "number",
+ *             "status": "string"
+ *           }
+ *         },
+ *         {
+ *           "name": "database",
+ *           "responseSchema": {
+ *             "connected": "boolean",
+ *             "latency_ms": "number"
+ *           }
+ *         }
+ *       ]
+ *     }
+ *   }
+ *
+ * @requires
+ *   {
+ *     "inMemory": [
+ *       "req.app.locals.routeTree"
+ *     ]
+ *   }
+ *
  */
 
-import { Request } from "express";
-import fs from "fs";
-import path from "path";
-import { internalDispatcher } from "@src/server";
+import { Request, Response } from "express";
 import { HealthResponse } from "@models/health";
 
-// Base folder for health sub-endpoints
-const HEALTH_DIR = path.resolve("src/routes/v1/health");
+/* =============================================================================
+ *  Schema Generator
+ * =============================================================================
+ */
 
 /**
- * Returns list of endpoint folder names that contain a GET.ts handler.
+ * Recursively walk a value and return a type metadata tree.
+ *
+ * Example:
+ *   { uptime: 3.14, flags: ["x","y"], sys: { total: 1, used: 2 } }
+ *
+ * Produces:
+ *   {
+ *     uptime: "number",
+ *     flags: ["string"],
+ *     sys: { total: "number", used: "number" }
+ *   }
  */
-function getHealthEndpoints(): string[] {
-    return fs.readdirSync(HEALTH_DIR).filter((name) => {
-        const fullPath = path.join(HEALTH_DIR, name);
-        return (
-            fs.statSync(fullPath).isDirectory() &&
-            fs.existsSync(path.join(fullPath, "GET.ts"))
-        );
-    });
-}
+function generateSchemaFromValue(value: any): any {
+    if (value === null) return "null";
+    if (value === undefined) return "undefined";
 
-/**
- * Dynamic Zod schema loader for ?all.
- */
-async function loadEndpointSchema(name: string) {
-    const file = path.join(HEALTH_DIR, name, "GET.ts");
+    const t = typeof value;
 
-    try {
-        const mod = await import(`file://${file}`);
-
-        if (!mod.schema || !mod.schema.response) {
-            return null;
-        }
-
-        const z = mod.schema.response;
-
-        if (typeof z.describe === "function") {
-            return z.describe();
-        }
-
-        if (z._def) return z._def;
-
-        return null;
-    } catch {
-        return null;
+    if (t === "number" || t === "string" || t === "boolean") {
+        return t;
     }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            return ["unknown"]; // empty array → unknown element type
+        }
+        return [generateSchemaFromValue(value[0])];
+    }
+
+    if (t === "object") {
+        const shape: Record<string, any> = {};
+        for (const key of Object.keys(value)) {
+            shape[key] = generateSchemaFromValue(value[key]);
+        }
+        return shape;
+    }
+
+    return "unknown";
 }
 
-/**
- * Calls a health endpoint over internal HTTPS and ensures
- * the result is in standard HealthResponse shape.
+/* =============================================================================
+ *  RouteTree Access Helpers
+ * =============================================================================
  */
-async function callHealth(name: string): Promise<HealthResponse> {
-    const url = `https://api.iworkhere.com:4300/v1/health/${name}`;
+
+function getHealthNode(req: Request) {
+    const tree = req.app.locals.routeTree;
+    const node = tree["/v1/health"];
+
+    if (!node) {
+        throw new Error("HealthIndex: routeTree missing /v1/health node");
+    }
+
+    return node;
+}
+
+function listChildEndpoints(req: Request): string[] {
+    const node = getHealthNode(req);
+    return Object.keys(node.children);
+}
+
+/* =============================================================================
+ *  Execute Children (Internal Mode)
+ * =============================================================================
+ */
+
+async function executeChildHealth(
+    req: Request,
+    childName: string
+): Promise<HealthResponse> {
+    const node = getHealthNode(req);
+    const child = node.children[childName];
+
+    if (!child) {
+        return {
+            status: "fail",
+            name: childName,
+            data: { error: "Child endpoint not found" }
+        };
+    }
+
+    const handler = child.handlers.GET;
+
+    if (typeof handler !== "function") {
+        return {
+            status: "fail",
+            name: childName,
+            data: { error: "No GET handler for child endpoint" }
+        };
+    }
+
+    // Fake response object — triggers internal mode in child handlers
+    const fakeReq = Object.assign(Object.create(Object.getPrototypeOf(req)), req);
+    const fakeRes = {} as Response;
 
     try {
-        const res = await fetch(url, {
-            dispatcher: internalDispatcher
-        });
+        const result = await handler(fakeReq, fakeRes);
 
-        if (!res.ok) {
-            return {
-                status: "fail",
-                name,
-                data: {
-                    httpStatus: res.status,
-                    message: `HTTP ${res.status}`
-                }
-            };
-        }
-
-        const json: unknown = await res.json();
-
-        // Type guard for fully-formed HealthResponse
         if (
-            typeof json === "object" &&
-            json !== null &&
-            "status" in json &&
-            "name" in json &&
-            "data" in json &&
-            typeof (json as any).status === "string" &&
-            typeof (json as any).name === "string"
+            typeof result === "object" &&
+            result !== null &&
+            "status" in result &&
+            "name" in result &&
+            "data" in result
         ) {
-            return json as HealthResponse;   // <-- safe, validated narrowing
+            return result as HealthResponse;
         }
 
-        // Fallback: wrap older or untyped data
+        // Fallback: wrap non-standard result
         return {
             status: "ok",
-            name,
-            data: json
+            name: childName,
+            data: result
         };
     } catch (err: any) {
         return {
             status: "fail",
-            name,
-            data: {
-                error: err.message ?? "unknown error"
-            }
+            name: childName,
+            data: { error: err?.message ?? "unknown error" }
         };
     }
 }
 
-/**
- * Main handler.
+/* =============================================================================
+ *  Main Endpoint Handler
+ * =============================================================================
  */
+
 export default async function handler(req: Request) {
-    const endpoints = getHealthEndpoints();
+    const endpoints = listChildEndpoints(req);
 
     const hasAll = "all" in req.query;
     const hasComplete = "complete" in req.query;
 
-    //
-    // Case 1 — simple listing (unchanged)
-    //
+    // -------------------------------------------------------------------------
+    // Case 1 — only list endpoint names
+    // -------------------------------------------------------------------------
     if (!hasAll && !hasComplete) {
         return {
             status: "ok",
@@ -145,15 +236,24 @@ export default async function handler(req: Request) {
         };
     }
 
-    //
-    // Case 2 — ?all → list + schemas
-    //
+    // -------------------------------------------------------------------------
+    // Case 2 — ?all → generate schema metadata
+    // -------------------------------------------------------------------------
     if (hasAll) {
         const detailed: Array<{ name: string; responseSchema: any }> = [];
 
         for (const name of endpoints) {
-            const schema = await loadEndpointSchema(name);
-            detailed.push({ name, responseSchema: schema });
+            const exec = await executeChildHealth(req, name);
+
+            const schema =
+                exec && exec.data
+                    ? generateSchemaFromValue(exec.data)
+                    : null;
+
+            detailed.push({
+                name,
+                responseSchema: schema
+            });
         }
 
         return {
@@ -163,14 +263,14 @@ export default async function handler(req: Request) {
         };
     }
 
-    //
-    // Case 3 — ?complete → execute all health checks
-    //
+    // -------------------------------------------------------------------------
+    // Case 3 — ?complete → execute all health checks fully
+    // -------------------------------------------------------------------------
     if (hasComplete) {
         const results: Record<string, HealthResponse> = {};
 
         for (const name of endpoints) {
-            results[name] = await callHealth(name);
+            results[name] = await executeChildHealth(req, name);
         }
 
         return {
@@ -180,9 +280,9 @@ export default async function handler(req: Request) {
         };
     }
 
-    //
-    // Fallback (unreachable)
-    //
+    // -------------------------------------------------------------------------
+    // Fallback — should not occur
+    // -------------------------------------------------------------------------
     return {
         status: "ok",
         name: "health-index",

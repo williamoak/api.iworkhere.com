@@ -1,34 +1,80 @@
+/**
+ * Swagger/OpenAPI generator based on @myDocBlock v2.2 annotations.
+ *
+ * ---------------------------------------------------------------------------
+ * PUBLIC ENDPOINT RULE
+ * ---------------------------------------------------------------------------
+ * A docblock is PUBLIC if it contains `@external` anywhere.
+ * The value after @external is ignored.
+ *
+ * ---------------------------------------------------------------------------
+ * PATH RESOLUTION
+ * ---------------------------------------------------------------------------
+ * 1) If @path exists and starts with "/", it is used as-is.
+ * 2) Otherwise, the path is derived from the filesystem under src/routes.
+ *
+ * NOTE:
+ * - HTTP methods are NOT permitted in @path (v2.2 rule).
+ * - If @path is invalid, the endpoint is skipped.
+ *
+ * ---------------------------------------------------------------------------
+ * HTTP METHOD
+ * ---------------------------------------------------------------------------
+ * Inferred strictly from filename:
+ *   GET.ts     → get
+ *   POST.ts    → post
+ *   PUT.ts     → put
+ *   DELETE.ts  → delete
+ *   PATCH.ts   → patch
+ *
+ * ---------------------------------------------------------------------------
+ * QUERY PARAMETERS
+ * ---------------------------------------------------------------------------
+ * Parsed from @query as structured JSON and emitted as OpenAPI query params.
+ *
+ * ---------------------------------------------------------------------------
+ * SAFETY
+ * ---------------------------------------------------------------------------
+ * This file is a build/dev utility and MUST NOT be imported at runtime.
+ */
+
 import "tsconfig-paths/register";
 import fs from "fs";
 import path from "path";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 interface DocBlockData {
-    file: string;
-    external: string[] | null;
+    isExternal: boolean;
     module: string;
     tag: string;
     version: string;
-    path: string;
+    path: string | null;
     summary: string;
     description: string;
-    requestExample: any | null;
-    response: any | null;
-    requires: any | null;
     author: string;
+    query: string | null;
+    __sourceFile: string;
 }
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 const PROJECT_ROOT = process.cwd();
-const TARGET_DIRS = ["src", "api", "routes", "controllers"]; // adjust as needed
+const ROUTES_ROOT = path.join(PROJECT_ROOT, "src/routes");
 const OUTPUT_FILE = path.join(PROJECT_ROOT, "swagger.json");
 
-// -----------------------------------------------------------------------------
-// Helper: Recursively collect .ts files
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function getAllTSFiles(dir: string): string[] {
     let list: string[] = [];
-    const entries = fs.readdirSync(dir);
 
-    for (const entry of entries) {
+    for (const entry of fs.readdirSync(dir)) {
         const resolved = path.join(dir, entry);
         const stat = fs.statSync(resolved);
 
@@ -42,91 +88,174 @@ function getAllTSFiles(dir: string): string[] {
     return list;
 }
 
-// -----------------------------------------------------------------------------
-// Helper: Extract @myDocBlock from file contents
-// -----------------------------------------------------------------------------
 function extractDocBlock(content: string): string | null {
-    const regex = /\/\*\*([\s\S]*?)\*\//g;
-    const matches = [...content.matchAll(regex)];
+    const match = content.match(/\/\*\*([\s\S]*?)\*\//);
+    if (!match) return null;
 
-    if (matches.length === 0) return null;
-    return matches[0][1]; // return first docblock content
+    // Only accept @myDocBlock blocks
+    if (!match[1].includes("@myDocBlock")) return null;
+
+    return match[1];
 }
 
-// -----------------------------------------------------------------------------
-// Helper: Parse a single docblock
-// -----------------------------------------------------------------------------
-function parseDocBlock(raw: string): DocBlockData | null {
-    const get = (label: string) => {
-        const r = new RegExp(`@${label}\\s+([\\s\\S]*?)(?=\\n\\s*\\*\\s*@|$)`, "m");
-        const m = raw.match(r);
-        return m ? m[1].trim() : null;
-    };
+function hasExternalMarker(raw: string): boolean {
+    return /@external\b/.test(raw);
+}
 
-    const jsonParseSafe = (str: string | null) => {
-        if (!str) return null;
-        try {
-            return JSON.parse(str);
-        } catch (_) {
-            return null;
+function getSingleLineTag(raw: string, label: string): string {
+    const r = new RegExp(`@${label}\\s+([^\\n\\r*]+)`);
+    const m = raw.match(r);
+    return m ? m[1].trim() : "";
+}
+
+function getBlockTag(raw: string, label: string): string | null {
+    const r = new RegExp(
+        `@${label}\\s*([\\s\\S]*?)(?=\\n\\s*\\*\\s*@\\w+|$)`,
+        "m"
+    );
+
+    const m = raw.match(r);
+    if (!m) return null;
+
+    return m[1]
+        .split("\n")
+        .map(line => line.replace(/^\s*\*\s?/, ""))
+        .join("\n")
+        .trim() || null;
+}
+
+function inferHttpMethodFromFile(filePath: string): string | null {
+    const base = path.basename(filePath).toUpperCase();
+
+    if (base.startsWith("GET")) return "get";
+    if (base.startsWith("POST")) return "post";
+    if (base.startsWith("PUT")) return "put";
+    if (base.startsWith("DELETE")) return "delete";
+    if (base.startsWith("PATCH")) return "patch";
+
+    return null;
+}
+
+function derivePathFromFile(filePath: string): string | null {
+    if (!filePath.startsWith(ROUTES_ROOT)) return null;
+
+    const relative = filePath
+        .replace(ROUTES_ROOT, "")
+        .replace(/\\/g, "/")
+        .replace(/\/(GET|POST|PUT|DELETE|PATCH)\.ts$/, "");
+
+    return relative || "/";
+}
+
+function normalizePath(rawPath: string): string | null {
+    const trimmed = rawPath.trim();
+
+    // v2.2: path MUST be a pure URL path
+    if (!trimmed.startsWith("/")) return null;
+
+    return trimmed;
+}
+
+function extractJsonObject(raw: string, label: string): string | null {
+    const tagIndex = raw.indexOf(`@${label}`);
+    if (tagIndex === -1) return null;
+
+    const braceStart = raw.indexOf("{", tagIndex);
+    if (braceStart === -1) return null;
+
+    let depth = 0;
+    let i = braceStart;
+
+    for (; i < raw.length; i++) {
+        if (raw[i] === "{") depth++;
+        else if (raw[i] === "}") {
+            depth--;
+            if (depth === 0) {
+                return raw.slice(braceStart, i + 1);
+            }
         }
-    };
+    }
 
-    return {
-        file: get("file") || "",
-        external: jsonParseSafe(get("external")),
-        module: get("module") || "",
-        tag: get("tag") || "",
-        version: get("version") || "",
-        path: get("path")?.replace(/"/g, "") || "",
-        summary: get("summary") || "",
-        description: get("description") || "",
-        requestExample: jsonParseSafe(get("requestExample")),
-        response: jsonParseSafe(get("response")),
-        requires: jsonParseSafe(get("requires")),
-        author: get("author") || ""
-    };
+    return null;
 }
 
-// -----------------------------------------------------------------------------
-// Convert docblocks to Swagger paths
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Query handling
+// ---------------------------------------------------------------------------
+
+function buildQueryParameters(queryRaw: string | null) {
+    if (!queryRaw) return [];
+
+    const start = queryRaw.indexOf("{");
+    const end = queryRaw.lastIndexOf("}");
+
+    if (start === -1 || end === -1 || end <= start) {
+        return [];
+    }
+
+    const jsonText = queryRaw.slice(start, end + 1);
+
+    // ✅ NEW: remove JSDoc '*' prefixes
+    const sanitized = jsonText
+        .split("\n")
+        .map(line => line.replace(/^\s*\*\s?/, ""))
+        .join("\n")
+        .trim();
+
+    try {
+        const parsed = JSON.parse(sanitized);
+
+        return Object.entries(parsed).map(([name, def]: any) => ({
+            name,
+            in: "query",
+            required: def.required === true,
+            description: def.description || "",
+            schema: {
+                type: def.type || "string",
+                format: def.format,
+                default: def.default
+            }
+        }));
+    } catch (err) {
+        console.warn("⚠️  Invalid @query JSON, skipping:", err);
+        return [];
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Swagger conversion
+// ---------------------------------------------------------------------------
+
 function convertToSwagger(docblocks: DocBlockData[]) {
-    const paths: any = {};
-    const infoTags = new Set<string>();
+    const paths: Record<string, any> = {};
+    const tags = new Set<string>();
 
     for (const d of docblocks) {
-        if (!d.path || d.path === "none") continue;
+        if (!d.isExternal) continue;
 
-        infoTags.add(d.tag);
+        const method = inferHttpMethodFromFile(d.__sourceFile);
+        if (!method) continue;
 
-        paths[d.path] = {
-            post: {
-                summary: d.summary,
-                description: d.description,
-                tags: [d.tag],
-                requestBody: d.requestExample
-                    ? {
-                        required: true,
-                        content: {
-                            "application/json": {
-                                schema: { type: "object" },
-                                example: d.requestExample
-                            }
-                        }
-                    }
-                    : undefined,
-                responses: {
-                    200: {
-                        description: "Successful response",
-                        content: {
-                            "application/json": {
-                                schema: { type: "object" },
-                                example: d.response || {}
-                            }
-                        }
-                    }
-                }
+        const routePath =
+            d.path
+                ? normalizePath(d.path)
+                : derivePathFromFile(d.__sourceFile);
+
+        if (!routePath) continue;
+
+        tags.add(d.tag || "api");
+
+        paths[routePath] ??= {};
+        paths[routePath][method] = {
+            summary: d.summary,
+            description: d.description,
+            tags: [d.tag || "api"],
+            parameters: buildQueryParameters(d.query),
+            responses: {
+                200: { description: "Successful response" },
+                400: { description: "Bad request" },
+                409: { description: "Conflict" },
+                500: { description: "Internal server error" }
             }
         };
     }
@@ -137,44 +266,55 @@ function convertToSwagger(docblocks: DocBlockData[]) {
             title: "API Documentation",
             version: "1.0.0"
         },
-        tags: [...infoTags].map(tag => ({ name: tag })),
+        tags: [...tags].map(name => ({ name })),
         paths
     };
 }
 
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Main
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
 function run() {
-    console.log("🔍 Scanning project for @myDocBlock files...");
+    console.log("🔍 Scanning project for @myDocBlock v2.2 files...");
 
-    const allFiles = TARGET_DIRS
-        .map(d => path.join(PROJECT_ROOT, d))
-        .filter(fs.existsSync)
-        .flatMap(dir => getAllTSFiles(dir));
+    const files = getAllTSFiles(path.join(PROJECT_ROOT, "src"));
+    const parsed: DocBlockData[] = [];
 
-    const results: DocBlockData[] = [];
+    for (const file of files) {
+        const raw = extractDocBlock(fs.readFileSync(file, "utf8"));
+        if (!raw) continue;
 
-    for (const file of allFiles) {
-        const content = fs.readFileSync(file, "utf8");
-        const rawBlock = extractDocBlock(content);
+        parsed.push({
+            isExternal: hasExternalMarker(raw),
+            module: getSingleLineTag(raw, "module"),
+            tag: getSingleLineTag(raw, "tag"),
+            version: getSingleLineTag(raw, "version"),
+            path: getSingleLineTag(raw, "path") || null,
+            summary: getSingleLineTag(raw, "summary"),
+            description: getBlockTag(raw, "description") || "",
+            author: getSingleLineTag(raw, "author"),
+            query: extractJsonObject(raw, "query"),
+            __sourceFile: file
+        });
+    }
 
-        if (!rawBlock) continue;
+    console.log(`📦 Parsed ${parsed.length} @myDocBlock(s).`);
 
-        const parsed = parseDocBlock(rawBlock);
-        if (parsed) {
-            results.push(parsed);
-            console.log(`✔ Found docblock in ${file}`);
+    const swagger = convertToSwagger(parsed);
+
+    console.log("\n🌐 Public API endpoints exposed:");
+    let routes = 0;
+    for (const [route, methods] of Object.entries(swagger.paths)) {
+        for (const m of Object.keys(methods)) {
+            console.log(`  ${m.toUpperCase()} ${route}`);
+            routes++;
         }
     }
 
-    console.log(`📦 Extracted ${results.length} docblocks.`);
-
-    const swagger = convertToSwagger(results);
-
     fs.writeFileSync(OUTPUT_FILE, JSON.stringify(swagger, null, 2));
-
-    console.log(`\n✅ Swagger file generated at: ${OUTPUT_FILE}`);
+    console.log(`\n✅ ${routes} external endpoint(s) generated.`);
+    console.log(`✅ Swagger file written to: ${OUTPUT_FILE}`);
 }
 
 run();

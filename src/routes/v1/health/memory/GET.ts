@@ -1,41 +1,75 @@
 /**
- * @myDocBlock v2.1
- * @file /v1/health/memory (GET)
- * @external none
+ * @myDocBlock v2.2
+ * @file GET.ts
+ * @external
  * @module health-memory
  * @tag health
- * @version 1.0.1 
- * @path GET /v1/health/memory
- * @summary Returns Node.js process memory metrics and system memory metrics.
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path /v1/health/memory
+ * @summary Memory health endpoint.
+ *
  * @description
- *   Provides standardized health information about both the Node.js process
- *   and the underlying operating system memory state. This endpoint is part of
- *   the v1 health suite and is included in the aggregator at /v1/health?complete.
+ *   Provides runtime memory usage information for both the Node.js process
+ *   and the underlying operating system.
+ *
+ *   External HTTP requests receive a structured JSON health response suitable
+ *   for health checks, diagnostics, and dashboards.
+ *
+ *   Internal invocations (such as health aggregators) receive the same object
+ *   directly as a return value, enabling efficient collection without HTTP
+ *   loopback.
+ *
+ * @query
+ *   {}
+ *
  * @requestExample
- *   GET /v1/health/memory
+ *   { "method": "GET", "url": "/v1/health/memory" }
+ *
  * @response
- *   The response follows the standardized HealthResponse shape:
- *     status: "ok" | "warn" | "fail"
- *     name: "memory"
- *     data: {
- *       process: { rss, heapTotal, heapUsed, external, arrayBuffers }
- *       system: { total, free, used }
+ *   {
+ *     "status": "ok",
+ *     "name": "memory",
+ *     "data": {
+ *       "process": {
+ *         "rss": 12345678,
+ *         "heapTotal": 12345678,
+ *         "heapUsed": 12345678,
+ *         "external": 12345678,
+ *         "arrayBuffers": 12345678
+ *       },
+ *       "system": {
+ *         "total": 12345678,
+ *         "free": 12345678,
+ *         "used": 12345678
+ *       }
  *     }
- * @requires
- *   - Node.js 20+
- *   - Express request/response objects
+ *   }
+ *
+ * @requires node:os
  */
 
 import os from "node:os";
 import type { Request, Response } from "express";
 import type { HealthResponse } from "@models/health";
 
-export default async function handler(req: Request, res: Response) {
+/**
+ * Detect internal invocation by the aggregator.
+ * The aggregator supplies a minimal fakeRes object without json().
+ */
+function isInternalInvocation(res: Response): boolean {
+    return typeof (res as any).json !== "function";
+}
+
+export default async function handler(
+    _req: Request,
+    res: Response
+): Promise<HealthResponse | void | Response> {
     const mem = process.memoryUsage();
     const systemTotal = os.totalmem();
     const systemFree = os.freemem();
 
-    const result: HealthResponse = {
+    const response: HealthResponse = {
         status: "ok",
         name: "memory",
         data: {
@@ -44,15 +78,25 @@ export default async function handler(req: Request, res: Response) {
                 heapTotal: mem.heapTotal,
                 heapUsed: mem.heapUsed,
                 external: mem.external,
-                arrayBuffers: mem.arrayBuffers,
+                arrayBuffers: mem.arrayBuffers
             },
             system: {
                 total: systemTotal,
                 free: systemFree,
-                used: systemTotal - systemFree,
-            },
-        },
+                used: systemTotal - systemFree
+            }
+        }
     };
 
-    res.json(result);
+    //
+    // INTERNAL call → return object directly
+    //
+    if (isInternalInvocation(res)) {
+        return response;
+    }
+
+    //
+    // EXTERNAL HTTP call → send JSON
+    //
+    return res.json(response);
 }

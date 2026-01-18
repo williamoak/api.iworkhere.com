@@ -1,7 +1,7 @@
 /**
  * @myDocBlock v2.1
  * @file /src/helpers/config.ts
- * @external none
+ * @internal
  * @module Config
  * @tag helpers
  * @version 1.0.2

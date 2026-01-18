@@ -6,169 +6,479 @@
   },
   "tags": [
     {
-      "name": "helpers"
-    },
-    {
-      "name": "api"
-    },
-    {
-      "name": ""
-    },
-    {
       "name": "health"
+    },
+    {
+      "name": "monitor"
+    },
+    {
+      "name": "modules"
+    },
+    {
+      "name": "warframes"
+    },
+    {
+      "name": "weapons"
     }
   ],
   "paths": {
-    "src/helpers/config.ts": {
-      "post": {
-        "summary": "Centralized environment configuration loader and accessor.",
-        "description": "*   Loads and merges .env files using a layered precedence model:",
-        "tags": [
-          "helpers"
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "src/loaders/routeLoader.ts": {
-      "post": {
-        "summary": "Recursively loads API routes from src/routes/v1 and registers them with Express.",
-        "description": "*   This loader:",
-        "tags": [
-          "api"
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "src/types/health.ts": {
-      "post": {
-        "summary": "Shared TypeScript interfaces for health endpoints.",
-        "description": "*   Standard response shape for all health check endpoints.",
-        "tags": [
-          ""
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "src/routes/v1/health/GET.ts": {
-      "post": {
-        "summary": "Health index, schema listing, and aggregator (standardized format).",
-        "description": "*   Behaviors:",
+    "/v1/health": {
+      "get": {
+        "summary": "Health index, schema enumerator, and aggregator using in-memory route metadata.",
+        "description": "Provides a dynamic health index endpoint with automatic runtime schema",
         "tags": [
           "health"
         ],
+        "parameters": [
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "Generate and return response schema metadata for all child health endpoints",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "complete",
+            "in": "query",
+            "required": false,
+            "description": "Execute all child health endpoints and return full results",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
-            }
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
     },
-    "src/routes/v1/health/api/GET.ts": {
-      "post": {
-        "summary": "API-only health check (standard health format).",
-        "description": "*   Returns basic health information about the API server,",
+    "/v1/health/api": {
+      "get": {
+        "summary": "Basic API server health check (uptime only).",
+        "description": "Provides a minimal API health endpoint reporting process uptime.",
         "tags": [
           "health"
         ],
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
-            }
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
     },
-    "GET /v1/health/memory": {
-      "post": {
-        "summary": "Returns Node.js process memory metrics and system memory metrics.",
-        "description": "*   Provides standardized health information about both the Node.js process",
+    "/v1/health/database": {
+      "get": {
+        "summary": "CockroachDB health check for latency, version, and build metadata.",
+        "description": "Provides a CockroachDB health endpoint reporting SQL latency, build metadata,",
         "tags": [
           "health"
         ],
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
-            }
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
     },
-    "src/server.ts": {
-      "post": {
-        "summary": "HTTPS API server (TLS-only). Internal requests use Undici dispatcher.",
-        "description": "*   Provides:",
+    "/v1/health/memory": {
+      "get": {
+        "summary": "Memory health endpoint.",
+        "description": "Provides runtime memory usage information for both the Node.js process",
         "tags": [
-          "api"
+          "health"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/monitor": {
+      "get": {
+        "summary": "Basic monitor endpoint returning an OK status.",
+        "description": "Provides a minimal monitoring signal indicating that the API process",
+        "tags": [
+          "monitor"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/monitor/network": {
+      "get": {
+        "summary": "Network monitoring stub endpoint.",
+        "description": "Provides a minimal network monitoring endpoint that confirms the API",
+        "tags": [
+          "monitor"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/warframe/modules": {
+      "delete": {
+        "summary": "Delete a module by mod_id.",
+        "description": "Deletes a single Warframe module identified by the required mod_id",
+        "tags": [
+          "modules"
+        ],
+        "parameters": [
+          {
+            "name": "mod_id",
+            "in": "query",
+            "required": true,
+            "description": "Unique identifier of the module to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                },
-                "example": {}
-              }
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Retrieve module list and optionally resolve a single module.",
+        "description": "Returns a stable response containing:",
+        "tags": [
+          "modules"
+        ],
+        "parameters": [
+          {
+            "name": "mod_id",
+            "in": "query",
+            "required": false,
+            "description": "Module identifiers to resolve; first match wins",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Exact module name to resolve if no mod_id is supplied",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Insert or update a Warframe module.",
+        "description": "Performs a deterministic upsert-style operation on modules using",
+        "tags": [
+          "modules"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/warframe/warframes": {
+      "delete": {
+        "summary": "Delete a warframe by warframe_id.",
+        "description": "Deletes a single warframe identified by the required warframe_id",
+        "tags": [
+          "warframes"
+        ],
+        "parameters": [
+          {
+            "name": "warframe_id",
+            "in": "query",
+            "required": true,
+            "description": "Unique identifier of the warframe to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Retrieve warframe list and optionally resolve a single warframe.",
+        "description": "Returns a stable response containing:",
+        "tags": [
+          "warframes"
+        ],
+        "parameters": [
+          {
+            "name": "warframe_id",
+            "in": "query",
+            "required": false,
+            "description": "Warframe identifiers to resolve; first match wins",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Insert or update a warframe.",
+        "description": "Performs a deterministic insert-or-update operation using the following",
+        "tags": [
+          "warframes"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/warframe/weapons": {
+      "delete": {
+        "summary": "Delete a weapon by weapon_id.",
+        "description": "Deletes a single weapon identified by the required weapon_id",
+        "tags": [
+          "weapons"
+        ],
+        "parameters": [
+          {
+            "name": "weapon_id",
+            "in": "query",
+            "required": true,
+            "description": "Unique identifier of the weapon to delete",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Retrieve weapon list and optionally resolve a single weapon.",
+        "description": "Returns a stable response containing:",
+        "tags": [
+          "weapons"
+        ],
+        "parameters": [
+          {
+            "name": "weapon_id",
+            "in": "query",
+            "required": false,
+            "description": "Weapon identifiers to resolve; first match wins",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Exact weapon name to resolve",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "class",
+            "in": "query",
+            "required": false,
+            "description": "Weapon class used when resolving by name",
+            "schema": {
+              "type": "string",
+              "default": "normal"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Insert or update a weapon.",
+        "description": "Performs a deterministic insert-or-update operation using the following",
+        "tags": [
+          "weapons"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }

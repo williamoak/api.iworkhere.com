@@ -1,130 +1,56 @@
 /**
  * @file server.ts
- * @external none
+ * @internal
  * @module Server
  * @tag api
- * @version 1.3.1
+ * @version 2.0.0
  * @path src/server.ts
- * @summary HTTPS API server (TLS-only). Internal requests use Undici dispatcher.
+ * @summary HTTP API server (behind nginx TLS termination). Internal traffic is HTTP-only.
  * @description
  *   Provides:
- *     - HTTPS Express server using server-side TLS only.
- *     - Internal HTTPS fetch via Undici dispatcher (mTLS not required externally).
- *     - Automatic hostname discovery from TLS certificate (SAN > CN).
- *     - Automatic CockroachDB mTLS detection.
- *     - Dynamic route loading from src/routes/v1/**.
+ *     - Plain HTTP Express server intended to run behind nginx reverse proxy.
+ *     - nginx performs all public HTTPS termination; Node never serves TLS directly.
+ *     - Dynamic route loading via appFactory and src/routes/v1/**.
+ *     - CockroachDB connectivity verification before startup.
  *
- * @requestExample none
- * @response none
- * @requires src/loaders/routeLoader.ts
+ * @requestExample
+ *   {
+ *     "method": "GET",
+ *     "url": "https://api.iworkhere.com/v1/health",
+ *     "headers": {
+ *       "Accept": "application/json"
+ *     }
+ *   }
+ *
+ * @response
+ *   {
+ *     "service": "api.iworkhere.com",
+ *     "status": "ok",
+ *     "uptime": 12345,
+ *     "timestamp": "2025-01-01T12:00:00.000Z"
+ *   }
+ *
+ * @requires
+ *   {
+ *     "modules": [
+ *       "src/appFactory.ts",
+ *       "src/services/dbService.ts",
+ *       "src/loaders/routeLoader.ts"
+ *     ]
+ *   }
  */
 
 import "tsconfig-paths/register";
 import "@helpers/config";
 
-import fs from "fs";
-import https from "https";
-import { Agent as UndiciAgent } from "undici";
-
-import { createBaseApp } from "@src/appFactory";
+import http from "http";
 import { configGet } from "@helpers/config";
-import { verifyConnection, db } from "@services/dbService";
+import { createBaseApp } from "@src/appFactory";
+import { verifyConnection } from "@services/dbService";
+import { loadSwagger } from "@loaders/swagger";
 
 // ---------------------------------------------------------------------------
-// Environment & paths
-// ---------------------------------------------------------------------------
-
-const API_CERT_DIR = configGet("API_CERT_DIR");
-const ROOT_CA_CERT = configGet("ROOT_CA_CERT");
-
-// ---------------------------------------------------------------------------
-// HTTPS server certificate loader
-// ---------------------------------------------------------------------------
-
-function loadHttpsOptions() {
-    const keyFile = `${API_CERT_DIR}/api.iworkhere.com.key`;
-    const crtFile = `${API_CERT_DIR}/api.iworkhere.com.crt`;
-
-    return {
-        cert: fs.readFileSync(crtFile),
-        key: fs.readFileSync(keyFile),
-        requestCert: false,
-        rejectUnauthorized: false
-    };
-}
-
-const httpsOptions = loadHttpsOptions();
-
-// ---------------------------------------------------------------------------
-// Hostname discovery (SAN > CN > fallback)
-// ---------------------------------------------------------------------------
-
-function getHttpsHostname(): string {
-    try {
-        const certFiles = fs.readdirSync(API_CERT_DIR)
-            .filter(f => f.endsWith(".crt"))
-            .map(f => `${API_CERT_DIR}/${f}`);
-
-        for (const file of certFiles) {
-            try {
-                const pem = fs.readFileSync(file, "utf8");
-
-                // Prefer SAN DNS entries
-                const sanMatches = pem.match(/DNS:([^\s,]+)/g);
-                if (sanMatches && sanMatches.length > 0) {
-                    const firstDns = sanMatches[0].replace("DNS:", "").trim();
-                    if (firstDns) return firstDns;
-                }
-
-                // Fallback to CN
-                const cnMatch = pem.match(/CN=([^,\n]+)/);
-                if (cnMatch && cnMatch[1]) {
-                    return cnMatch[1].trim();
-                }
-            } catch {
-                // continue to next cert
-            }
-        }
-
-        return "unknown-host";
-    } catch {
-        return "unknown-host";
-    }
-}
-
-const HOSTNAME = getHttpsHostname();
-
-// ---------------------------------------------------------------------------
-// Internal Undici dispatcher
-// ---------------------------------------------------------------------------
-
-const internalDispatcher = new UndiciAgent({
-    connect: {
-        ca: fs.readFileSync(ROOT_CA_CERT, "utf8"),
-        servername: HOSTNAME,
-        keepAlive: true
-    }
-});
-export { internalDispatcher };
-
-// ---------------------------------------------------------------------------
-// CockroachDB mTLS detection
-// ---------------------------------------------------------------------------
-
-const isCockroachMtlsEnabled = (): boolean => {
-    const ssl = (db.options as any)?.ssl;
-
-    return Boolean(
-        ssl &&
-        ssl.ca &&
-        ssl.cert &&
-        ssl.key &&
-        ssl.rejectUnauthorized === true
-    );
-};
-
-// ---------------------------------------------------------------------------
-// Bootstrap server
+// Bootstrap server (HTTP-only; TLS handled by nginx)
 // ---------------------------------------------------------------------------
 
 async function bootstrap() {
@@ -134,36 +60,85 @@ async function bootstrap() {
     // Build the Express app using the unified factory
     const app = await createBaseApp();
 
+    // -------------------------------------------------------------------
+    // DEV-ONLY: Swagger UI
+    // -------------------------------------------------------------------
+    if (process.env.NODE_ENV !== "production") {
+        loadSwagger(app);
+    }
+
     const PORT = 4300;
 
-    https.createServer(httpsOptions, app).listen(PORT, () => {
-        const httpsActive = Boolean(httpsOptions.cert && httpsOptions.key);
-        const cockroachMtlsActive = isCockroachMtlsEnabled();
+    // HTTP-only server; nginx performs TLS termination
+    const HOST = configGet("HOST_IP");
 
-        console.log(`API server running at https://${HOSTNAME}:${PORT}`);
+    http.createServer(app).listen(PORT, HOST, () => {
+        console.log(`API server running at http://${HOST}:${PORT}`);
+        console.log("HTTPS termination is handled by nginx; internal traffic is HTTP-only.");
 
-        console.log(
-            httpsActive
-                ? "Client HTTPS is ENABLED and ACTIVE."
-                : "Client HTTPS is NOT active (certificate missing)."
-        );
-
-        console.log(
-            cockroachMtlsActive
-                ? "CockroachDB mTLS is ENABLED and ACTIVE."
-                : "CockroachDB mTLS is NOT active."
-        );
+        if (process.env.NODE_ENV !== "production") {
+            console.log(`Swagger UI available at http://${HOST}:${PORT}/docs`);
+        }
     });
 }
 
-// ---------------------------------------------------------------------------
-// Start API server
-// Only start the server if not running under Vitest
-// ---------------------------------------------------------------------------
-if (process.env.VITEST !== "true") {
-    bootstrap().catch((err) => {
-        console.error("Fatal startup error:", err);
-        process.exit(1);
-    });
-}
+export { bootstrap };
 
+/**
+ * @myTestingHints
+ *
+ * @language TypeScript
+ * @runtime cli (long-running HTTP server process)
+ *
+ * @harness
+ *   - primary: Jest (ts-jest, Node environment)
+ *   - alternatives: Vitest (node environment, coverage via c8)
+ *
+ * @coverage
+ *   - target: ≥ 80% statements/branches
+ *   - rationale:
+ *       HTTP-only startup simplifies testing; TLS paths removed.
+ *   - exclude:
+ *       - Node internals of http.createServer
+ *
+ * @entryPoints
+ *   - bootstrap()
+ *
+ * @dependencies
+ *   @env none
+ *
+ *   @io
+ *     - network:
+ *         - HTTP server bind on port 4300
+ *
+ * @external  
+ *     - @services/dbService.verifyConnection
+ *     - @src/appFactory.createBaseApp
+ *
+ * @happyPath
+ *   - verifyConnection() resolves successfully
+ *   - Express app is created and attached to HTTP server
+ *   - Server logs correct startup message
+ *
+ * @validation
+ *   - If CockroachDB is unreachable, bootstrap() must fail and not start server
+ *
+ * @errorHandling
+ *   - Any exception during bootstrap logs an error in start.ts and terminates process
+ *
+ * @edgeCases
+ *   - Port already in use
+ *   - verifyConnection() slow or intermittent
+ *
+ * @security
+ *   - No TLS keys/certs are handled in this process
+ *   - All public HTTPS handling is delegated to nginx
+ *
+ * @performance
+ *   - Minimal startup overhead; filesystem scanning removed
+ *   - No TLS handshake cost inside Node API
+ *
+ * @notes
+ *   - Tests should mock verifyConnection() to avoid real DB connections
+ *   - Route loading behavior is validated in routeLoader-level tests
+ */

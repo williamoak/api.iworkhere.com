@@ -11,7 +11,7 @@ import { Request, Response, NextFunction } from "express";
 
 // Shape of the expected return value
 interface Validator {
-    request: (req: Request, res: Response, next: NextFunction) => void;
+    request: (_req: Request, _res: Response, next: NextFunction) => void;
     response: <T>(data: T) => T;
 }
 
@@ -26,7 +26,7 @@ export function makeValidator(_schema: any): Validator {
         /**
          * Request validator — currently a no-op.
          */
-        request(req: Request, _res: Response, next: NextFunction) {
+        request(_req: Request, _res: Response, next: NextFunction) {
             // No validation — just continue
             next();
         },
