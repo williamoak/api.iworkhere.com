@@ -25,6 +25,44 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 
+
+/**
+ * Get required numeric variable
+ */
+export function configGetNumber(
+    key: string,
+    options?: {
+        defaultValue?: number;
+        min?: number;
+        max?: number;
+    }
+): number {
+    const raw = config[key];
+
+    if (raw === undefined || raw.trim() === "") {
+        if (options?.defaultValue !== undefined) {
+            return options.defaultValue;
+        }
+        throw new Error(`Missing required numeric configuration variable: ${key}`);
+    }
+
+    const value = Number(raw);
+
+    if (!Number.isFinite(value)) {
+        throw new Error(`Invalid numeric value for configuration variable: ${key}`);
+    }
+
+    if (options?.min !== undefined && value < options.min) {
+        throw new Error(`Configuration variable ${key} must be >= ${options.min}`);
+    }
+
+    if (options?.max !== undefined && value > options.max) {
+        throw new Error(`Configuration variable ${key} must be <= ${options.max}`);
+    }
+
+    return value;
+}
+
 /**
  * Determine environment (default "development")
  */
