@@ -1,0 +1,3 @@
+-- NO-OP migration
+-- Original snapshot migration intentionally discarded
+-- Kept to satisfy Drizzle migration history

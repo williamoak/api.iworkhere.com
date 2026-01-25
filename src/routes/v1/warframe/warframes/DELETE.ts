@@ -55,7 +55,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { URL } from "url";
 
 import { db } from "@services/dbService";
-import { warframe } from "@db/schema";
+import { warframes } from "@db/schema";
 import { eq } from "drizzle-orm";
 
 /**

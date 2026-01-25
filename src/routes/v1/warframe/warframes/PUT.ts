@@ -72,7 +72,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 
 import { db } from "@services/dbService";
-import { warframe } from "@db/schema";
+import { warframes } from "@db/schema";
 
 import {
     warframeInsertSchema,

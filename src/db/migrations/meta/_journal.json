@@ -29,6 +29,90 @@
       "when": 1767574009722,
       "tag": "0003_third_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768947750020,
+      "tag": "0004_amazing_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768948157132,
+      "tag": "0005_green_deathbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768948280156,
+      "tag": "0006_graceful_chimera",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1768949657478,
+      "tag": "0007_pretty_skin",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1769061123144,
+      "tag": "0008_rename_user_status_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1769121808939,
+      "tag": "0009_update_warframe_tables_for_persistence",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1769126512650,
+      "tag": "0010_create_applications_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1769126861642,
+      "tag": "0011_create_application_origins_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1769127224174,
+      "tag": "0012_create_user_applications_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1769128041826,
+      "tag": "0013_create_auth_tokens_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1769129469232,
+      "tag": "0014_create_password_reset_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1769132658535,
+      "tag": "0015_create_user_auth_local",
+      "breakpoints": true
     }
   ]
 }

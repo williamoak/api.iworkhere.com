@@ -36,6 +36,17 @@ export async function createBaseApp() {
         credentials: false
     }));
 
+    // temporary diagnostic, looking for bad json in request
+    app.use((req, _res, next) => {
+        if (req.headers['content-type']?.includes('application/json')) {
+            console.log('----------------------------------------');
+            console.log('--- JSON REQUEST ---');
+            console.log(req.method, req.url);
+            console.log('----------------------------------------');
+        }
+        next();
+    });
+
     // Body parsing
     app.use(express.json());
 

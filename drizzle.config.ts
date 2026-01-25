@@ -1,5 +1,5 @@
 import type { Config } from "drizzle-kit";
-import fs from "fs";
+import * as fs from "fs";
 
 const DB_HOST     = process.env.DB_HOSTNAME!;
 const DB_PORT     = Number(process.env.DB_PORT || 26257);
@@ -8,7 +8,7 @@ const DB_USER     = process.env.DB_USER!;
 const DB_CERT_DIR = process.env.DB_CERT_DIR!;
 
 export default {
-    schema: "./src/db/schema",
+    schema: "./src/db/schema/index.ts",
     out: "./src/db/migrations",
     dialect: "postgresql",          // CockroachDB uses pg dialect
     dbCredentials: {

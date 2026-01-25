@@ -1,67 +1,25 @@
-import {
-    pgTable,
-    uuid,
-    text,
-    boolean,
-    timestamp,
-    jsonb,
-    pgEnum,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { userStatuses } from "./user_statuses";
 
-/**
- * ENUM: user_status
- */
-export const userStatus = pgEnum("user_status", [
-    "active",
-    "disabled",
-    "locked",
-    "pending",
-]);
-
-/**
- * ENUM: auth_provider
- * (future-facing, not all used immediately)
- */
-export const authProvider = pgEnum("auth_provider", [
-    "local",        // username/password
-    "certificate",  // mTLS client cert
-    "oauth",        // OAuth2 / OIDC
-    "sso",          // partner SSO
-]);
-
-/**
- * TABLE: users
- */
 export const users = pgTable("users", {
-    userId: uuid("user_id")
-        .defaultRandom()
-        .primaryKey(),
+    id: uuid("id").primaryKey(),
 
-    // --- Core identity ---
-    username: text("username").unique(),
+    username: text("username").notNull().unique(),
+    email: text("email").unique(),
 
-    passwordHash: text("password_hash"), // nullable by design
-
-    status: userStatus("status")
+    statusCode: text("status_code")
         .notNull()
-        .default("active"),
+        .references(() => userStatuses.statusCode),
 
-    // --- Auth extensibility ---
-    authProvider: authProvider("auth_provider")
-        .notNull()
-        .default("local"),
+    emailVerifiedAt: timestamp("email_verified_at", {
+        withTimezone: true,
+    }),
 
-    // --- Future identity claims ---
-    identityClaims: jsonb("identity_claims"), // cert DNs, OAuth claims, SSO attrs
+    createdAt: timestamp("created_at", {
+        withTimezone: true,
+    }).notNull(),
 
-    // --- Audit / lifecycle ---
-    emailVerified: boolean("email_verified").default(false),
-
-    createdAt: timestamp("created_at", { withTimezone: true })
-        .defaultNow()
-        .notNull(),
-
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-        .defaultNow()
-        .notNull(),
+    updatedAt: timestamp("updated_at", {
+        withTimezone: true,
+    }).notNull(),
 });

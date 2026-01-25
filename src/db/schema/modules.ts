@@ -9,6 +9,9 @@ import {
 
 /**
  * ENUM: module_slot_type
+ *
+ * Legacy enum defined in migration 0001.
+ * Retained to mirror existing DB state.
  */
 export const moduleSlotType = pgEnum("module_slot_type", [
     "Aura",
@@ -19,14 +22,15 @@ export const moduleSlotType = pgEnum("module_slot_type", [
 
 /**
  * TABLE: modules
+ *
+ * Legacy domain table.
+ * Schema mirrors existing DB exactly.
  */
 export const modules = pgTable("modules", {
-    modId: uuid("mod_id")
-        .defaultRandom()
-        .primaryKey(),
-
+    modId: uuid("mod_id").primaryKey(),
     name: text("name").notNull(),
-
+    grade: text("grade"),
+    owner: text("owner_id"),
     polarity: text("polarity"),
     capacity: integer("capacity"),
 

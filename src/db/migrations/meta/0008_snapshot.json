@@ -1,0 +1,525 @@
+{
+  "id": "abfde0d3-d278-48e0-aca8-b7311b79805f",
+  "prevId": "ecb1c3e7-ec98-4a76-9908-d653da8449ab",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.user_statuses": {
+      "name": "user_statuses",
+      "schema": "",
+      "columns": {
+        "status_code": {
+          "name": "status_code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_code": {
+          "name": "status_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_verified_at": {
+          "name": "email_verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "users_status_code_user_statuses_status_code_fk": {
+          "name": "users_status_code_user_statuses_status_code_fk",
+          "tableFrom": "users",
+          "tableTo": "user_statuses",
+          "columnsFrom": [
+            "status_code"
+          ],
+          "columnsTo": [
+            "status_code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_username_unique": {
+          "name": "users_username_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        },
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.warframes": {
+      "name": "warframes",
+      "schema": "",
+      "columns": {
+        "warframe_id": {
+          "name": "warframe_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "class": {
+          "name": "class",
+          "type": "warframe_class",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lore": {
+          "name": "lore",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_health": {
+          "name": "base_health",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_health": {
+          "name": "effective_health",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_shield": {
+          "name": "base_shield",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_shield": {
+          "name": "effective_shield",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_armour": {
+          "name": "base_armour",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_armour": {
+          "name": "effective_armour",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_energy": {
+          "name": "base_energy",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_energy": {
+          "name": "effective_energy",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_ability_strength": {
+          "name": "base_ability_strength",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_ability_strength": {
+          "name": "effective_ability_strength",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_range": {
+          "name": "base_range",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_range": {
+          "name": "effective_range",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_duration": {
+          "name": "base_duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_duration": {
+          "name": "effective_duration",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_ability_efficiency": {
+          "name": "base_ability_efficiency",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_ability_efficiency": {
+          "name": "effective_ability_efficiency",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_sprint_speed": {
+          "name": "base_sprint_speed",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_sprint_speed": {
+          "name": "effective_sprint_speed",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "base_capacity": {
+          "name": "base_capacity",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effective_capacity": {
+          "name": "effective_capacity",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_passives": {
+          "name": "max_passives",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_passives": {
+          "name": "current_passives",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_abilities": {
+          "name": "max_abilities",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_abilities": {
+          "name": "current_abilities",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_mods": {
+          "name": "max_mods",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_mods": {
+          "name": "current_mods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_aura_mods": {
+          "name": "max_aura_mods",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_aura_mods": {
+          "name": "current_aura_mods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_exilus_mods": {
+          "name": "max_exilus_mods",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_exilus_mods": {
+          "name": "current_exilus_mods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_arcanes": {
+          "name": "max_arcanes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_arcanes": {
+          "name": "current_arcanes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_shards": {
+          "name": "max_shards",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_shards": {
+          "name": "current_shards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weapons_loadout": {
+          "name": "weapons_loadout",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.modules": {
+      "name": "modules",
+      "schema": "",
+      "columns": {
+        "mod_id": {
+          "name": "mod_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "polarity": {
+          "name": "polarity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capacity": {
+          "name": "capacity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slot_type": {
+          "name": "slot_type",
+          "type": "module_slot_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_rank": {
+          "name": "max_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_rank": {
+          "name": "current_rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rank_upgrades": {
+          "name": "rank_upgrades",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locked": {
+          "name": "locked",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "modify": {
+          "name": "modify",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.warframe_weapons": {
+      "name": "warframe_weapons",
+      "schema": "",
+      "columns": {
+        "weapon_id": {
+          "name": "weapon_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "class": {
+          "name": "class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weapon_mods": {
+          "name": "weapon_mods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.warframe_class": {
+      "name": "warframe_class",
+      "schema": "public",
+      "values": [
+        "normal",
+        "prime",
+        "umbra"
+      ]
+    },
+    "public.module_slot_type": {
+      "name": "module_slot_type",
+      "schema": "public",
+      "values": [
+        "Aura",
+        "Exilus",
+        "General",
+        "Arcane"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

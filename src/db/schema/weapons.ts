@@ -7,13 +7,16 @@ import {
 
 /**
  * TABLE: warframe_weapons
+ *
+ * Legacy domain table.
+ * Schema mirrors existing DB exactly.
  */
 export const weapons = pgTable("warframe_weapons", {
-    weaponId: uuid("weapon_id")
-        .defaultRandom()
-        .primaryKey(),
+    weaponId: uuid("weapon_id").primaryKey(),
 
     name: text("name").notNull(),
+    grade: text("grade"),
+    owner: text("owner_id"),
 
     class: text("class").notNull(),
 

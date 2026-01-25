@@ -10,6 +10,9 @@ import {
 
 /**
  * ENUM: warframe_class
+ *
+ * Legacy enum defined in migration 0000.
+ * Intentionally retained to match existing DB state.
  */
 export const warframeClass = pgEnum("warframe_class", [
     "normal",
@@ -19,14 +22,17 @@ export const warframeClass = pgEnum("warframe_class", [
 
 /**
  * TABLE: warframe
+ *
+ * Legacy domain table.
+ * Schema mirrors existing DB exactly.
  */
-export const warframe = pgTable("warframe", {
-    warframeId: uuid("warframe_id")
-        .defaultRandom()
-        .primaryKey(),
+export const warframes = pgTable("warframes", {
+    warframeId: uuid("warframe_id").primaryKey(),
 
     name: text("name").notNull(),
     class: warframeClass("class").notNull(),
+    grade: text("grade"),
+    owner: text("owner_id"),
 
     lore: text("lore"),
 

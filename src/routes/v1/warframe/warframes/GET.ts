@@ -74,7 +74,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { URL } from "url";
 
 import { db } from "@services/dbService";
-import { warframe } from "@db/schema";
+import { warframes } from "@db/schema";
 import { inArray } from "drizzle-orm";
 import { emptyWarframe, toWarframeDTO } from "@src/dto/warframe";
 
@@ -97,7 +97,7 @@ export default async function GET(
                 warframe_id: warframe.warframeId,
                 name: warframe.name,
             })
-            .from(warframe);
+            .from(warframes);
 
         let currentWarframe = emptyWarframe();
 

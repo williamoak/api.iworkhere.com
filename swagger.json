@@ -25,7 +25,7 @@
     "/v1/health": {
       "get": {
         "summary": "Health index, schema enumerator, and aggregator using in-memory route metadata.",
-        "description": "Provides a dynamic health index endpoint with automatic runtime schema",
+        "description": "Provides a dynamic health index endpoint with automatic runtime schema\n  generation for all child health endpoints.\n\n  No Zod, no manual schemas, and no filesystem scanning are used. Instead,\n  child endpoints are executed once (in internal mode) and their returned\n  JSON structures are walked recursively to infer response schemas.\n\n  Resolution behavior:\n\n    1) GET /v1/health\n         → Returns only child endpoint names.\n\n    2) GET /v1/health?all\n         → Executes each child endpoint ONCE and returns a generated\n           response-schema tree for each.\n\n    3) GET /v1/health?complete\n         → Executes all child endpoints and returns full health results.",
         "tags": [
           "health"
         ],
@@ -68,7 +68,7 @@
     "/v1/health/api": {
       "get": {
         "summary": "Basic API server health check (uptime only).",
-        "description": "Provides a minimal API health endpoint reporting process uptime.",
+        "description": "Provides a minimal API health endpoint reporting process uptime.\n\n  Supports dual-mode execution:\n    1) Internal invocation by the /v1/health aggregator\n    2) External HTTP invocation via Express\n\n  Internal mode:\n    - Handler returns a HealthResponse object directly\n\n  External mode:\n    - Handler responds via res.json(HealthResponse)",
         "tags": [
           "health"
         ],
@@ -92,7 +92,7 @@
     "/v1/health/database": {
       "get": {
         "summary": "CockroachDB health check for latency, version, and build metadata.",
-        "description": "Provides a CockroachDB health endpoint reporting SQL latency, build metadata,",
+        "description": "Provides a CockroachDB health endpoint reporting SQL latency, build metadata,\n  version information, and connectivity status.\n\n  Supports dual invocation modes:\n\n    1) External HTTP invocation via Express\n       → Handler writes JSON directly to the Express response.\n\n    2) Internal invocation by the /v1/health aggregator\n       → Handler receives a synthetic response object and MUST return a\n         HealthResponse object instead of calling res.json().\n\n  This dual-mode behavior enables:\n    • Zero-latency child health execution\n    • Hierarchical route metadata traversal\n    • Parent → child aggregation for /v1/health?complete",
         "tags": [
           "health"
         ],
@@ -116,7 +116,7 @@
     "/v1/health/memory": {
       "get": {
         "summary": "Memory health endpoint.",
-        "description": "Provides runtime memory usage information for both the Node.js process",
+        "description": "Provides runtime memory usage information for both the Node.js process\n  and the underlying operating system.\n\n  External HTTP requests receive a structured JSON health response suitable\n  for health checks, diagnostics, and dashboards.\n\n  Internal invocations (such as health aggregators) receive the same object\n  directly as a return value, enabling efficient collection without HTTP\n  loopback.",
         "tags": [
           "health"
         ],
@@ -140,7 +140,7 @@
     "/v1/monitor": {
       "get": {
         "summary": "Basic monitor endpoint returning an OK status.",
-        "description": "Provides a minimal monitoring signal indicating that the API process",
+        "description": "Provides a minimal monitoring signal indicating that the API process\n  is running and responsive.\n\n  External HTTP requests receive a simple JSON object suitable for\n  uptime monitoring, load balancer probes, and basic diagnostics.\n\n  Internal invocations (such as monitoring aggregators or self-tests)\n  receive the same object directly as a return value, avoiding HTTP\n  loopback overhead.",
         "tags": [
           "monitor"
         ],
@@ -164,7 +164,7 @@
     "/v1/monitor/network": {
       "get": {
         "summary": "Network monitoring stub endpoint.",
-        "description": "Provides a minimal network monitoring endpoint that confirms the API",
+        "description": "Provides a minimal network monitoring endpoint that confirms the API\n  server is responsive.\n\n  Supports dual-mode execution:\n\n    1) External HTTP invocation\n       → Responds via res.json({ ok: true }).\n\n    2) Internal invocation (future monitoring aggregator)\n       → Returns the payload object directly.\n\n  Dual-mode support allows this endpoint to be incorporated into a\n  high-speed monitoring or aggregation system without HTTP loopback.",
         "tags": [
           "monitor"
         ],
@@ -188,7 +188,7 @@
     "/v1/warframe/modules": {
       "delete": {
         "summary": "Delete a module by mod_id.",
-        "description": "Deletes a single Warframe module identified by the required mod_id",
+        "description": "Deletes a single Warframe module identified by the required mod_id\n  query parameter.\n\n  If no matching record exists, the operation still succeeds and\n  returns a null data payload.",
         "tags": [
           "modules"
         ],
@@ -221,7 +221,7 @@
       },
       "get": {
         "summary": "Retrieve module list and optionally resolve a single module.",
-        "description": "Returns a stable response containing:",
+        "description": "Returns a stable response containing:\n\n  - A lightweight list of all modules\n  - A single resolved module object\n\n  Resolution priority is:\n    1. mod_id query parameters (first match wins)\n    2. Exact name match if no mod_id is supplied\n\n  If no match is found, the module field is returned as an empty\n  module DTO to preserve a stable response shape.",
         "tags": [
           "modules"
         ],
@@ -263,7 +263,7 @@
       },
       "put": {
         "summary": "Insert or update a Warframe module.",
-        "description": "Performs a deterministic upsert-style operation on modules using",
+        "description": "Performs a deterministic upsert-style operation on modules using\n  the following resolution order:\n\n    1. Update by mod_id if provided\n    2. Update by name if exactly one matching record exists\n    3. Insert if name resolves to zero records\n    4. Reject with conflict if name resolves to more than one record\n\n  If no mod_id or name is provided, the request is treated as an\n  insert operation.",
         "tags": [
           "modules"
         ],
@@ -287,7 +287,7 @@
     "/v1/warframe/warframes": {
       "delete": {
         "summary": "Delete a warframe by warframe_id.",
-        "description": "Deletes a single warframe identified by the required warframe_id",
+        "description": "Deletes a single warframe identified by the required warframe_id\n  query parameter.\n\n  If no matching record exists, the operation still succeeds and\n  returns a null data payload.",
         "tags": [
           "warframes"
         ],
@@ -320,7 +320,7 @@
       },
       "get": {
         "summary": "Retrieve warframe list and optionally resolve a single warframe.",
-        "description": "Returns a stable response containing:",
+        "description": "Returns a stable response containing:\n\n  - A lightweight list of all warframes\n  - A single resolved warframe object\n\n  If one or more warframe_id query parameters are supplied, the first\n  matching warframe is resolved and returned.\n\n  If no matching record is found, the warframe field is returned as an\n  empty warframe DTO to preserve a stable response shape.",
         "tags": [
           "warframes"
         ],
@@ -353,7 +353,7 @@
       },
       "put": {
         "summary": "Insert or update a warframe.",
-        "description": "Performs a deterministic insert-or-update operation using the following",
+        "description": "Performs a deterministic insert-or-update operation using the following\n  resolution order:\n\n    1. Update by warframe_id if provided (highest priority)\n    2. Resolve by name:\n       - class defaults to \"normal\" if not provided\n       - 0 matches → insert\n       - 1 match → update\n       - 2+ matches → disambiguate by resolved class\n    3. Insert if no identifier is resolvable\n\n  If multiple records still match after class disambiguation, the request\n  is rejected with a conflict error.",
         "tags": [
           "warframes"
         ],
@@ -377,7 +377,7 @@
     "/v1/warframe/weapons": {
       "delete": {
         "summary": "Delete a weapon by weapon_id.",
-        "description": "Deletes a single weapon identified by the required weapon_id",
+        "description": "Deletes a single weapon identified by the required weapon_id\n  query parameter.\n\n  If no matching record exists, the operation still succeeds and\n  returns a null data payload.",
         "tags": [
           "weapons"
         ],
@@ -410,7 +410,7 @@
       },
       "get": {
         "summary": "Retrieve weapon list and optionally resolve a single weapon.",
-        "description": "Returns a stable response containing:",
+        "description": "Returns a stable response containing:\n\n  - A lightweight list of all weapons\n  - A single resolved weapon object\n\n  Resolution order is:\n    1. One or more weapon_id query parameters (first match wins)\n    2. Exact name match\n       - If multiple records share the same name, class is used\n       - class defaults to \"normal\" when not provided\n    3. No resolvable filters → empty weapon DTO\n\n  This endpoint is read-only and has no side effects.",
         "tags": [
           "weapons"
         ],
@@ -462,7 +462,7 @@
       },
       "put": {
         "summary": "Insert or update a weapon.",
-        "description": "Performs a deterministic insert-or-update operation using the following",
+        "description": "Performs a deterministic insert-or-update operation using the following\n  resolution order:\n\n    1. Update by weapon_id if provided (highest priority)\n    2. Resolve by name:\n       - class defaults to \"normal\" if not provided\n       - 0 name matches → insert\n       - 1 name match → update\n       - 2+ name matches → disambiguate by class\n           - 0 narrowed → insert\n           - 1 narrowed → update\n           - >1 narrowed → reject with conflict\n    3. Insert if no identifier is resolvable\n\n  Update operations require at least one writable field; otherwise the\n  request is rejected.",
         "tags": [
           "weapons"
         ],
