@@ -101,9 +101,9 @@ export default async function PUT(
             const writePayload = toWarframeWrite(parsed);
 
             const rows = await db
-                .update(warframe)
+                .update(warframes)
                 .set(writePayload)
-                .where(eq(warframe.warframeId, parsed.warframe_id))
+                .where(eq(warframes.warframeId, parsed.warframe_id))
                 .returning();
 
             dbResult = rows[0] ?? null;
@@ -125,8 +125,8 @@ export default async function PUT(
 
             const nameMatches = await db
                 .select()
-                .from(warframe)
-                .where(eq(warframe.name, effectiveParsed.name));
+                .from(warframes)
+                .where(eq(warframes.name, effectiveParsed.name));
 
             // ---- 0 matches → INSERT
             if (nameMatches.length === 0) {
@@ -134,7 +134,7 @@ export default async function PUT(
                 const writePayload = toWarframeWrite(insertParsed);
 
                 const rows = await db
-                    .insert(warframe)
+                    .insert(warframes)
                     .values(writePayload)
                     .returning();
 
@@ -146,9 +146,9 @@ export default async function PUT(
                 const writePayload = toWarframeWrite(effectiveParsed);
 
                 const rows = await db
-                    .update(warframe)
+                    .update(warframes)
                     .set(writePayload)
-                    .where(eq(warframe.warframeId, nameMatches[0].warframeId))
+                    .where(eq(warframes.warframeId, nameMatches[0].warframeId))
                     .returning();
 
                 dbResult = rows[0];
@@ -168,7 +168,7 @@ export default async function PUT(
                     const writePayload = toWarframeWrite(insertParsed);
 
                     const rows = await db
-                        .insert(warframe)
+                        .insert(warframes)
                         .values(writePayload)
                         .returning();
 
@@ -180,9 +180,9 @@ export default async function PUT(
                     const writePayload = toWarframeWrite(effectiveParsed);
 
                     const rows = await db
-                        .update(warframe)
+                        .update(warframes)
                         .set(writePayload)
-                        .where(eq(warframe.warframeId, narrowed[0].warframeId))
+                        .where(eq(warframes.warframeId, narrowed[0].warframeId))
                         .returning();
 
                     dbResult = rows[0];
@@ -209,7 +209,7 @@ export default async function PUT(
             const writePayload = toWarframeWrite(parsed);
 
             const rows = await db
-                .insert(warframe)
+                .insert(warframes)
                 .values(writePayload)
                 .returning();
 

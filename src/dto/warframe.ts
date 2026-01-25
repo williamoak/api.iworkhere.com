@@ -1,5 +1,5 @@
 import type { InferSelectModel } from "drizzle-orm";
-import { warframe as warframeSchema } from "@db/schema";
+import { warframes as warframeSchema } from "@db/schema";
 
 /**
  * DB row type (camelCase, Drizzle-generated)

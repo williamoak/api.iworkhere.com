@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import { describe, test, expect, vi, beforeEach } from "vitest";
+import type { IncomingMessage, ServerResponse } from "http";
 
 /**
  * ------------------------------------------------------------
@@ -7,23 +7,32 @@ import type { IncomingMessage, ServerResponse } from 'http'
  * ------------------------------------------------------------
  */
 
-vi.mock('@db/schema', () => ({
-    warframe: {
-        warframeId: 'warframe_id',
-        name: 'name',
-        class: 'class',
-    },
-}))
+/**
+ * IMPORTANT:
+ * - The handler imports `warframes` (plural)
+ * - Tests previously mocked `warframe` (singular) ❌
+ */
+vi.mock("@db/schema", async (importOriginal) => {
+    const actual = await importOriginal<any>();
+    return {
+        ...actual,
+        warframes: {
+            warframeId: "warframe_id",
+            name: "name",
+            class: "class",
+        },
+    };
+});
 
-vi.mock('@services/dbService', () => ({
+vi.mock("@services/dbService", () => ({
     db: {
         select: vi.fn(),
         insert: vi.fn(),
         update: vi.fn(),
     },
-}))
+}));
 
-vi.mock('@src/validation/warframe', () => ({
+vi.mock("@src/validation/warframe", () => ({
     warframeInsertSchema: {
         parse: vi.fn((v) => v),
     },
@@ -33,23 +42,23 @@ vi.mock('@src/validation/warframe', () => ({
     warframeUpdateByNameSchema: {
         parse: vi.fn((v) => v),
     },
-}))
+}));
 
-vi.mock('@src/db/mappers/warframeWrite', () => ({
+vi.mock("@src/db/mappers/warframeWrite", () => ({
     toWarframeWrite: vi.fn((v) => v),
-}))
+}));
 
-vi.mock('@src/dto/warframe', () => ({
+vi.mock("@src/dto/warframe", () => ({
     emptyWarframe: vi.fn(() => ({})),
     toWarframeDTO: vi.fn((row) => row),
-}))
+}));
 
-vi.mock('@src/dto/dtoOverlay', () => ({
+vi.mock("@src/dto/dtoOverlay", () => ({
     overlayDto: vi.fn(() => ({
         merged: {},
         providedFields: new Set(),
     })),
-}))
+}));
 
 /**
  * ------------------------------------------------------------
@@ -57,8 +66,8 @@ vi.mock('@src/dto/dtoOverlay', () => ({
  * ------------------------------------------------------------
  */
 
-import { db } from '@services/dbService'
-import PUT from '@routes/v1/warframe/warframes/PUT'
+import { db } from "@services/dbService";
+import PUT from "@routes/v1/warframe/warframes/PUT";
 
 /**
  * ------------------------------------------------------------
@@ -67,14 +76,14 @@ import PUT from '@routes/v1/warframe/warframes/PUT'
  */
 
 function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+    return ({ body } as unknown) as IncomingMessage;
 }
 
 function createRes(): ServerResponse {
-    const res: Partial<ServerResponse> = {}
-    res.setHeader = vi.fn()
-    res.end = vi.fn()
-    return res as ServerResponse
+    const res: Partial<ServerResponse> = {};
+    res.setHeader = vi.fn();
+    res.end = vi.fn();
+    return res as ServerResponse;
 }
 
 /**
@@ -83,113 +92,121 @@ function createRes(): ServerResponse {
  * ------------------------------------------------------------
  */
 
-describe('PUT /v1/warframe/warframes', () => {
+describe("PUT /v1/warframe/warframes", () => {
     beforeEach(() => {
-        vi.clearAllMocks()
-    })
+        vi.clearAllMocks();
+    });
 
     /**
      * ------------------------------------------------------------
      * UPDATE by warframe_id (highest priority)
      * ------------------------------------------------------------
      */
-    test('updates a warframe when warframe_id is provided', async () => {
-        ;(db.update as any).mockReturnValueOnce({
+    test("updates a warframe when warframe_id is provided", async () => {
+        (db.update as any).mockReturnValueOnce({
             set: () => ({
                 where: () => ({
                     returning: () =>
                         Promise.resolve([
-                            { warframeId: '1', name: 'Excalibur', class: 'normal' },
+                            {
+                                warframeId: "1",
+                                name: "Excalibur",
+                                class: "normal",
+                            },
                         ]),
                 }),
             }),
-        })
+        });
 
         const req = createReq({
-            warframe_id: '1',
-            name: 'Excalibur',
+            warframe_id: "1",
+            name: "Excalibur",
             health: 120,
-        })
-        const res = createRes()
+        });
+        const res = createRes();
 
-        await PUT(req, res)
+        await PUT(req, res);
 
-        expect(db.update).toHaveBeenCalledOnce()
-        expect(res.end).toHaveBeenCalledOnce()
+        expect(db.update).toHaveBeenCalledOnce();
+        expect(res.end).toHaveBeenCalledOnce();
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
-        expect(payload.data.name).toBe('Excalibur')
-    })
+        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
+        expect(payload.success).toBe(true);
+        expect(payload.data.name).toBe("Excalibur");
+    });
 
     /**
      * ------------------------------------------------------------
-     * INSERT by name (0 matches, class defaults to "normal")
+     * INSERT by name (0 matches → insert)
      * ------------------------------------------------------------
      */
-    test('inserts a warframe when name resolves to zero records', async () => {
-        // name lookup → 0 matches
-        ;(db.select as any).mockReturnValueOnce({
+    test("inserts a warframe when name resolves to zero records", async () => {
+        // name lookup → no matches
+        (db.select as any).mockReturnValueOnce({
             from: () => ({
                 where: () => Promise.resolve([]),
             }),
-        })
+        });
 
-        // insert
-        ;(db.insert as any).mockReturnValueOnce({
+        // insert path
+        (db.insert as any).mockReturnValueOnce({
             values: () => ({
                 returning: () =>
                     Promise.resolve([
-                        { warframeId: '2', name: 'Mag', class: 'normal' },
+                        {
+                            warframeId: "2",
+                            name: "Mag",
+                            class: "normal",
+                        },
                     ]),
             }),
-        })
+        });
 
         const req = createReq({
-            name: 'Mag',
+            name: "Mag",
             health: 80,
             shield: 150,
-        })
-        const res = createRes()
+        });
+        const res = createRes();
 
-        await PUT(req, res)
+        await PUT(req, res);
 
-        expect(db.select).toHaveBeenCalledOnce()
-        expect(db.insert).toHaveBeenCalledOnce()
+        expect(db.select).toHaveBeenCalledOnce();
+        expect(db.insert).toHaveBeenCalledOnce();
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
-        expect(payload.data.class).toBe('normal')
-    })
+        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
+        expect(payload.success).toBe(true);
+        expect(payload.data.class).toBe("normal");
+    });
 
     /**
      * ------------------------------------------------------------
-     * CONFLICT — multiple records match name + class
+     * CONFLICT — multiple matches by name + class
      * ------------------------------------------------------------
      */
-    test('returns 409 when multiple warframes match name and class', async () => {
-        ;(db.select as any).mockReturnValueOnce({
+    test("returns 409 when multiple warframes match name and class", async () => {
+        (db.select as any).mockReturnValueOnce({
             from: () => ({
                 where: () =>
                     Promise.resolve([
-                        { warframeId: '1', class: 'normal' },
-                        { warframeId: '2', class: 'normal' },
+                        { warframeId: "1", class: "normal" },
+                        { warframeId: "2", class: "normal" },
                     ]),
             }),
-        })
+        });
 
         const req = createReq({
-            name: 'Excalibur',
-            class: 'normal',
-        })
-        const res = createRes()
+            name: "Excalibur",
+            class: "normal",
+        });
+        const res = createRes();
 
-        await PUT(req, res)
+        await PUT(req, res);
 
-        expect(res.end).toHaveBeenCalledOnce()
+        expect(res.end).toHaveBeenCalledOnce();
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(false)
-        expect(payload.error).toContain('Multiple warframes')
-    })
-})
+        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
+        expect(payload.success).toBe(false);
+        expect(payload.error).toContain("Multiple warframes");
+    });
+});

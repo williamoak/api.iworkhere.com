@@ -84,8 +84,8 @@ export default async function DELETE(
         }
 
         const rows = await db
-            .delete(warframe)
-            .where(eq(warframe.warframeId, warframeId))
+            .delete(warframes)
+            .where(eq(warframes.warframeId, warframeId))
             .returning();
 
         const result = rows.length > 0 ? rows[0] : null;
