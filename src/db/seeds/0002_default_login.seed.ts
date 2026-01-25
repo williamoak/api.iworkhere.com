@@ -14,13 +14,21 @@ import { db } from "@services/dbService";
  * CockroachDB-safe
  * Fully idempotent
  * Auto-runs on import
+ *
+ * Requires:
+ *   SEED_BILL_PASSWORD in .env.development
  */
 
 const USERNAME = "bill";
 const EMAIL = "william.r.oak@gmail.com";
-const PASSWORD = "CassandraR0x!";
 const APP_KEY = "bill.iworkhere.com";
 const APP_NAME = "Bill Web";
+
+const PASSWORD = process.env.SEED_BILL_PASSWORD;
+
+if (!PASSWORD) {
+    throw new Error("SEED_BILL_PASSWORD must be set in .env.development");
+}
 
 /* -------------------------------------------------
  * 1. Ensure user exists (natural key = username)
@@ -71,7 +79,7 @@ const userId = userResult.rows[0].id;
  * ------------------------------------------------- */
 
 await db.execute(`
-    UPSERT INTO applications (
+    INSERT INTO applications (
         id,
         app_key,
         name,
@@ -80,7 +88,7 @@ await db.execute(`
         created_at,
         updated_at
     )
-    VALUES (
+    SELECT
         gen_random_uuid(),
         '${APP_KEY}',
         '${APP_NAME}',
@@ -88,6 +96,10 @@ await db.execute(`
         true,
         now(),
         now()
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM applications
+        WHERE app_key = '${APP_KEY}'
     )
 `);
 
@@ -113,7 +125,7 @@ const applicationId = appResult.rows[0].id;
  * ------------------------------------------------- */
 
 await db.execute(`
-    UPSERT INTO user_applications (
+    INSERT INTO user_applications (
         id,
         user_id,
         application_id,
@@ -122,7 +134,7 @@ await db.execute(`
         created_at,
         updated_at
     )
-    VALUES (
+    SELECT
         gen_random_uuid(),
         '${userId}',
         '${applicationId}',
@@ -130,17 +142,22 @@ await db.execute(`
         true,
         now(),
         now()
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM user_applications
+        WHERE user_id = '${userId}'
+          AND application_id = '${applicationId}'
     )
 `);
 
 /* -------------------------------------------------
- * 6. Hash password
+ * 6. Hash password (runtime only)
  * ------------------------------------------------- */
 
 const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
 /* -------------------------------------------------
- * 7. UPSERT local auth credentials
+ * 7. UPSERT local auth credentials (PK = user_id)
  * ------------------------------------------------- */
 
 await db.execute(`
