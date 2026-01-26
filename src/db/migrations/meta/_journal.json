@@ -113,6 +113,20 @@
       "when": 1769132658535,
       "tag": "0015_create_user_auth_local",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1769377740493,
+      "tag": "0016_puzzling_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1769379419049,
+      "tag": "0017_create_password_reset_token_table",
+      "breakpoints": true
     }
   ]
 }

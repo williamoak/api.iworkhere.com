@@ -1,297 +1,236 @@
 /**
+ * @myDocBlock v2.3
  * @file routeLoader.ts
  * @internal
- * @module RouteLoader
- * @tag api
- * @version 3.1.0
- * @author: william.r.oak@gmail.com
+ * @module loaders/routeLoader
+ * @tag api, routing, middleware
+ * @version 3.2.0
+ * @author william.r.oak@gmail.com
  * @path src/loaders/routeLoader.ts
- * @summary Hierarchical route metadata builder and Express route binder with centralized caching and throttling.
+ * @summary
+ * Discovers, binds, and enforces all API routes with centralized middleware.
+ *
  * @description
- *   This loader performs a complete multi-phase route setup with
- *   centralized cross-cutting concerns applied structurally at bind time.
+ * Performs a two-phase routing process:
  *
- *   PHASE 1 — Metadata Construction
- *     - Recursively scans src/routes/{API_VERSION}/**
- *     - Converts directory structure → canonical Express paths (/{API_VERSION}/...)
- *     - Dynamically imports GET.ts, POST.ts, PUT.ts, DELETE.ts, PATCH.ts
- *     - Builds a hierarchical RouteNode tree with parent→child relationships
- *     - Stores the entire tree in app.locals.routeTree
+ * PHASE 1 — Route Discovery
+ *   - Recursively scans src/routes/{API_VERSION}/**
+ *   - Imports HTTP method handlers (GET.ts, PUT.ts, etc.)
+ *   - Builds a hierarchical route metadata tree
+ *   - Exposes the tree on app.locals.routeTree
  *
- *   PHASE 2 — Express Binding
- *     - Registers all discovered handlers with Express
- *     - Applies middleware in a fixed, enforced order:
+ * PHASE 2 — Express Binding
+ *   - Registers handlers with Express
+ *   - Applies middleware in a fixed, enforced order
+ *   - Applies auth-specific rate limiting structurally
+ *   - Registers METHOD_NOT_ALLOWED (405) fallback
  *
- *         1. Request validation
- *         2. Concurrency throttling (env-driven)
- *         3. Centralized cache enforcement (method-aware)
- *         4. Route handler execution
- *
- *     - Registers METHOD_NOT_ALLOWED (405) fallback last
- *
- *   CACHING BEHAVIOR (structural, middleware-enforced)
- *     - GET    → read-through cache (serve cached response when present)
- *     - PUT    → write-through cache (update cache on successful response)
- *     - DELETE → cache invalidation (remove cached entry)
- *
- *   THROTTLING BEHAVIOR
- *     - Limits in-flight concurrent requests per route and HTTP method
- *     - Configured via MAX_CONCURRENT_REQUESTS environment variable
- *     - Protects cache and database layers from thundering-herd scenarios
- *
- *   This design eliminates all internal HTTP calls between routes.
- *   Parent routes (e.g., /{API_VERSION}/health) may call children directly via:
- *
- *       const node = req.app.locals.routeTree["/{API_VERSION}/health"];
- *       const result = await node.children["database"].handlers.GET(req, res);
- *
- *   Fully compatible with the existing appFactory, middleware, and validator
- *   architecture. Route files remain cache- and throttle-agnostic.
- *
- * @requestExample
- *   {
- *     "example": "Route metadata for /{API_VERSION}/health",
- *     "node": {
- *       "path": "/{API_VERSION}/health",
- *       "file": "src/routes/{API_VERSION}/health/GET.ts",
- *       "handlers": ["GET"],
- *       "children": ["database", "network"]
- *     }
- *   }
- *
- * @response
- *   {
- *     "status": "ok",
- *     "message": "Routes loaded, middleware bound, and metadata tree constructed.",
- *     "routes": 42
- *   }
+ * ENFORCED MIDDLEWARE ORDER
+ *   1. Request validation
+ *   2. Auth rate limiting (auth routes only)
+ *   3. Concurrency throttling
+ *   4. Centralized cache enforcement
+ *   5. Route handler execution
  *
  * @requires
- *   - src/helpers/config.ts
- *   - src/middleware/validate.ts
- *   - src/middleware/cacheMiddleware.ts
- *   - src/middleware/throttleMiddleware.ts
- *   - src/routes/{API_VERSION}/**
+ * {
+ *   "helpers": ["@helpers/config"],
+ *   "middleware": [
+ *     "@middleware/validate",
+ *     "@middleware/throttleMiddleware",
+ *     "@middleware/rateLimitMiddleware",
+ *     "@middleware/cacheMiddleware"
+ *   ]
+ * }
  */
 
-import fs from "fs";
-import path from "path";
-import { pathToFileURL } from "url";
-import { configGet } from "@helpers/config";
-import { makeValidator } from "@middleware/validate";
-import { cacheMiddleware } from "@middleware/cacheMiddleware";
-import { throttleMiddleware } from "@middleware/throttleMiddleware";
-import { Application, Request, Response, NextFunction } from "express";
+import fs from 'fs'
+import path from 'path'
+import { pathToFileURL } from 'url'
+import type { Application, Request, Response, NextFunction } from 'express'
 
-// Supported method filenames
-const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"] as const;
-const METHOD_FILES = HTTP_METHODS.map((m) => `${m}.ts`);
+import { configGet } from '@helpers/config'
+import { makeValidator } from '@middleware/validate'
+import { throttleMiddleware } from '@middleware/throttleMiddleware'
+import { rateLimitMiddleware } from '@middleware/rateLimitMiddleware'
+import { cacheMiddleware } from '@middleware/cacheMiddleware'
 
-type RouteHandler = (req: Request, res: Response) => any;
+/* ------------------------------------------------------------------ */
+/* Types                                                              */
+/* ------------------------------------------------------------------ */
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
+const METHOD_FILES = HTTP_METHODS.map(m => `${m}.ts`)
+
+type RouteHandler = (req: Request, res: Response) => any
 
 interface RouteNode {
-    path: string;
-    file?: string; // points to latest-imported method file for debugging
-    handlers: {
-        GET?: RouteHandler;
-        POST?: RouteHandler;
-        PUT?: RouteHandler;
-        DELETE?: RouteHandler;
-        PATCH?: RouteHandler;
-    };
-    children: Record<string, RouteNode>;
+    path: string
+    file?: string
+    handlers: Partial<Record<typeof HTTP_METHODS[number], RouteHandler>>
+    children: Record<string, RouteNode>
 }
 
-/**
- * Entry point for the entire routing process.
- */
+/* ------------------------------------------------------------------ */
+/* Public API                                                         */
+/* ------------------------------------------------------------------ */
+
 export async function loadRoutes(app: Application): Promise<void> {
-    const routeTree: Record<string, RouteNode> = {};
+    const routeTree: Record<string, RouteNode> = {}
+    app.locals.routeTree = routeTree
 
-    // Expose route metadata to all handlers
-    app.locals.routeTree = routeTree;
-
-    const API_VERSION = configGet("API_VERSION") ?? "v1";
-
+    const API_VERSION = configGet('API_VERSION') ?? 'v1'
     const MAX_CONCURRENT_REQUESTS = Number(
-        configGet("MAX_CONCURRENT_REQUESTS") ?? "10"
-    );
+        configGet('MAX_CONCURRENT_REQUESTS') ?? '10'
+    )
 
-    const baseDir = path.join(
-        process.cwd(),
-        "src",
-        "routes",
-        API_VERSION
-    );
+    const baseDir = path.join(process.cwd(), 'src', 'routes', API_VERSION)
 
-    await scanDirectory(baseDir, `/${API_VERSION}`, routeTree);
+    await scanDirectory(baseDir, `/${API_VERSION}`, routeTree)
+    bindExpress(app, routeTree, MAX_CONCURRENT_REQUESTS)
 
-    bindExpress(app, routeTree,MAX_CONCURRENT_REQUESTS);
-
-    const routeCount = Object.keys(routeTree).length;
-    console.log(`RouteLoader: Registered ${routeCount} routes`);
+    console.log(
+        `RouteLoader: Registered ${Object.keys(routeTree).length} routes`
+    )
 }
 
-/**
- * Recursively walks directories and builds metadata structure.
- */
+/* ------------------------------------------------------------------ */
+/* Phase 1 — Route Discovery                                          */
+/* ------------------------------------------------------------------ */
+
 async function scanDirectory(
     dir: string,
     routePath: string,
     routeTree: Record<string, RouteNode>
 ): Promise<void> {
-
-    // Ensure current RouteNode exists
     if (!routeTree[routePath]) {
         routeTree[routePath] = {
             path: routePath,
             handlers: {},
-            children: {}
-        };
-    }
-
-    const node = routeTree[routePath];
-    const entries = fs.readdirSync(dir);
-
-    // Register handlers (GET.ts, POST.ts, etc.)
-    for (const entry of entries) {
-        const fullPath = path.join(dir, entry);
-        const isMethodFile = METHOD_FILES.includes(entry);
-
-        if (!isMethodFile) continue;
-
-        const method = entry.replace(".ts", "") as keyof RouteNode["handlers"];
-        const moduleUrl = pathToFileURL(fullPath).href;
-
-        try {
-            const mod = await import(moduleUrl);
-
-            if (typeof mod.default !== "function") {
-                console.error(
-                    `RouteLoader: ${fullPath} missing default export function.`
-                );
-                continue;
-            }
-
-            if (node.handlers[method]) {
-                console.error(
-                    `RouteLoader: Duplicate handler for ${method} at ${routePath}. Keeping first.`
-                );
-                continue;
-            }
-
-            node.handlers[method] = mod.default;
-            node.file = fullPath;
-        } catch (err) {
-            console.error(`RouteLoader: Failed to import ${fullPath}`, err);
+            children: {},
         }
     }
 
-    // Recurse into child directories
+    const node = routeTree[routePath]
+    const entries = fs.readdirSync(dir)
+
     for (const entry of entries) {
-        const fullPath = path.join(dir, entry);
-        if (!fs.statSync(fullPath).isDirectory()) continue;
+        const fullPath = path.join(dir, entry)
+        if (!METHOD_FILES.includes(entry)) continue
 
-        const childPath = `${routePath}/${entry}`;
-        await scanDirectory(fullPath, childPath, routeTree);
+        const method = entry.replace('.ts', '') as keyof RouteNode['handlers']
+        const moduleUrl = pathToFileURL(fullPath).href
 
-        // Link as child
-        node.children[entry] = routeTree[childPath];
+        const mod = await import(moduleUrl)
+        if (typeof mod.default !== 'function') {
+            throw new Error(`RouteLoader: ${fullPath} missing default export`)
+        }
+
+        if (!node.handlers[method]) {
+            node.handlers[method] = mod.default
+            node.file = fullPath
+        }
+    }
+
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry)
+        if (!fs.statSync(fullPath).isDirectory()) continue
+
+        const childPath = `${routePath}/${entry}`
+        await scanDirectory(fullPath, childPath, routeTree)
+        node.children[entry] = routeTree[childPath]
     }
 }
 
-/**
- * Second phase: bind all metadata to Express routes.
- */
+/* ------------------------------------------------------------------ */
+/* Phase 2 — Express Binding                                          */
+/* ------------------------------------------------------------------ */
+
 function bindExpress(
     app: Application,
     routeTree: Record<string, RouteNode>,
     maxConcurrentRequests: number
 ): void {
-
-    // Sort routes by path depth: shallow → deep (ensures correct override behavior)
     const sortedPaths = Object.keys(routeTree).sort(
-        (a, b) => a.split("/").length - b.split("/").length
-    );
+        (a, b) => a.split('/').length - b.split('/').length
+    )
+
+    const isAuthRoute = (path: string) => path.startsWith('/v1/auth')
 
     for (const routePath of sortedPaths) {
-        const node = routeTree[routePath];
-        const supportedMethods = Object.keys(node.handlers);
-        const missingMethods = HTTP_METHODS.filter(
-            (m) => !supportedMethods.includes(m)
-        );
+        const node = routeTree[routePath]
+        const supportedMethods = Object.keys(node.handlers)
 
-        // Register HTTP method handlers FIRST
         for (const method of supportedMethods) {
-            const handler = node.handlers[method as keyof RouteNode["handlers"]];
-            if (!handler) continue;
+            const handler = node.handlers[method as keyof typeof node.handlers]
+            if (!handler) continue
 
-            const schema = {}; // metadata-only placeholder
-            const validator = makeValidator(schema);
+            const validator = makeValidator({})
 
-            (app as any)[method.toLowerCase()](
-                routePath,
+            const middlewareChain = [
+                    validator.request,
 
-                // 1. Request validation
-                validator.request,
+                    ...(isAuthRoute(routePath)
+                        ? [
+                            rateLimitMiddleware({
+                                key: req =>
+                                    req.ip ||
+                                    (req.body?.email ?? req.body?.identifier ?? ''),
+                                max: 5,
+                                windowMs: 60_000,
+                            }),
+                        ]
+                        : []),
 
-                // 2. Concurrency throttling (before cache / DB)
-                throttleMiddleware(maxConcurrentRequests),
+                    throttleMiddleware(maxConcurrentRequests),
+                    cacheMiddleware(),
 
-                // 3. Centralized cache enforcement (method-aware)
-                cacheMiddleware(),
-
-                // 4. Route handler
-                async (req: Request, res: Response, next: NextFunction) => {
-                    try {
-                        const result = await handler(req, res);
-
-                        if (!res.headersSent) {
-                            const validated = validator.response(result);
-                            return res.json(validated);
+                    async (req: Request, res: Response, next: NextFunction) => {
+                        try {
+                            const result = await handler(req, res)
+                            if (!res.headersSent) {
+                                return res.json(validator.response(result))
+                            }
+                        } catch (err) {
+                            return next(err)
                         }
-                    } catch (err) {
-                        return next(err);
-                    }
-                }
-            );
+                    },
+                ]
+
+            ;(app as any)[method.toLowerCase()](routePath, ...middlewareChain)
         }
 
-        // Register fallback 405 LAST
-        register405(app, routePath, supportedMethods, missingMethods);
+        register405(app, routePath, supportedMethods)
     }
 }
 
-/**
- * METHOD_NOT_ALLOWED fallback (registered last).
- */
+/* ------------------------------------------------------------------ */
+/* 405 Fallback                                                       */
+/* ------------------------------------------------------------------ */
+
 function register405(
     app: Application,
     routePath: string,
-    supportedMethods: string[],
-    missingMethods: string[]
+    supportedMethods: string[]
 ): void {
-    app.all(routePath, (req: Request, res: Response, next: NextFunction) => {
-        const incoming = req.method.toUpperCase();
-
-        // If supported, allow next() to deliver handler
-        if (supportedMethods.includes(incoming)) {
-            return next();
+    app.all(routePath, (req, res, next) => {
+        if (supportedMethods.includes(req.method.toUpperCase())) {
+            return next()
         }
 
         return res.status(405).json({
-            error: "METHOD_NOT_ALLOWED",
-            message:
-                supportedMethods.length === 0
-                    ? `No supported methods for ${routePath}`
-                    : `${incoming} not allowed for ${routePath}`,
+            error: 'METHOD_NOT_ALLOWED',
+            message: `${req.method} not allowed for ${routePath}`,
             supportedMethods,
-            allowedMethods: missingMethods
-        });
-    });
+        })
+    })
 }
+
+/* ------------------------------------------------------------------ */
+/* Test Hooks                                                         */
+/* ------------------------------------------------------------------ */
 
 export const __test__ = {
     scanDirectory,
     bindExpress,
-};
+}

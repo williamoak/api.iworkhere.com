@@ -116,6 +116,14 @@ export async function resolveUserForApplication(
 
     const row = rows[0]
 
+    if (row.status === 'pending') {
+        throw new AuthError(
+            'USER_NOT_VERIFIED',
+            'Email verification required',
+            403
+        )
+    }
+
     if (row.status !== 'active') {
         throw new AuthError(
             'USER_DISABLED',

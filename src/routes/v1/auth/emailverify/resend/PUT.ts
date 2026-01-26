@@ -1,53 +1,41 @@
 /**
  * @myDocBlock v2.3
- * @file DELETE.ts
+ * @file PUT.ts
  * @external
- * @module routes/v1/auth/token
- * @tag auth, logout, revoke
+ * @module routes/v1/auth/emailverify/resend
+ * @tag auth, email, verify
  * @version 1.0.0
  * @author william.r.oak@gmail.com
- * @path /v1/auth/token
- * @summary Revoke an authentication token.
+ * @path /v1/auth/emailverify/resend
+ * @summary Resend an email verification token.
  * @description
- * Explicitly revokes an access or refresh token. Used for logout,
- * security events, or credential changes. Revocation is immediate.
- *
- * @requestExample
- * {
- *   "token": "opaque-token"
- * }
- *
- * @response
- * (204 No Content)
- *
- * @requires
- * {
- *   "services": [
- *     "tokenService"
- *   ]
- * }
+ * Allows a pending user to request a new email verification token.
+ * This endpoint is non-enumerating and always returns success.
  */
 
 import type { IncomingMessage, ServerResponse } from 'http'
 
-import { revokeToken } from '@services/auth/tokenService'
-import { AuthError } from '@services/auth/authContext'
+import { resolveAuthContext, AuthError } from '@services/auth/authContext'
+import { resendEmailVerificationToken } from '@services/auth/emailVerificationService'
 
-/**
- * DELETE /v1/auth/token
- */
-export default async function DELETE(
+export default async function PUT(
     req: IncomingMessage,
     res: ServerResponse
 ): Promise<void> {
     try {
         const body = (req as any).body
-        const token = body?.token
+        const { email } = body ?? {}
 
-        await revokeToken(token)
+        const { applicationId } = await resolveAuthContext(body)
 
-        res.statusCode = 204
-        res.end()
+        await resendEmailVerificationToken({
+            applicationId,
+            email,
+        })
+
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ ok: true }))
     } catch (err) {
         if (err instanceof AuthError) {
             res.statusCode = err.httpStatus
