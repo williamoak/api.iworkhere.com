@@ -129,7 +129,7 @@ describe('PUT /v1/auth/emailverify', () => {
 
     test('translates AuthError to HTTP response', async () => {
         ;(verifyEmailToken as any).mockRejectedValue(
-            new AuthError('TOKEN_INVALID', 'Token is invalid', 401)
+            new AuthError('INVALID_TOKEN', 'Token is invalid', 401)
         )
 
         const req = createReq({ token: 'bad-token' })
@@ -139,7 +139,7 @@ describe('PUT /v1/auth/emailverify', () => {
 
         expect(res.statusCode).toBe(401)
         expect(res.body).toEqual({
-            error: 'TOKEN_INVALID',
+            error: 'INVALID_TOKEN',
             message: 'Token is invalid',
         })
     })

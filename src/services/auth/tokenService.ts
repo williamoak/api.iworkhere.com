@@ -153,7 +153,7 @@ export async function refreshTokens(
 
     if (rows.length === 0) {
         throw new AuthError(
-            'TOKEN_INVALID',
+            'INVALID_TOKEN',
             'Token is invalid or expired',
             401
         )

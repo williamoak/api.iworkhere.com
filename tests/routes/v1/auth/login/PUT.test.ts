@@ -63,7 +63,7 @@ vi.mock('@services/auth/tokenService', () => ({
  * ------------------------------------------------------------
  */
 
-import PUT from '@routes/v1/auth/login/PUT'
+import POST from '@routes/v1/auth/login/POST.ts'
 import { resolveAuthContext, AuthError } from '@services/auth/authContext'
 import { resolveUserForApplication } from '@services/auth/authUserResolver'
 import { verifyPassword } from '@services/auth/passwordService'
@@ -139,7 +139,7 @@ describe('PUT /v1/auth/login', () => {
 
         const res = createRes()
 
-        await PUT(req, res)
+        await POST(req, res)
 
         expect(res.statusCode).toBe(200)
         expect(res.body.user.username).toBe('bill')
@@ -155,7 +155,7 @@ describe('PUT /v1/auth/login', () => {
         const req = createReq({ app_key: 'disabled.app' })
         const res = createRes()
 
-        await PUT(req, res)
+        await POST(req, res)
 
         expect(res.statusCode).toBe(403)
         expect(res.body).toEqual({

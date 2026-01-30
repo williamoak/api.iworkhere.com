@@ -119,7 +119,7 @@ describe('tokenService', () => {
             await expect(
                 refreshTokens('missing-token')
             ).rejects.toMatchObject({
-                code: 'TOKEN_INVALID',
+                code: 'INVALID_TOKEN',
                 httpStatus: 401,
             })
         })

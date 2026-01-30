@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/routes/v1/warframe/modules/GET.ts</title>
+    <title>Code coverage report for src/routes/v1/warframe/modules/POST.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../../../../prettify.css" />
     <link rel="stylesheet" href="../../../../../base.css" />
@@ -19,7 +19,7 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/warframe/modules</a> GET.ts</h1>
+        <h1><a href="../../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/warframe/modules</a> POST.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
@@ -407,7 +407,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * @myDocBlock v2.2
- * @file GET.ts
+ * @file POST.ts
  * @external
  * @module warframe-modules
  * @tag modules
@@ -447,7 +447,7 @@
  *
  * @requestExample
  *   {
- *     "method": "GET",
+ *     "method": "POST",
  *     "url": "/v1/warframe/modules?mod_id=550e8400-e29b-41d4-a716-446655440000"
  *   }
  *
@@ -492,7 +492,7 @@ import { inArray, eq } from "drizzle-orm";
 import { emptyModule, toModuleDTO } from "@src/dto/module";
 &nbsp;
 /**
- * GET /v1/warframe/modules
+ * POST /v1/warframe/modules
  *
  * Query params:
  *   - mod_id (UUID)        optional, may appear multiple times
@@ -504,7 +504,7 @@ import { emptyModule, toModuleDTO } from "@src/dto/module";
  *   module: { ...full module object (empty or populated) }
  * }
  */
-export default async function GET(
+export default async function POST(
     req: IncomingMessage,
     res: ServerResponse
 ) {
@@ -564,7 +564,7 @@ export default async function GET(
             })
         );
     } catch (err) {
-<span class="cstat-no" title="statement not covered" >        console.error("GET /modules error:", err);</span>
+<span class="cstat-no" title="statement not covered" >        console.error("POST /modules error:", err);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        res.statusCode = 500;</span>
 <span class="cstat-no" title="statement not covered" >        res.setHeader("Content-Type", "application/json");</span>

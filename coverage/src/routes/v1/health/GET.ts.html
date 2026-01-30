@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/routes/v1/health/GET.ts</title>
+    <title>Code coverage report for src/routes/v1/health/POST.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../../../prettify.css" />
     <link rel="stylesheet" href="../../../../base.css" />
@@ -19,7 +19,7 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/health</a> GET.ts</h1>
+        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/health</a> POST.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
@@ -662,7 +662,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/// &lt;reference types="node" /&gt;
 /**
  * @myDocBlock v2.2
- * @file GET.ts
+ * @file POST.ts
  * @external
  * @author william.r.oak@gmail.com
  * @module HealthIndex
@@ -680,14 +680,14 @@
  *
  *   Resolution behavior:
  *
- *     1) GET /v1/health
+ *     1) POST /v1/health
  *          → Returns only child endpoint names.
  *
- *     2) GET /v1/health?all
+ *     2) POST /v1/health?all
  *          → Executes each child endpoint ONCE and returns a generated
  *            response-schema tree for each.
  *
- *     3) GET /v1/health?complete
+ *     3) POST /v1/health?complete
  *          → Executes all child endpoints and returns full health results.
  *
  * @query
@@ -706,7 +706,7 @@
  *
  * @requestExample
  *   {
- *     "method": "GET",
+ *     "method": "POST",
  *     "url": "/v1/health?all"
  *   }
  *
@@ -833,13 +833,13 @@ async function executeChildHealth(
         };
     }
 &nbsp;
-    const handler = child.handlers.GET;
+    const handler = child.handlers.POST;
 &nbsp;
     if (typeof handler !== "function") {
         return {
             status: "fail",
             name: childName,
-            data: { error: "No GET handler for child endpoint" }
+            data: { error: "No POST handler for child endpoint" }
         };
     }
 &nbsp;

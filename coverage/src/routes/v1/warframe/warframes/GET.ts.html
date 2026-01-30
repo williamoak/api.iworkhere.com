@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/routes/v1/warframe/warframes/GET.ts</title>
+    <title>Code coverage report for src/routes/v1/warframe/warframes/POST.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../../../../prettify.css" />
     <link rel="stylesheet" href="../../../../../base.css" />
@@ -19,7 +19,7 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/warframe/warframes</a> GET.ts</h1>
+        <h1><a href="../../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/warframe/warframes</a> POST.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
@@ -347,7 +347,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * @myDocBlock v2.2
- * @file GET.ts
+ * @file POST.ts
  * @external
  * @module warframe-warframes
  * @tag warframes
@@ -381,7 +381,7 @@
  *
  * @requestExample
  *   {
- *     "method": "GET",
+ *     "method": "POST",
  *     "url": "/v1/warframe/warframes?warframe_id=660e8400-e29b-41d4-a716-446655440010"
  *   }
  *
@@ -426,9 +426,9 @@ import { inArray } from "drizzle-orm";
 import { emptyWarframe, toWarframeDTO } from "@src/dto/warframe";
 &nbsp;
 /**
- * GET /v1/warframe/warframes
+ * POST /v1/warframe/warframes
  */
-export default async function GET(
+export default async function POST(
     req: IncomingMessage,
     res: ServerResponse
 ) {
@@ -474,7 +474,7 @@ export default async function GET(
             })
         );
     } catch (err) {
-<span class="cstat-no" title="statement not covered" >        console.error("GET /warframes error:", err);</span>
+<span class="cstat-no" title="statement not covered" >        console.error("POST /warframes error:", err);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >        res.statusCode = 500;</span>
 <span class="cstat-no" title="statement not covered" >        res.setHeader("Content-Type", "application/json");</span>

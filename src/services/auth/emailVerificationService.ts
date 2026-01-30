@@ -121,7 +121,7 @@ export async function verifyEmailToken(token: string): Promise<{
 
     if (rows.length === 0) {
         throw new AuthError(
-            'TOKEN_INVALID',
+            'INVALID_TOKEN',
             'Verification token is invalid',
             401
         )

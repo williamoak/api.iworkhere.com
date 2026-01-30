@@ -114,7 +114,7 @@ describe('PUT /v1/auth/passreset/complete', () => {
 
     test('translates AuthError to HTTP response', async () => {
         ;(completePasswordReset as any).mockRejectedValue(
-            new AuthError('TOKEN_INVALID', 'Reset token is invalid', 401)
+            new AuthError('INVALID_TOKEN', 'Reset token is invalid', 401)
         )
 
         const req = createReq({
@@ -127,7 +127,7 @@ describe('PUT /v1/auth/passreset/complete', () => {
 
         expect(res.statusCode).toBe(401)
         expect(res.body).toEqual({
-            error: 'TOKEN_INVALID',
+            error: 'INVALID_TOKEN',
             message: 'Reset token is invalid',
         })
     })

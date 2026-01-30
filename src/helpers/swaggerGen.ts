@@ -21,9 +21,9 @@
  * HTTP METHOD
  * ---------------------------------------------------------------------------
  * Inferred strictly from filename:
- *   GET.ts     → get
+ *   POST.ts     → get
  *   POST.ts    → post
- *   PUT.ts     → put
+ *   POST.ts     → put
  *   DELETE.ts  → delete
  *   PATCH.ts   → patch
  *
@@ -145,7 +145,7 @@ function derivePathFromFile(filePath: string): string | null {
     const relative = filePath
         .replace(ROUTES_ROOT, "")
         .replace(/\\/g, "/")
-        .replace(/\/(GET|POST|PUT|DELETE|PATCH)\.ts$/, "");
+        .replace(/\/(POST|POST|POST|DELETE|PATCH)\.ts$/, "");
 
     return relative || "/";
 }

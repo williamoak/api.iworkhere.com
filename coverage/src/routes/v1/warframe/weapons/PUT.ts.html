@@ -3,7 +3,7 @@
 <html lang="en">
 
 <head>
-    <title>Code coverage report for src/routes/v1/warframe/weapons/PUT.ts</title>
+    <title>Code coverage report for src/routes/v1/warframe/weapons/POST.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../../../../prettify.css" />
     <link rel="stylesheet" href="../../../../../base.css" />
@@ -19,7 +19,7 @@
 <body>
 <div class='wrapper'>
     <div class='pad1'>
-        <h1><a href="../../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/warframe/weapons</a> PUT.ts</h1>
+        <h1><a href="../../../../../index.html">All files</a> / <a href="index.html">src/routes/v1/warframe/weapons</a> POST.ts</h1>
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
@@ -631,7 +631,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * @myDocBlock v2.2
- * @file PUT.ts
+ * @file POST.ts
  * @external
  * @module warframe-weapons
  * @tag weapons
@@ -663,7 +663,7 @@
  *
  * @requestExample
  *   {
- *     "method": "PUT",
+ *     "method": "POST",
  *     "url": "/v1/warframe/weapons",
  *     "body": {
  *       "name": "Braton",
@@ -714,7 +714,7 @@ import { toWeaponWrite } from "@src/db/mappers/weaponWrite";
 import { toWeaponDTO, emptyWeapon } from "@src/dto/weapon";
 import { overlayDto } from "@src/dto/dtoOverlay";
 &nbsp;
-export default async function PUT(
+export default async function POST(
     req: IncomingMessage,
     res: ServerResponse
 ) {
@@ -903,7 +903,7 @@ export default async function PUT(
 <span class="cstat-no" title="statement not covered" >            return;</span>
         }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >        console.error("PUT /weapons error:", err);</span>
+<span class="cstat-no" title="statement not covered" >        console.error("POST /weapons error:", err);</span>
 <span class="cstat-no" title="statement not covered" >        res.statusCode = 500;</span>
 <span class="cstat-no" title="statement not covered" >        res.setHeader("Content-Type", "application/json");</span>
 <span class="cstat-no" title="statement not covered" >        res.end(JSON.stringify({</span>

@@ -139,7 +139,7 @@ export async function verifyPasswordResetToken(
 
     if (rows.length === 0) {
         throw new AuthError(
-            'TOKEN_INVALID',
+            'INVALID_TOKEN',
             'Reset token is invalid',
             401
         )
@@ -190,7 +190,7 @@ export async function completePasswordReset(
 
     if (rows.length === 0) {
         throw new AuthError(
-            'TOKEN_INVALID',
+            'INVALID_TOKEN',
             'Reset token is invalid',
             401
         )

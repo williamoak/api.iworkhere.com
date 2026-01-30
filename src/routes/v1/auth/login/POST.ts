@@ -1,6 +1,6 @@
 /**
  * @myDocBlock v2.3
- * @file PUT.ts
+ * @file POST.ts
  * @external
  * @module routes/v1/auth/login
  * @tag auth, login
@@ -63,9 +63,9 @@ import { verifyPassword } from '@services/auth/passwordService'
 import { issueLoginTokens } from '@services/auth/tokenService'
 
 /**
- * PUT /v1/auth/login
+ * GET /v1/auth/login
  */
-export default async function PUT(
+export default async function POST(
     req: IncomingMessage,
     res: ServerResponse
 ): Promise<void> {
