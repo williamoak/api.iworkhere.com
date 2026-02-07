@@ -1,120 +1,97 @@
 /**
- * @myDocBlock v2.2
+ * @myDocBlock v2.3
  * @file GET.ts
  * @external
- * @module warframe-weapons
- * @tag weapons
- * @version 1.0.0
+ * @module routes/v1/warframe/weapons
+ * @tag warframe
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/weapons
  * @summary Retrieve weapon list and optionally resolve a single weapon.
  *
  * @description
- *   Returns a stable response containing:
+ * Returns a stable response containing:
+ * - A lightweight list of all weapons
+ * - A single resolved weapon object
  *
- *   - A lightweight list of all weapons
- *   - A single resolved weapon object
+ * Resolution order is:
+ * 1) One or more weapon_id query parameters (first match wins)
+ * 2) Exact name match
+ *    - If multiple records share the same name, class is used
+ *    - class defaults to "normal" when not provided
+ * 3) No resolvable filters → empty weapon DTO
  *
- *   Resolution order is:
- *     1. One or more weapon_id query parameters (first match wins)
- *     2. Exact name match
- *        - If multiple records share the same name, class is used
- *        - class defaults to "normal" when not provided
- *     3. No resolvable filters → empty weapon DTO
- *
- *   This endpoint is read-only and has no side effects.
+ * This endpoint is read-only and has no side effects.
  *
  * @query
- *   {
- *     "weapon_id": {
- *       "type": "string",
- *       "format": "uuid",
- *       "required": false,
- *       "multiple": true,
- *       "description": "Weapon identifiers to resolve; first match wins"
- *     },
- *     "name": {
- *       "type": "string",
- *       "required": false,
- *       "description": "Exact weapon name to resolve"
- *     },
- *     "class": {
- *       "type": "string",
- *       "required": false,
- *       "default": "normal",
- *       "description": "Weapon class used when resolving by name"
- *     }
+ * {
+ *   "weapon_id": {
+ *     "type": "string",
+ *     "required": false,
+ *     "description": "Weapon identifiers to resolve; first match wins (repeatable query param)"
+ *   },
+ *   "name": {
+ *     "type": "string",
+ *     "required": false,
+ *     "description": "Exact weapon name to resolve"
+ *   },
+ *   "class": {
+ *     "type": "string",
+ *     "required": false,
+ *     "description": "Weapon class used when resolving by name (defaults to normal)"
  *   }
+ * }
  *
  * @requestExample
- *   {
- *     "method": "GET",
- *     "url": "/v1/warframe/weapons?name=Braton&class=prime"
- *   }
+ * {
+ *   "method": "GET",
+ *   "url": "/v1/warframe/weapons?name=Braton&class=prime"
+ * }
  *
  * @response
- *   {
- *     "success": true,
- *     "data": {
- *       "weapons": [
- *         {
- *           "weapon_id": "880e8400-e29b-41d4-a716-446655440020",
- *           "name": "Braton"
- *         },
- *         {
- *           "weapon_id": "880e8400-e29b-41d4-a716-446655440021",
- *           "name": "Braton Prime"
- *         }
- *       ],
- *       "weapon": {
- *         "weapon_id": "880e8400-e29b-41d4-a716-446655440021",
- *         "name": "Braton",
- *         "class": "prime",
- *         "description": "",
- *         "weapon_mods": null
- *       }
- *     }
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "weapons": [
+ *       { "weapon_id": "<WEAPON_ID>", "name": "Braton" }
+ *     ],
+ *     "weapon": {}
  *   }
+ * }
  *
  * @requires
- *   - Database connection via dbService
- *   - weapons table schema
- *   - DTO mapping via toWeaponDTO()
- *   - emptyWeapon() for non-resolved responses
+ * {
+ *   "tables": ["weapons"],
+ *   "services": ["dbService"],
+ *   "mappers": ["toWeaponDTO", "emptyWeapon"]
+ * }
  */
 
-import type { IncomingMessage, ServerResponse } from "http";
-import { URL } from "url";
+import type { Request, Response } from "express";
+import { inArray, eq } from "drizzle-orm";
 
 import { db } from "@services/dbService";
 import { weapons } from "@db/schema";
-import { inArray, eq } from "drizzle-orm";
 import { emptyWeapon, toWeaponDTO } from "@src/dto/weapon";
 
 /**
  * GET /v1/warframe/weapons
- *
- * Query params:
- *   - weapon_id (UUID)        optional, may appear multiple times
- *   - name (string)          optional, exact match
- *   - class (string)         optional, defaults to "normal" when name is used
- *
- * Response shape (always stable):
- * {
- *   weapons: [{ weapon_id, name }],
- *   weapon: { ...full weapon object (empty or populated) }
- * }
  */
-export default async function GET(
-    req: IncomingMessage,
-    res: ServerResponse
-) {
+export default async function GET(req: Request, res: Response) {
     try {
-        const url = new URL(req.url ?? "", "http://localhost");
+        const weaponIdsRaw = req.query.weapon_id;
+        const weaponIds =
+            typeof weaponIdsRaw === "string"
+                ? [weaponIdsRaw]
+                : Array.isArray(weaponIdsRaw)
+                    ? weaponIdsRaw.filter((v): v is string => typeof v === "string")
+                    : [];
 
-        const weaponIds = url.searchParams.getAll("weapon_id");
-        const name = url.searchParams.get("name");
-        const weaponClass = url.searchParams.get("class") ?? "normal";
+        const nameRaw = req.query.name;
+        const name = typeof nameRaw === "string" ? nameRaw : undefined;
+
+        const classRaw = req.query.class;
+        const weaponClass = typeof classRaw === "string" ? classRaw : "normal";
 
         // --------------------------------------------------
         // 1) Always fetch lightweight weapon list
@@ -145,8 +122,8 @@ export default async function GET(
             }
         }
 
-            // --------------------------------------------------
-            // 4) Priority 2: name (+ class resolution)
+        // --------------------------------------------------
+        // 4) Priority 2: name (+ class resolution)
         // --------------------------------------------------
         else if (name) {
             const nameMatches = await db
@@ -171,27 +148,19 @@ export default async function GET(
             }
         }
 
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(
-            JSON.stringify({
-                success: true,
-                data: {
-                    weapons: weaponList,
-                    weapon: currentWeapon,
-                },
-            })
-        );
+        return res.status(200).json({
+            success: true,
+            data: {
+                weapons: weaponList,
+                weapon: currentWeapon,
+            },
+        });
     } catch (err) {
         console.error("GET /weapons error:", err);
 
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        res.end(
-            JSON.stringify({
-                success: false,
-                error: "Internal server error",
-            })
-        );
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        });
     }
 }

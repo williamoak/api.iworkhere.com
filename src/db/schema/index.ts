@@ -12,6 +12,7 @@ export * from "./user_password_history";
 export * from "./user_auth_local";
 export * from './email_verification_tokens'
 export * from './password_reset_tokens'
+export * from './config'
 
 // --- Warframe Calculator tables ---
 export * from "./warframes";

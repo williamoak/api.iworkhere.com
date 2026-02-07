@@ -13,40 +13,85 @@
  * associates the user with an application, and enforces password
  * security rules. The user is created in a pending state until
  * email verification is completed.
+ *
+ * @query none
+ *
+ * @requestExample
+ * {
+ *   "app_key": "example-app-key",
+ *   "username": "bill",
+ *   "email": "bill@example.com",
+ *   "password": "plaintext-password"
+ * }
+ *
+ * @response
+ * {
+ *   "user": {
+ *     "id": "uuid",
+ *     "username": "bill",
+ *     "email": "bill@example.com",
+ *     "status": "pending"
+ *   }
+ * }
+ *
+ * @requires
+ * {
+ *   "services": [
+ *     "authContext",
+ *     "passwordService",
+ *     "emailVerificationService",
+ *     "dbService"
+ *   ],
+ *   "tables": [
+ *     "users",
+ *     "user_auth_local",
+ *     "user_applications",
+ *     "email_verification_tokens"
+ *   ]
+ * }
  */
 
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
+import { z } from 'zod'
 
 import { resolveAuthContext, AuthError } from '@services/auth/authContext'
-import { hashPassword, enforcePasswordHistory } from '@services/auth/passwordService'
-import { issueEmailVerificationToken } from '@services/auth/emailVerificationService' // NEW
-import { db } from '@services/dbService'
 import {
-    users,
-    userAuthLocal,
-    userApplications,
-} from '@db/schema'
+    hashPassword,
+    enforcePasswordHistory,
+} from '@services/auth/passwordService'
+import { issueEmailVerificationToken } from '@services/auth/emailVerificationService'
+import { db } from '@services/dbService'
+import { users, userAuthLocal, userApplications } from '@db/schema'
 
 import { v7 as uuidv7 } from 'uuid'
 
-export default async function PUT(
-    req: IncomingMessage,
-    res: ServerResponse
-): Promise<void> {
+export const schema = {
+    body: z.object({
+        app_key: z.string().trim().min(1),
+        username: z.string().trim().min(1),
+        email: z.string().trim().email(),
+        password: z.string().min(1),
+    }),
+}
+
+export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        const body = (req as any).body
+        const body = req.body
         const { username, email, password } = body ?? {}
 
         // Validate request BEFORE services
-        if (!username || !email || !password) {
-            res.statusCode = 400
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: 'INVALID_REQUEST',
-                    message: 'username, email, and password are required',
-                })
-            )
+        if (
+            typeof username !== 'string' ||
+            username.trim().length === 0 ||
+            typeof email !== 'string' ||
+            email.trim().length === 0 ||
+            typeof password !== 'string' ||
+            password.trim().length === 0
+        ) {
+            res.status(400).json({
+                error: 'INVALID_REQUEST',
+                message: 'username, email, and password are required',
+            })
             return
         }
 
@@ -80,7 +125,6 @@ export default async function PUT(
                 isEnabled: true,
             })
 
-            // 🔐 Issue email verification token (NEW)
             await issueEmailVerificationToken({
                 userId,
                 email,
@@ -88,38 +132,26 @@ export default async function PUT(
             })
         })
 
-        res.statusCode = 201
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                user: {
-                    id: userId,
-                    username,
-                    email,
-                    status: 'pending',
-                },
-            })
-        )
+        res.status(201).json({
+            user: {
+                id: userId,
+                username,
+                email,
+                status: 'pending',
+            },
+        })
     } catch (err) {
         if (err instanceof AuthError) {
-            res.statusCode = err.httpStatus
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: err.code,
-                    message: err.message,
-                })
-            )
+            res.status(err.httpStatus).json({
+                error: err.code,
+                message: err.message,
+            })
             return
         }
 
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                error: 'INTERNAL_ERROR',
-                message: 'An unexpected error occurred',
-            })
-        )
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
     }
 }

@@ -1,73 +1,53 @@
 /**
- * @myDocBlock v2.2
+ * @myDocBlock v2.3
  * @file PUT.ts
  * @external
- * @module warframe-warframes
- * @tag warframes
- * @version 1.0.0
+ * @module routes/v1/warframe/warframes
+ * @tag warframe
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/warframes
  * @summary Insert or update a warframe.
- *
  * @description
- *   Performs a deterministic insert-or-update operation using the following
- *   resolution order:
+ * Performs a deterministic insert-or-update operation using the following
+ * resolution order:
  *
- *     1. Update by warframe_id if provided (highest priority)
- *     2. Resolve by name:
- *        - class defaults to "normal" if not provided
- *        - 0 matches → insert
- *        - 1 match → update
- *        - 2+ matches → disambiguate by resolved class
- *     3. Insert if no identifier is resolvable
+ * 1. Update by warframe_id if provided (highest priority)
+ * 2. Resolve by name:
+ *    - class defaults to "normal" if not provided
+ *    - 0 matches → insert
+ *    - 1 match → update
+ *    - 2+ matches → disambiguate by resolved class
+ * 3. Insert if no identifier is resolvable
  *
- *   If multiple records still match after class disambiguation, the request
- *   is rejected with a conflict error.
+ * If multiple records still match after class disambiguation, the request
+ * is rejected with a conflict error.
  *
- * @query
- *   {}
+ * @query none
  *
  * @requestExample
- *   {
- *     "method": "PUT",
- *     "url": "/v1/warframe/warframes",
- *     "body": {
- *       "name": "Excalibur",
- *       "class": "normal",
- *       "health": 100,
- *       "shield": 100,
- *       "armor": 225,
- *       "energy": 100
- *     }
- *   }
+ * {
+ *   "warframe_id": "<WARFRAME_ID>",
+ *   "name": "Excalibur",
+ *   "class": "normal"
+ * }
  *
  * @response
- *   {
- *     "success": true,
- *     "data": {
- *       "warframe_id": "660e8400-e29b-41d4-a716-446655440010",
- *       "name": "Excalibur",
- *       "class": "normal",
- *       "health": 100,
- *       "shield": 100,
- *       "armor": 225,
- *       "energy": 100
- *     }
- *   }
+ * {
+ *   "success": true,
+ *   "data": {}
+ * }
  *
  * @requires
- *   - Database connection via dbService
- *   - warframe table schema
- *   - Zod validation schemas:
- *       warframeInsertSchema
- *       warframeUpdateSchema
- *       warframeUpdateByNameSchema
- *   - DTO mapping via toWarframeDTO()
- *   - Write mapper via toWarframeWrite()
- *   - emptyWarframe() for validation overlay
+ * {
+ *   "tables": ["warframes"],
+ *   "services": ["dbService"],
+ *   "validation": ["warframeInsertSchema", "warframeUpdateSchema", "warframeUpdateByNameSchema"],
+ *   "mappers": ["toWarframeDTO", "toWarframeWrite"]
+ * }
  */
 
-import type { IncomingMessage, ServerResponse } from "http";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 
@@ -84,11 +64,8 @@ import { toWarframeDTO, emptyWarframe } from "@src/dto/warframe";
 import { overlayDto } from "@src/dto/dtoOverlay";
 import { toWarframeWrite } from "@src/db/mappers/warframeWrite";
 
-export default async function PUT(
-    req: IncomingMessage,
-    res: ServerResponse
-) {
-    const body = (req as any).body ?? {};
+export default async function PUT(req: Request, res: Response) {
+    const body = req.body ?? {};
 
     try {
         let dbResult: any = null;
@@ -109,13 +86,13 @@ export default async function PUT(
             dbResult = rows[0] ?? null;
         }
 
-            // -------------------------------------------------
-            // UPDATE / INSERT by name (class defaults applied)
+        // -------------------------------------------------
+        // UPDATE / INSERT by name (class defaults applied)
         // -------------------------------------------------
         else if (body?.name) {
             const parsed = warframeUpdateByNameSchema.parse(body);
 
-            // ✅ class ALWAYS defaults here for name-based logic
+            // class ALWAYS defaults here for name-based logic
             const resolvedClass = parsed.class ?? "normal";
 
             const effectiveParsed = {
@@ -190,19 +167,16 @@ export default async function PUT(
 
                 // >1 narrowed matches → conflict
                 else {
-                    res.statusCode = 409;
-                    res.setHeader("Content-Type", "application/json");
-                    res.end(JSON.stringify({
+                    return res.status(409).json({
                         success: false,
                         error: "Multiple warframes match name and class",
-                    }));
-                    return;
+                    });
                 }
             }
         }
 
-            // -------------------------------------------------
-            // INSERT (no identifiers)
+        // -------------------------------------------------
+        // INSERT (no identifiers)
         // -------------------------------------------------
         else {
             const parsed = warframeInsertSchema.parse(body);
@@ -216,12 +190,10 @@ export default async function PUT(
             dbResult = rows[0];
         }
 
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({
+        return res.status(200).json({
             success: true,
             data: dbResult ? toWarframeDTO(dbResult) : null,
-        }));
+        });
 
     } catch (err) {
         if (err instanceof z.ZodError) {
@@ -239,24 +211,19 @@ export default async function PUT(
                 )
                 .map(([k]) => k);
 
-            res.statusCode = 400;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({
+            return res.status(400).json({
                 success: false,
                 error: "Validation failed",
                 details: err.issues,
                 missing_fields,
                 empty_fields,
-            }));
-            return;
+            });
         }
 
         console.error("PUT /warframes error:", err);
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({
+        return res.status(500).json({
             success: false,
             error: "Internal server error",
-        }));
+        });
     }
 }

@@ -4,13 +4,41 @@
  * @internal
  * @module tests/routes/v1/auth/register
  * @tag auth, register, test
- * @version 1.1.0
+ * @version 1.2.0
+ * @author william.r.oak@gmail.com
  * @path tests/routes/v1/auth/register/PUT.test.ts
- * @summary Tests PUT /v1/auth/register endpoint glue logic.
+ * @summary Unit tests for PUT /v1/auth/register endpoint glue logic.
+ * @description
+ * Verifies that the register endpoint:
+ *   - orchestrates auth context resolution and password hashing
+ *   - executes user creation and email verification issuance within a DB transaction
+ *   - returns HTTP 201 with a pending user payload on success
+ *   - returns HTTP 400 for missing required fields (handler-level validation)
+ *
+ * Also verifies that the endpoint exports a Zod `schema` definition for request
+ * validation (consumed by the route loader middleware chain).
+ *
+ * @query
+ *   {}
+ *
+ * @requires
+ * {
+ *   "services": [
+ *     "authContext",
+ *     "passwordService",
+ *     "emailVerificationService",
+ *     "dbService"
+ *   ],
+ *   "tables": [
+ *     "users",
+ *     "user_auth_local",
+ *     "user_applications"
+ *   ]
+ * }
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
 
 /**
  * ------------------------------------------------------------
@@ -58,7 +86,7 @@ vi.mock('@db/schema', () => ({
  * ------------------------------------------------------------
  */
 
-import PUT from '@routes/v1/auth/register/PUT'
+import PUT, { schema } from '@routes/v1/auth/register/PUT'
 import { resolveAuthContext } from '@services/auth/authContext'
 import { hashPassword } from '@services/auth/passwordService'
 import { issueEmailVerificationToken } from '@services/auth/emailVerificationService'
@@ -70,20 +98,44 @@ import { db } from '@services/dbService'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+function createReq(body: any): Request {
+    return {
+        body,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse & { body?: any } {
-    return {
+type ResMock = Response & {
+    statusCode: number
+    body?: any
+    headers: Record<string, string>
+}
+
+function createRes(): ResMock {
+    const res = {
         statusCode: 0,
-        setHeader() {},
-        end(payload?: string) {
-            if (payload) {
-                this.body = JSON.parse(payload)
-            }
+        body: undefined,
+        headers: {} as Record<string, string>,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
         },
-    } as any
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
+        setHeader(key: string, value: string) {
+            this.headers[key] = value
+        },
+
+        end() {
+            return this
+        },
+    }
+
+    return res as unknown as ResMock
 }
 
 beforeEach(() => {
@@ -97,6 +149,20 @@ beforeEach(() => {
  */
 
 describe('PUT /v1/auth/register', () => {
+    test('exports a Zod request schema', async () => {
+        expect(schema).toBeTruthy()
+        expect(schema.body).toBeTruthy()
+
+        const parsed = schema.body.safeParse({
+            app_key: 'bill.iworkhere.com',
+            username: 'bill',
+            email: 'not-an-email',
+            password: 'secret',
+        })
+
+        expect(parsed.success).toBe(false)
+    })
+
     test('creates a user, issues email verification token, and returns 201', async () => {
         ;(resolveAuthContext as any).mockResolvedValue({
             applicationId: 'app-id',

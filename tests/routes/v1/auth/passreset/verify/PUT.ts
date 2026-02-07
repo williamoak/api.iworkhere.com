@@ -3,14 +3,34 @@
  * @file PUT.test.ts
  * @internal
  * @module tests/routes/v1/auth/passreset/verify
- * @tag auth, password, reset, test
+ * @tag auth, password-reset, verify, test
  * @version 1.0.0
+ * @author william.r.oak@gmail.com
  * @path tests/routes/v1/auth/passreset/verify/PUT.test.ts
- * @summary Tests PUT /v1/auth/passreset/verify endpoint.
+ * @summary Unit tests for PUT /v1/auth/passreset/verify endpoint glue logic.
+ * @description
+ * Verifies that the password reset token verification endpoint:
+ *   - exports a Zod `schema` for request validation
+ *   - returns HTTP 400 for invalid request bodies
+ *   - calls verifyPasswordResetToken() with the provided token
+ *   - returns HTTP 200 with { valid: true } on success
+ *   - translates AuthError failures into HTTP responses
+ *   - returns HTTP 500 for unexpected errors
+ *
+ * @query
+ *   {}
+ *
+ * @requires
+ * {
+ *   "services": [
+ *     "passwordResetService",
+ *     "authContext"
+ *   ]
+ * }
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
 
 /**
  * ------------------------------------------------------------
@@ -40,7 +60,7 @@ vi.mock('@services/auth/authContext', () => ({
  * ------------------------------------------------------------
  */
 
-import PUT from '@routes/v1/auth/passreset/verify/PUT'
+import PUT, { schema } from '@routes/v1/auth/passreset/verify/PUT'
 import { verifyPasswordResetToken } from '@services/auth/passwordResetService'
 import { AuthError } from '@services/auth/authContext'
 
@@ -50,23 +70,44 @@ import { AuthError } from '@services/auth/authContext'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+function createReq(body: any): Request {
+    return {
+        body,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse & { body?: any } {
-    return {
+type ResMock = Response & {
+    statusCode: number
+    body?: any
+    headers: Record<string, string>
+}
+
+function createRes(): ResMock {
+    const res = {
         statusCode: 0,
+        body: undefined,
         headers: {} as Record<string, string>,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
         setHeader(key: string, value: string) {
-            ;(this.headers as any)[key] = value
+            this.headers[key] = value
         },
-        end(payload?: string) {
-            if (payload) {
-                this.body = JSON.parse(payload)
-            }
+
+        end() {
+            return this
         },
-    } as any
+    }
+
+    return res as unknown as ResMock
 }
 
 beforeEach(() => {
@@ -80,6 +121,17 @@ beforeEach(() => {
  */
 
 describe('PUT /v1/auth/passreset/verify', () => {
+    test('exports a Zod request schema', async () => {
+        expect(schema).toBeTruthy()
+        expect(schema.body).toBeTruthy()
+
+        const parsed = schema.body.safeParse({
+            token: '',
+        })
+
+        expect(parsed.success).toBe(false)
+    })
+
     test('returns 200 when token is valid', async () => {
         ;(verifyPasswordResetToken as any).mockResolvedValue({
             userId: 'u1',
@@ -95,7 +147,7 @@ describe('PUT /v1/auth/passreset/verify', () => {
         expect(verifyPasswordResetToken).toHaveBeenCalledWith('valid-token')
     })
 
-    test('returns 400 when token is missing', async () => {
+    test('returns 400 for invalid request body (missing token)', async () => {
         const req = createReq({})
         const res = createRes()
 
@@ -104,8 +156,10 @@ describe('PUT /v1/auth/passreset/verify', () => {
         expect(res.statusCode).toBe(400)
         expect(res.body).toEqual({
             error: 'INVALID_REQUEST',
-            message: 'token is required',
+            message: 'Invalid request body',
         })
+
+        expect(verifyPasswordResetToken).not.toHaveBeenCalled()
     })
 
     test('translates AuthError to HTTP response', async () => {
@@ -122,6 +176,21 @@ describe('PUT /v1/auth/passreset/verify', () => {
         expect(res.body).toEqual({
             error: 'INVALID_TOKEN',
             message: 'Reset token is invalid',
+        })
+    })
+
+    test('returns 500 for unexpected errors', async () => {
+        ;(verifyPasswordResetToken as any).mockRejectedValue(new Error('boom'))
+
+        const req = createReq({ token: 'valid-token' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
         })
     })
 })

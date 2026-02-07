@@ -1,32 +1,63 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import type { IncomingMessage, ServerResponse } from "http";
+/**
+ * @myDocBlock v2.3
+ * @file DELETE.test.ts
+ * @internal
+ * @module tests/routes/v1/warframe/warframes
+ * @tag warframe, warframes, test
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path tests/routes/v1/warframe/warframes/DELETE.test.ts
+ * @summary Unit tests for DELETE /v1/warframe/warframes endpoint glue logic.
+ * @description
+ * Verifies that DELETE /v1/warframe/warframes:
+ *   - deletes a warframe when warframe_id is supplied
+ *   - succeeds with null data when no record exists
+ *   - returns 400 when warframe_id is missing
+ *   - returns 500 on unexpected errors
+ *
+ * @query
+ * {
+ *   "warframe_id": "string"
+ * }
+ *
+ * @requestExample
+ * none
+ *
+ * @response
+ * {
+ *   "success": true
+ * }
+ *
+ * @requires
+ * {
+ *   "routes": [
+ *     "routes/v1/warframe/warframes/DELETE"
+ *   ]
+ * }
+ */
+
+import { describe, test, expect, vi, beforeEach } from "vitest"
+import type { Request, Response } from "express"
 
 /**
  * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE HANDLER IMPORT
+ * MOCKS — MUST APPEAR BEFORE IMPORTS
  * ------------------------------------------------------------
  */
 
-/**
- * IMPORTANT:
- * - Handler imports `warframes` (plural)
- * - Tests previously mocked `warframe` (singular) ❌
- */
-vi.mock("@db/schema", async (importOriginal) => {
-    const actual = await importOriginal<any>();
-    return {
-        ...actual,
-        warframes: {
-            warframeId: "warframe_id",
-        },
-    };
-});
+vi.mock("@db/schema", () => ({
+    __esModule: true,
+    warframes: {
+        warframeId: "warframe_id",
+    },
+}))
 
 vi.mock("@services/dbService", () => ({
+    __esModule: true,
     db: {
         delete: vi.fn(),
     },
-}));
+}))
 
 /**
  * ------------------------------------------------------------
@@ -34,8 +65,8 @@ vi.mock("@services/dbService", () => ({
  * ------------------------------------------------------------
  */
 
-import { db } from "@services/dbService";
-import DELETE from "@routes/v1/warframe/warframes/DELETE";
+import DELETE from "@routes/v1/warframe/warframes/DELETE"
+import { db } from "@services/dbService"
 
 /**
  * ------------------------------------------------------------
@@ -43,16 +74,43 @@ import DELETE from "@routes/v1/warframe/warframes/DELETE";
  * ------------------------------------------------------------
  */
 
-function createReq(url: string): IncomingMessage {
-    return ({ url } as unknown) as IncomingMessage;
+function createReq(query: any): Request {
+    return {
+        query,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse {
-    const res: Partial<ServerResponse> = {};
-    res.setHeader = vi.fn();
-    res.end = vi.fn();
-    return res as ServerResponse;
+type ResMock = Response & {
+    statusCode: number
+    body?: any
 }
+
+function createRes(): ResMock {
+    const res = {
+        statusCode: 0,
+        body: undefined,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
+        end() {
+            return this
+        },
+    }
+
+    return res as unknown as ResMock
+}
+
+beforeEach(() => {
+    vi.resetAllMocks()
+})
 
 /**
  * ------------------------------------------------------------
@@ -61,88 +119,87 @@ function createRes(): ServerResponse {
  */
 
 describe("DELETE /v1/warframe/warframes", () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
-
-    /**
-     * ------------------------------------------------------------
-     * SUCCESS — record exists
-     * ------------------------------------------------------------
-     */
     test("deletes a warframe by warframe_id and returns deleted record", async () => {
-        (db.delete as any).mockReturnValueOnce({
+        ;(db.delete as any).mockReturnValueOnce({
             where: () => ({
-                returning: () =>
-                    Promise.resolve([
-                        {
-                            warframeId: "1",
-                            name: "Excalibur",
-                            health: 100,
-                            shield: 100,
-                            armor: 225,
-                            energy: 100,
-                        },
-                    ]),
+                returning: async () => [
+                    {
+                        warframeId: "1",
+                        name: "Excalibur",
+                        health: 100,
+                        shield: 100,
+                        armor: 225,
+                        energy: 100,
+                    },
+                ],
             }),
-        });
+        })
 
-        const req = createReq(
-            "/v1/warframe/warframes?warframe_id=660e8400-e29b-41d4-a716-446655440010"
-        );
-        const res = createRes();
+        const req = createReq({
+            warframe_id: "660e8400-e29b-41d4-a716-446655440010",
+        })
+        const res = createRes()
 
-        await DELETE(req, res);
+        await DELETE(req, res)
 
-        expect(db.delete).toHaveBeenCalledOnce();
-        expect(res.end).toHaveBeenCalledOnce();
+        expect(db.delete).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.name).toBe("Excalibur")
+    })
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
-        expect(payload.success).toBe(true);
-        expect(payload.data.name).toBe("Excalibur");
-    });
-
-    /**
-     * ------------------------------------------------------------
-     * SUCCESS — no matching record
-     * ------------------------------------------------------------
-     */
     test("succeeds with null data when no matching warframe exists", async () => {
-        (db.delete as any).mockReturnValueOnce({
+        ;(db.delete as any).mockReturnValueOnce({
             where: () => ({
-                returning: () => Promise.resolve([]),
+                returning: async () => [],
             }),
-        });
+        })
 
-        const req = createReq(
-            "/v1/warframe/warframes?warframe_id=nonexistent-id"
-        );
-        const res = createRes();
+        const req = createReq({
+            warframe_id: "nonexistent-id",
+        })
+        const res = createRes()
 
-        await DELETE(req, res);
+        await DELETE(req, res)
 
-        expect(res.end).toHaveBeenCalledOnce();
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data).toBeNull()
+    })
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
-        expect(payload.success).toBe(true);
-        expect(payload.data).toBeNull();
-    });
-
-    /**
-     * ------------------------------------------------------------
-     * ERROR — missing warframe_id
-     * ------------------------------------------------------------
-     */
     test("returns 400 when warframe_id is missing", async () => {
-        const req = createReq("/v1/warframe/warframes");
-        const res = createRes();
+        const req = createReq({})
+        const res = createRes()
 
-        await DELETE(req, res);
+        await DELETE(req, res)
 
-        expect(res.end).toHaveBeenCalledOnce();
+        expect(res.statusCode).toBe(400)
+        expect(res.body.success).toBe(false)
+        expect(res.body.error).toContain("warframe_id is required")
+    })
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
-        expect(payload.success).toBe(false);
-        expect(payload.error).toContain("warframe_id is required");
-    });
-});
+    test("returns 500 on unexpected errors", async () => {
+        const consoleErrorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {})
+
+        ;(db.delete as any).mockImplementationOnce(() => {
+            throw new Error("boom")
+        })
+
+        const req = createReq({
+            warframe_id: "1",
+        })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            success: false,
+            error: "Internal server error",
+        })
+
+        consoleErrorSpy.mockRestore()
+    })
+})

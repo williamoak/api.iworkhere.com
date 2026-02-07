@@ -2,18 +2,18 @@
  * @myDocBlock v2.3
  * @file PUT.test.ts
  * @internal
- * @module tests/routes/v1/auth/passreset/complete
- * @tag auth, password-reset, complete, test
+ * @module tests/routes/v1/auth/passreset/initiate
+ * @tag auth, password-reset, initiate, test
  * @version 1.0.0
  * @author william.r.oak@gmail.com
- * @path tests/routes/v1/auth/passreset/complete/PUT.test.ts
- * @summary Unit tests for PUT /v1/auth/passreset/complete endpoint glue logic.
+ * @path tests/routes/v1/auth/passreset/initiate/PUT.test.ts
+ * @summary Unit tests for PUT /v1/auth/passreset/initiate endpoint glue logic.
  * @description
- * Verifies that the password reset completion endpoint:
+ * Verifies that the password reset initiate endpoint:
  *   - exports a Zod `schema` for request validation
- *   - returns HTTP 400 for invalid request bodies
- *   - calls completePasswordReset() with token and new_password
- *   - returns HTTP 200 with { ok: true } on success
+ *   - validates request body and returns HTTP 400 for invalid inputs
+ *   - resolves auth context before initiating reset
+ *   - initiates password reset and returns HTTP 200 with { status: "ok" }
  *   - translates AuthError failures into HTTP responses
  *   - returns HTTP 500 for unexpected errors
  *
@@ -23,9 +23,9 @@
  * @requires
  * {
  *   "services": [
- *     "passwordResetService",
- *     "authContext"
- *   ]
+ *     "authContext",
+ *     "passwordResetService"
+ *   }
  * }
  */
 
@@ -38,11 +38,8 @@ import type { Request, Response } from 'express'
  * ------------------------------------------------------------
  */
 
-vi.mock('@services/auth/passwordResetService', () => ({
-    completePasswordReset: vi.fn(),
-}))
-
 vi.mock('@services/auth/authContext', () => ({
+    resolveAuthContext: vi.fn(),
     AuthError: class AuthError extends Error {
         constructor(
             public code: string,
@@ -54,15 +51,19 @@ vi.mock('@services/auth/authContext', () => ({
     },
 }))
 
+vi.mock('@services/auth/passwordResetService', () => ({
+    initiatePasswordReset: vi.fn(),
+}))
+
 /**
  * ------------------------------------------------------------
  * IMPORTS (AFTER MOCKS)
  * ------------------------------------------------------------
  */
 
-import PUT, { schema } from '@routes/v1/auth/passreset/complete/PUT'
-import { completePasswordReset } from '@services/auth/passwordResetService'
-import { AuthError } from '@services/auth/authContext'
+import PUT, { schema } from '@routes/v1/auth/passreset/initiate/PUT'
+import { resolveAuthContext, AuthError } from '@services/auth/authContext'
+import { initiatePasswordReset } from '@services/auth/passwordResetService'
 
 /**
  * ------------------------------------------------------------
@@ -120,43 +121,52 @@ beforeEach(() => {
  * ------------------------------------------------------------
  */
 
-describe('PUT /v1/auth/passreset/complete', () => {
+describe('PUT /v1/auth/passreset/initiate', () => {
     test('exports a Zod request schema', async () => {
         expect(schema).toBeTruthy()
         expect(schema.body).toBeTruthy()
 
         const parsed = schema.body.safeParse({
-            token: '',
-            new_password: '',
+            app_key: 'bill.iworkhere.com',
+            email: 'not-an-email',
         })
 
         expect(parsed.success).toBe(false)
     })
 
-    test('returns 200 and completes password reset on success', async () => {
-        ;(completePasswordReset as any).mockResolvedValue(undefined)
+    test('returns 200 and initiates password reset on success (email is trimmed)', async () => {
+        ;(resolveAuthContext as any).mockResolvedValue({
+            applicationId: 'app-id',
+            applicationKey: 'bill.iworkhere.com',
+        })
+
+        ;(initiatePasswordReset as any).mockResolvedValue(undefined)
 
         const req = createReq({
-            token: 'valid-token',
-            new_password: 'new-strong-password',
+            app_key: 'bill.iworkhere.com',
+            email: 'user@example.com',
         })
+
         const res = createRes()
 
         await PUT(req, res)
 
         expect(res.statusCode).toBe(200)
-        expect(res.body).toEqual({ ok: true })
+        expect(res.body).toEqual({ status: 'ok' })
 
-        expect(completePasswordReset).toHaveBeenCalledWith(
-            'valid-token',
-            'new-strong-password'
-        )
+        expect(resolveAuthContext).toHaveBeenCalledWith({
+            app_key: 'bill.iworkhere.com',
+            email:   'user@example.com',
+        })
+
+        expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com')
     })
 
-    test('returns 400 for invalid request body (missing fields)', async () => {
+    test('returns 400 for invalid request body (missing email)', async () => {
         const req = createReq({
-            token: 'valid-token',
+            app_key: 'bill.iworkhere.com',
         })
+
         const res = createRes()
 
         await PUT(req, res)
@@ -167,36 +177,48 @@ describe('PUT /v1/auth/passreset/complete', () => {
             message: 'Invalid request body',
         })
 
-        expect(completePasswordReset).not.toHaveBeenCalled()
+        expect(resolveAuthContext).not.toHaveBeenCalled()
+        expect(initiatePasswordReset).not.toHaveBeenCalled()
     })
 
     test('translates AuthError to HTTP response', async () => {
-        ;(completePasswordReset as any).mockRejectedValue(
-            new AuthError('INVALID_TOKEN', 'Reset token is invalid', 401)
+        ;(resolveAuthContext as any).mockRejectedValue(
+            new AuthError('APP_NOT_FOUND', 'Application not found', 401)
         )
 
         const req = createReq({
-            token: 'bad-token',
-            new_password: 'new-strong-password',
+            app_key: 'unknown-app',
+            email: 'user@example.com',
         })
+
         const res = createRes()
 
         await PUT(req, res)
 
         expect(res.statusCode).toBe(401)
         expect(res.body).toEqual({
-            error: 'INVALID_TOKEN',
-            message: 'Reset token is invalid',
+            error: 'APP_NOT_FOUND',
+            message: 'Application not found',
         })
+
+        expect(initiatePasswordReset).not.toHaveBeenCalled()
     })
 
     test('returns 500 for unexpected errors', async () => {
-        ;(completePasswordReset as any).mockRejectedValue(new Error('boom'))
+        ;(resolveAuthContext as any).mockResolvedValue({
+            applicationId: 'app-id',
+            applicationKey: 'bill.iworkhere.com',
+        })
+
+        ;(initiatePasswordReset as any).mockRejectedValue(
+            new Error('boom')
+        )
 
         const req = createReq({
-            token: 'valid-token',
-            new_password: 'new-strong-password',
+            app_key: 'bill.iworkhere.com',
+            email: 'user@example.com',
         })
+
         const res = createRes()
 
         await PUT(req, res)

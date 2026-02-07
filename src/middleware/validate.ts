@@ -1,41 +1,211 @@
 /**
+ * @myDocBlock v3.1
  * @file validate.ts
- * @summary Temporary no-op validator replacing Zod-based validation.
+ * @internal
+ * @module middleware/validate
+ * @tag api, validation, middleware
+ * @version 3.1.0
+ * @author placeholder@example.com
+ * @path src/middleware/validate.ts
+ * @summary Global request hardening + per-route Zod validation.
+ *
  * @description
- *   This module provides a stub validation layer so that routeLoader.ts
- *   continues to function after removing Zod. Once Drizzle schema validation
- *   is introduced, this file will be upgraded.
+ *   Provides a centralized validation layer for the RouteLoader middleware chain.
+ *
+ *   This middleware is intentionally two-layered:
+ *     1) Global checks (schema-agnostic)
+ *     2) Per-route checks (schema-driven via Zod)
+ *
+ *   IMPORTANT:
+ *     - Framework-owned request properties (req.query, req.body, req.params)
+ *       are NEVER mutated.
+ *     - All validated data is attached to req.validated.
  */
 
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from 'express'
+import { z } from 'zod'
 
-// Shape of the expected return value
-interface Validator {
-    request: (_req: Request, _res: Response, next: NextFunction) => void;
-    response: <T>(data: T) => T;
+/* ------------------------------------------------------------------ */
+/* Types                                                              */
+/* ------------------------------------------------------------------ */
+
+export type ValidationSchemas = {
+    body?: z.ZodTypeAny
+    query?: z.ZodTypeAny
+    params?: z.ZodTypeAny
+    response?: z.ZodTypeAny
 }
 
-/**
- * Create a no-op validator that ignores the schema.
- *
- * @param schema - placeholder for future Drizzle schemas
- */
-export function makeValidator(_schema: any): Validator {
+export interface ValidatedRequestData {
+    query?: unknown
+    body?: unknown
+    params?: unknown
+}
 
+declare global {
+    namespace Express {
+        interface Request {
+            validated?: ValidatedRequestData
+        }
+    }
+}
+
+interface Validator {
+    request: (req: Request, res: Response, next: NextFunction) => void
+    response: <T>(data: T) => T
+}
+
+/* ------------------------------------------------------------------ */
+/* Global checks / hardening                                          */
+/* ------------------------------------------------------------------ */
+
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (typeof value !== 'object' || value === null) return false
+    const proto = Object.getPrototypeOf(value)
+    return proto === Object.prototype || proto === null
+}
+
+function hasPrototypePollutionKeys(value: unknown): boolean {
+    const forbidden = new Set(['__proto__', 'prototype', 'constructor'])
+
+    const visit = (v: unknown): boolean => {
+        if (!v || typeof v !== 'object') return false
+
+        if (Array.isArray(v)) {
+            for (const item of v) if (visit(item)) return true
+            return false
+        }
+
+        for (const key of Object.keys(v as Record<string, unknown>)) {
+            if (forbidden.has(key)) return true
+            if (visit((v as any)[key])) return true
+        }
+        return false
+    }
+
+    return visit(value)
+}
+
+function wantsJsonBody(req: Request): boolean {
+    return BODY_METHODS.has(req.method.toUpperCase())
+}
+
+function contentTypeLooksJson(req: Request): boolean {
+    const ct = (req.headers['content-type'] ?? '').toString().toLowerCase()
+    return ct.includes('application/json') || ct.includes('+json')
+}
+
+function sendInvalidRequest(
+    res: Response,
+    payload: { message: string; details?: unknown }
+) {
+    return res.status(400).json({
+        error: 'INVALID_REQUEST',
+        message: payload.message,
+        details: payload.details,
+    })
+}
+
+/* ------------------------------------------------------------------ */
+/* Factory                                                            */
+/* ------------------------------------------------------------------ */
+
+export function makeValidator(schemas: ValidationSchemas = {}): Validator {
     return {
-        /**
-         * Request validator — currently a no-op.
-         */
-        request(_req: Request, _res: Response, next: NextFunction) {
-            // No validation — just continue
-            next();
+        request(req: Request, res: Response, next: NextFunction) {
+            /* ------------------------------------------------------
+             * Global checks (schema-agnostic)
+             * ------------------------------------------------------ */
+
+            if (wantsJsonBody(req)) {
+                const hasSomeBody =
+                    req.body !== undefined &&
+                    req.body !== null &&
+                    !(typeof req.body === 'string' && req.body.trim() === '')
+
+                if (hasSomeBody && !contentTypeLooksJson(req)) {
+                    return res.status(415).json({
+                        error: 'UNSUPPORTED_MEDIA_TYPE',
+                        message: 'Content-Type must be application/json',
+                    })
+                }
+            }
+
+            if (req.body !== undefined && req.body !== null) {
+                if (!isPlainObject(req.body)) {
+                    return sendInvalidRequest(res, {
+                        message: 'Request body must be a JSON object',
+                    })
+                }
+
+                if (hasPrototypePollutionKeys(req.body)) {
+                    return sendInvalidRequest(res, {
+                        message: 'Request body contains forbidden keys',
+                    })
+                }
+            }
+
+            if (req.query && hasPrototypePollutionKeys(req.query)) {
+                return sendInvalidRequest(res, {
+                    message: 'Query string contains forbidden keys',
+                })
+            }
+
+            /* ------------------------------------------------------
+             * Per-route schema validation
+             * ------------------------------------------------------ */
+
+            req.validated = req.validated ?? {}
+
+            if (schemas.params) {
+                const parsed = schemas.params.safeParse(req.params)
+                if (!parsed.success) {
+                    return sendInvalidRequest(res, {
+                        message: 'Invalid path parameters',
+                        details: parsed.error.issues,
+                    })
+                }
+                req.validated.params = parsed.data
+            }
+
+            if (schemas.query) {
+                const parsed = schemas.query.safeParse(req.query)
+                if (!parsed.success) {
+                    return sendInvalidRequest(res, {
+                        message: 'Invalid query parameters',
+                        details: parsed.error.issues,
+                    })
+                }
+                req.validated.query = parsed.data
+            }
+
+            if (schemas.body) {
+                const parsed = schemas.body.safeParse(req.body ?? {})
+                if (!parsed.success) {
+                    return sendInvalidRequest(res, {
+                        message: 'Invalid request body',
+                        details: parsed.error.issues,
+                    })
+                }
+                req.validated.body = parsed.data
+            }
+
+            return next()
         },
 
-        /**
-         * Response validator — currently returns the data unchanged.
-         */
         response<T>(data: T): T {
-            return data;
-        }
-    };
+            if (!schemas.response) return data
+
+            const parsed = schemas.response.safeParse(data)
+            if (!parsed.success) {
+                const err = new Error('Response validation failed')
+                ;(err as any).details = parsed.error.issues
+                throw err
+            }
+
+            return parsed.data as T
+        },
+    }
 }

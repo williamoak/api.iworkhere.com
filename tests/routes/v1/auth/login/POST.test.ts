@@ -1,16 +1,19 @@
 /**
  * @myDocBlock v2.3
- * @file PUT.test.ts
+ * @file POST.test.ts
  * @internal
  * @module tests/routes/v1/auth/login
  * @tag auth, login, test
  * @version 1.0.0
  * @path tests/routes/v1/auth/login/PUT.test.ts
- * @summary Tests PUT /v1/auth/login endpoint glue logic.
+ * @summary Tests POST /v1/auth/login endpoint glue logic.
  * @description
  * Verifies that the login endpoint correctly orchestrates auth services,
  * handles success responses, and translates AuthError failures into HTTP
  * responses. Auth business logic is mocked and tested separately.
+ *
+ * Also verifies that the endpoint exports a Zod `schema` definition for
+ * request validation (used by the route loader middleware chain).
  *
  * @requires
  * {
@@ -24,7 +27,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
 
 /**
  * ------------------------------------------------------------
@@ -75,23 +78,44 @@ import { issueLoginTokens } from '@services/auth/tokenService'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+function createReq(body: any): Request {
+    return {
+        body,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse & {
+type ResMock = Response & {
+    statusCode: number
     body?: any
-} {
-    return {
+    headers: Record<string, string>
+}
+
+function createRes(): ResMock {
+    const res = {
         statusCode: 0,
+        body: undefined,
         headers: {} as Record<string, string>,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
         setHeader(key: string, value: string) {
-            ;(this.headers as any)[key] = value
+            this.headers[key] = value
         },
-        end(payload: string) {
-            this.body = JSON.parse(payload)
+
+        end() {
+            return this
         },
-    } as any
+    }
+
+    return res as unknown as ResMock
 }
 
 beforeEach(() => {
@@ -104,7 +128,7 @@ beforeEach(() => {
  * ------------------------------------------------------------
  */
 
-describe('PUT /v1/auth/login', () => {
+describe('POST /v1/auth/login', () => {
     test('returns tokens on successful login', async () => {
         ;(resolveAuthContext as any).mockResolvedValue({
             applicationId: 'app-id',

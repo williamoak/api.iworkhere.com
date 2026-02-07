@@ -1,86 +1,72 @@
 /**
- * @myDocBlock v2.2
+ * @myDocBlock v2.3
  * @file DELETE.ts
  * @external
- * @module warframe-warframes
- * @tag warframes
- * @version 1.0.0
+ * @module routes/v1/warframe/warframes
+ * @tag warframe
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/warframes
  * @summary Delete a warframe by warframe_id.
- *
  * @description
- *   Deletes a single warframe identified by the required warframe_id
- *   query parameter.
+ * Deletes a single warframe identified by the required warframe_id query parameter.
  *
- *   If no matching record exists, the operation still succeeds and
- *   returns a null data payload.
+ * If no matching record exists, the operation still succeeds and returns a null data payload.
  *
  * @query
- *   {
- *     "warframe_id": {
- *       "type": "string",
- *       "format": "uuid",
- *       "required": true,
- *       "description": "Unique identifier of the warframe to delete"
- *     }
+ * {
+ *   "warframe_id": {
+ *     "type": "string",
+ *     "required": true,
+ *     "description": "Unique identifier of the warframe to delete"
  *   }
+ * }
  *
  * @requestExample
- *   {
- *     "method": "DELETE",
- *     "url": "/v1/warframe/warframes?warframe_id=660e8400-e29b-41d4-a716-446655440010"
- *   }
+ * {
+ *   "method": "DELETE",
+ *   "url": "/v1/warframe/warframes?warframe_id=<WARFRAME_ID>"
+ * }
  *
  * @response
- *   {
- *     "success": true,
- *     "data": {
- *       "warframe_id": "660e8400-e29b-41d4-a716-446655440010",
- *       "name": "Excalibur",
- *       "health": 100,
- *       "shield": 100,
- *       "armor": 225,
- *       "energy": 100
- *     }
- *   }
+ * {
+ *   "success": true,
+ *   "data": {}
+ * }
  *
  * @requires
- *   - Database connection via dbService
- *   - warframe table schema
+ * {
+ *   "tables": ["warframes"],
+ *   "services": ["dbService"]
+ * }
  */
 
-
-import type { IncomingMessage, ServerResponse } from "http";
-import { URL } from "url";
+import type { Request, Response } from "express";
+import { eq } from "drizzle-orm";
 
 import { db } from "@services/dbService";
 import { warframes } from "@db/schema";
-import { eq } from "drizzle-orm";
 
 /**
  * DELETE /v1/warframe/warframes
  * Query param:
- *   - warframe_id (UUID, required)
+ *   - warframe_id (required)
  */
-export default async function DELETE(
-    req: IncomingMessage,
-    res: ServerResponse
-) {
+export default async function DELETE(req: Request, res: Response) {
     try {
-        const url = new URL(req.url ?? "", "http://localhost");
-        const warframeId = url.searchParams.get("warframe_id");
+        const warframeIdRaw = req.query.warframe_id;
+        const warframeId =
+            typeof warframeIdRaw === "string"
+                ? warframeIdRaw
+                : Array.isArray(warframeIdRaw) && typeof warframeIdRaw[0] === "string"
+                    ? warframeIdRaw[0]
+                    : undefined;
 
         if (!warframeId) {
-            res.statusCode = 400;
-            res.setHeader("Content-Type", "application/json");
-            res.end(
-                JSON.stringify({
-                    success: false,
-                    error: "warframe_id is required",
-                })
-            );
-            return;
+            return res.status(400).json({
+                success: false,
+                error: "warframe_id is required",
+            });
         }
 
         const rows = await db
@@ -90,24 +76,16 @@ export default async function DELETE(
 
         const result = rows.length > 0 ? rows[0] : null;
 
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(
-            JSON.stringify({
-                success: true,
-                data: result,
-            })
-        );
+        return res.status(200).json({
+            success: true,
+            data: result,
+        });
     } catch (err) {
         console.error("DELETE /warframes error:", err);
 
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        res.end(
-            JSON.stringify({
-                success: false,
-                error: "Internal server error",
-            })
-        );
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        });
     }
 }

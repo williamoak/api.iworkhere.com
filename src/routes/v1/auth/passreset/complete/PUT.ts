@@ -31,54 +31,48 @@
  * }
  */
 
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
+import { z } from 'zod'
+
 import { AuthError } from '@services/auth/authContext'
 import { completePasswordReset } from '@services/auth/passwordResetService'
 
-export default async function PUT(
-    req: IncomingMessage,
-    res: ServerResponse
-): Promise<void> {
-    try {
-        const { token, new_password } = (req as any).body ?? {}
+export const schema = {
+    body: z.object({
+        token: z.string().trim().min(1),
+        new_password: z.string().trim().min(1),
+    }),
+}
 
-        if (!token || !new_password) {
-            res.statusCode = 400
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: 'INVALID_REQUEST',
-                    message: 'token and new_password are required',
-                })
-            )
+export default async function PUT(req: Request, res: Response): Promise<void> {
+    try {
+        // Validate request shape BEFORE calling services
+        const parsed = schema.body.safeParse(req.body)
+        if (!parsed.success) {
+            res.status(400).json({
+                error: 'INVALID_REQUEST',
+                message: 'Invalid request body',
+            })
             return
         }
 
-        await completePasswordReset(token, new_password)
+        const body = parsed.data
 
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify({ ok: true }))
+        await completePasswordReset(body.token, body.new_password)
+
+        res.status(200).json({ ok: true })
     } catch (err) {
         if (err instanceof AuthError) {
-            res.statusCode = err.httpStatus
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: err.code,
-                    message: err.message,
-                })
-            )
+            res.status(err.httpStatus).json({
+                error: err.code,
+                message: err.message,
+            })
             return
         }
 
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                error: 'INTERNAL_ERROR',
-                message: 'An unexpected error occurred',
-            })
-        )
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
     }
 }

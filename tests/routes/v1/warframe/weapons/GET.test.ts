@@ -1,27 +1,68 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+/**
+ * @myDocBlock v2.3
+ * @file GET.test.ts
+ * @internal
+ * @module tests/routes/v1/warframe/weapons
+ * @tag warframe, weapons, test
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path tests/routes/v1/warframe/weapons/GET.test.ts
+ * @summary Unit tests for GET /v1/warframe/weapons endpoint glue logic.
+ * @description
+ * Verifies that GET /v1/warframe/weapons:
+ *   - always returns a lightweight weapon list
+ *   - resolves by weapon_id with highest priority
+ *   - resolves by name + class when weapon_id is not provided
+ *   - defaults class to "normal"
+ *   - returns emptyWeapon() when resolution is ambiguous or missing
+ *   - returns 500 on unexpected errors
+ *
+ * @query
+ *   {}
+ *
+ * @requestExample
+ * none
+ *
+ * @response
+ * {
+ *   "success": true
+ * }
+ *
+ * @requires
+ * {
+ *   "routes": [
+ *     "routes/v1/warframe/weapons/GET"
+ *   ]
+ * }
+ */
+
+import { describe, test, expect, vi, beforeEach } from "vitest"
+import type { Request, Response } from "express"
 
 /**
  * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE HANDLER IMPORT
+ * MOCKS — MUST APPEAR BEFORE IMPORTS
  * ------------------------------------------------------------
  */
 
-vi.mock('@db/schema', () => ({
+vi.mock("@db/schema", () => ({
+    __esModule: true,
     weapons: {
-        weaponId: 'weapon_id',
-        name: 'name',
-        class: 'class',
+        weaponId: "weapon_id",
+        name: "name",
+        class: "class",
     },
 }))
 
-vi.mock('@services/dbService', () => ({
+vi.mock("@services/dbService", () => ({
+    __esModule: true,
     db: {
         select: vi.fn(),
     },
 }))
 
-vi.mock('@src/dto/weapon', () => ({
+vi.mock("@src/dto/weapon", () => ({
+    __esModule: true,
     emptyWeapon: vi.fn(() => ({
         weapon_id: null,
         name: null,
@@ -29,11 +70,11 @@ vi.mock('@src/dto/weapon', () => ({
         description: null,
         weapon_mods: null,
     })),
-    toWeaponDTO: vi.fn((row) => ({
+    toWeaponDTO: vi.fn((row: any) => ({
         weapon_id: row.weaponId,
         name: row.name,
         class: row.class,
-        description: row.description ?? '',
+        description: row.description ?? "",
         weapon_mods: row.weapon_mods ?? null,
     })),
 }))
@@ -44,8 +85,9 @@ vi.mock('@src/dto/weapon', () => ({
  * ------------------------------------------------------------
  */
 
-import { db } from '@services/dbService'
-import GET from '@routes/v1/warframe/weapons/GET'
+import GET from "@routes/v1/warframe/weapons/GET"
+import { db } from "@services/dbService"
+import { emptyWeapon, toWeaponDTO } from "@src/dto/weapon"
 
 /**
  * ------------------------------------------------------------
@@ -53,16 +95,43 @@ import GET from '@routes/v1/warframe/weapons/GET'
  * ------------------------------------------------------------
  */
 
-function createReq(url: string): IncomingMessage {
-    return ({ url } as unknown) as IncomingMessage
+function createReq(query: any): Request {
+    return {
+        query,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse {
-    const res: Partial<ServerResponse> = {}
-    res.setHeader = vi.fn()
-    res.end = vi.fn()
-    return res as ServerResponse
+type ResMock = Response & {
+    statusCode: number
+    body?: any
 }
+
+function createRes(): ResMock {
+    const res = {
+        statusCode: 0,
+        body: undefined,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
+        end() {
+            return this
+        },
+    }
+
+    return res as unknown as ResMock
+}
+
+beforeEach(() => {
+    vi.resetAllMocks()
+})
 
 /**
  * ------------------------------------------------------------
@@ -70,159 +139,151 @@ function createRes(): ServerResponse {
  * ------------------------------------------------------------
  */
 
-describe('GET /v1/warframe/weapons', () => {
-    beforeEach(() => {
-        vi.clearAllMocks()
-    })
-
-    /**
-     * ------------------------------------------------------------
-     * NO QUERY — list + empty weapon
-     * ------------------------------------------------------------
-     */
-    test('returns weapon list and empty weapon when no query params supplied', async () => {
+describe("GET /v1/warframe/weapons", () => {
+    test("returns weapon list and empty weapon when no query params supplied", async () => {
         ;(db.select as any).mockReturnValueOnce({
-            from: () =>
-                Promise.resolve([
-                    { weapon_id: '1', name: 'Braton' },
-                    { weapon_id: '2', name: 'Braton Prime' },
-                ]),
+            from: async () => [
+                { weapon_id: "1", name: "Braton" },
+                { weapon_id: "2", name: "Braton Prime" },
+            ],
         })
 
-        const req = createReq('/v1/warframe/weapons')
+        const req = createReq({})
         const res = createRes()
 
         await GET(req, res)
 
-        expect(db.select).toHaveBeenCalledOnce()
-        expect(res.end).toHaveBeenCalledOnce()
+        expect(emptyWeapon).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
-        expect(payload.data.weapons.length).toBe(2)
-        expect(payload.data.weapon).toMatchObject({
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.weapons).toHaveLength(2)
+        expect(res.body.data.weapon).toMatchObject({
             weapon_id: null,
             name: null,
         })
     })
 
-    /**
-     * ------------------------------------------------------------
-     * PRIORITY 1 — resolve by weapon_id
-     * ------------------------------------------------------------
-     */
-    test('resolves weapon by weapon_id when provided', async () => {
+    test("resolves weapon by weapon_id when provided", async () => {
         ;(db.select as any)
-            // 1️⃣ lightweight list
+            // lightweight list
             .mockReturnValueOnce({
-                from: () =>
-                    Promise.resolve([
-                        { weapon_id: '1', name: 'Braton' },
-                    ]),
+                from: async () => [
+                    { weapon_id: "1", name: "Braton" },
+                ],
             })
-            // 2️⃣ resolution by weapon_id
+            // resolution by weapon_id
             .mockReturnValueOnce({
                 from: () => ({
-                    where: () =>
-                        Promise.resolve([
-                            {
-                                weaponId: '1',
-                                name: 'Braton',
-                                class: 'normal',
-                                description: '',
-                                weapon_mods: null,
-                            },
-                        ]),
+                    where: async () => [
+                        {
+                            weaponId: "1",
+                            name: "Braton",
+                            class: "normal",
+                            description: "",
+                            weapon_mods: null,
+                        },
+                    ],
                 }),
             })
 
-        const req = createReq(
-            '/v1/warframe/weapons?weapon_id=880e8400-e29b-41d4-a716-446655440020'
-        )
+        const req = createReq({
+            weapon_id: "880e8400-e29b-41d4-a716-446655440020",
+        })
         const res = createRes()
 
         await GET(req, res)
 
-        expect(db.select).toHaveBeenCalledTimes(2)
-
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.data.weapon.name).toBe('Braton')
-        expect(payload.data.weapon.class).toBe('normal')
+        expect(toWeaponDTO).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.weapon.name).toBe("Braton")
+        expect(res.body.data.weapon.class).toBe("normal")
     })
 
-    /**
-     * ------------------------------------------------------------
-     * PRIORITY 2 — resolve by name + class
-     * ------------------------------------------------------------
-     */
-    test('resolves weapon by name and class when multiple name matches exist', async () => {
+    test("resolves weapon by name and class when multiple name matches exist", async () => {
         ;(db.select as any)
             // list
             .mockReturnValueOnce({
-                from: () =>
-                    Promise.resolve([
-                        { weapon_id: '1', name: 'Braton' },
-                        { weapon_id: '2', name: 'Braton Prime' },
-                    ]),
+                from: async () => [
+                    { weapon_id: "1", name: "Braton" },
+                    { weapon_id: "2", name: "Braton Prime" },
+                ],
             })
             // name lookup
             .mockReturnValueOnce({
                 from: () => ({
-                    where: () =>
-                        Promise.resolve([
-                            { weaponId: '1', name: 'Braton', class: 'normal' },
-                            { weaponId: '2', name: 'Braton', class: 'prime' },
-                        ]),
+                    where: async () => [
+                        { weaponId: "1", name: "Braton", class: "normal" },
+                        { weaponId: "2", name: "Braton", class: "prime" },
+                    ],
                 }),
             })
 
-        const req = createReq(
-            '/v1/warframe/weapons?name=Braton&class=prime'
-        )
+        const req = createReq({
+            name: "Braton",
+            class: "prime",
+        })
         const res = createRes()
 
         await GET(req, res)
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.data.weapon.class).toBe('prime')
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.weapon.class).toBe("prime")
     })
 
-    /**
-     * ------------------------------------------------------------
-     * NAME PROVIDED — no resolvable match
-     * ------------------------------------------------------------
-     */
-    test('returns empty weapon when name resolution yields no single match', async () => {
+    test("returns empty weapon when name resolution yields no single match", async () => {
         ;(db.select as any)
             // list
             .mockReturnValueOnce({
-                from: () =>
-                    Promise.resolve([
-                        { weapon_id: '1', name: 'Braton' },
-                    ]),
+                from: async () => [
+                    { weapon_id: "1", name: "Braton" },
+                ],
             })
             // name lookup → multiple, but none match class
             .mockReturnValueOnce({
                 from: () => ({
-                    where: () =>
-                        Promise.resolve([
-                            { weaponId: '1', name: 'Braton', class: 'normal' },
-                            { weaponId: '2', name: 'Braton', class: 'prime' },
-                        ]),
+                    where: async () => [
+                        { weaponId: "1", name: "Braton", class: "normal" },
+                        { weaponId: "2", name: "Braton", class: "prime" },
+                    ],
                 }),
             })
 
-        const req = createReq(
-            '/v1/warframe/weapons?name=Braton&class=wraith'
-        )
+        const req = createReq({
+            name: "Braton",
+            class: "wraith",
+        })
         const res = createRes()
 
         await GET(req, res)
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.data.weapon).toMatchObject({
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.weapon).toMatchObject({
             weapon_id: null,
             name: null,
         })
+    })
+
+    test("returns 500 on unexpected errors", async () => {
+        const consoleErrorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {})
+
+        ;(db.select as any).mockImplementationOnce(() => {
+            throw new Error("boom")
+        })
+
+        const req = createReq({})
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            success: false,
+            error: "Internal server error",
+        })
+
+        consoleErrorSpy.mockRestore()
     })
 })

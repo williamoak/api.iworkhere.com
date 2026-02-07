@@ -1,5 +1,40 @@
+/**
+ * @myDocBlock v2.3
+ * @file PUT.test.ts
+ * @internal
+ * @module tests/routes/v1/warframe/modules
+ * @tag warframe, modules, test
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path tests/routes/v1/warframe/modules/PUT.test.ts
+ * @summary Unit tests for PUT /v1/warframe/modules endpoint glue logic.
+ * @description
+ * Verifies that PUT /v1/warframe/modules:
+ *   - inserts when name resolves to zero existing records
+ *   - updates when mod_id is provided
+ *   - returns 409 when name resolves to multiple records
+ *
+ * @query
+ *   {}
+ *
+ * @requestExample
+ * none
+ *
+ * @response
+ * {
+ *   "ok": true
+ * }
+ *
+ * @requires
+ * {
+ *   "routes": [
+ *     "routes/v1/warframe/modules/PUT"
+ *   ]
+ * }
+ */
+
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
 
 /**
  * ------------------------------------------------------------
@@ -8,6 +43,7 @@ import type { IncomingMessage, ServerResponse } from 'http'
  */
 
 vi.mock('@db/schema', () => ({
+    __esModule: true,
     modules: {
         modId: 'mod_id',
         name: 'name',
@@ -15,6 +51,7 @@ vi.mock('@db/schema', () => ({
 }))
 
 vi.mock('@services/dbService', () => ({
+    __esModule: true,
     db: {
         select: vi.fn(),
         insert: vi.fn(),
@@ -23,30 +60,34 @@ vi.mock('@services/dbService', () => ({
 }))
 
 vi.mock('@src/validation/module', () => ({
+    __esModule: true,
     moduleInsertSchema: {
-        parse: vi.fn((v) => v),
+        parse: vi.fn((v: any) => v),
     },
     moduleUpdateSchema: {
-        parse: vi.fn((v) => v),
+        parse: vi.fn((v: any) => v),
     },
     moduleUpdateByNameSchema: {
-        parse: vi.fn((v) => v),
+        parse: vi.fn((v: any) => v),
     },
 }))
 
 vi.mock('@src/db/mappers/moduleWrite', () => ({
-    toModuleWrite: vi.fn((v) => v),
+    __esModule: true,
+    toModuleWrite: vi.fn((v: any) => v),
 }))
 
 vi.mock('@src/dto/module', () => ({
+    __esModule: true,
     emptyModule: vi.fn(() => ({})),
-    toModuleDTO: vi.fn((row) => row),
+    toModuleDTO: vi.fn((row: any) => row),
 }))
 
 vi.mock('@src/dto/dtoOverlay', () => ({
+    __esModule: true,
     overlayDto: vi.fn(() => ({
         merged: {},
-        providedFields: new Set(),
+        providedFields: new Set<string>(),
     })),
 }))
 
@@ -65,16 +106,43 @@ import PUT from '@routes/v1/warframe/modules/PUT'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+function createReq(body: any): Request {
+    return {
+        body,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse {
-    const res: Partial<ServerResponse> = {}
-    res.setHeader = vi.fn()
-    res.end = vi.fn()
-    return res as ServerResponse
+type ResMock = Response & {
+    statusCode: number
+    body?: any
 }
+
+function createRes(): ResMock {
+    const res = {
+        statusCode: 0,
+        body: undefined,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
+        end() {
+            return this
+        },
+    }
+
+    return res as unknown as ResMock
+}
+
+beforeEach(() => {
+    vi.resetAllMocks()
+})
 
 /**
  * ------------------------------------------------------------
@@ -83,30 +151,18 @@ function createRes(): ServerResponse {
  */
 
 describe('PUT /v1/warframe/modules', () => {
-    beforeEach(() => {
-        vi.clearAllMocks()
-    })
-
-    /**
-     * ------------------------------------------------------------
-     * INSERT by name (0 existing matches)
-     * ------------------------------------------------------------
-     */
     test('inserts a module when name resolves to zero existing records', async () => {
-        // 1️⃣ name lookup → zero matches
+        // 1) name lookup → zero matches
         ;(db.select as any).mockReturnValueOnce({
             from: () => ({
-                where: () => Promise.resolve([]),
+                where: async () => [],
             }),
         })
 
-        // 2️⃣ insert path
+        // 2) insert path
         ;(db.insert as any).mockReturnValueOnce({
             values: () => ({
-                returning: () =>
-                    Promise.resolve([
-                        { modId: '1', name: 'Vitality' },
-                    ]),
+                returning: async () => [{ modId: '1', name: 'Vitality' }],
             }),
         })
 
@@ -120,26 +176,17 @@ describe('PUT /v1/warframe/modules', () => {
 
         expect(db.select).toHaveBeenCalledOnce()
         expect(db.insert).toHaveBeenCalledOnce()
-        expect(res.end).toHaveBeenCalledOnce()
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
-        expect(payload.data.name).toBe('Vitality')
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.name).toBe('Vitality')
     })
 
-    /**
-     * ------------------------------------------------------------
-     * UPDATE by mod_id
-     * ------------------------------------------------------------
-     */
     test('updates a module when mod_id is provided', async () => {
         ;(db.update as any).mockReturnValueOnce({
             set: () => ({
                 where: () => ({
-                    returning: () =>
-                        Promise.resolve([
-                            { modId: '1', name: 'Vitality' },
-                        ]),
+                    returning: async () => [{ modId: '1', name: 'Vitality' }],
                 }),
             }),
         })
@@ -153,25 +200,15 @@ describe('PUT /v1/warframe/modules', () => {
         await PUT(req, res)
 
         expect(db.update).toHaveBeenCalledOnce()
-        expect(res.end).toHaveBeenCalledOnce()
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
     })
 
-    /**
-     * ------------------------------------------------------------
-     * CONFLICT — multiple name matches
-     * ------------------------------------------------------------
-     */
     test('returns 409 when name resolves to multiple records', async () => {
         ;(db.select as any).mockReturnValueOnce({
             from: () => ({
-                where: () =>
-                    Promise.resolve([
-                        { modId: '1' },
-                        { modId: '2' },
-                    ]),
+                where: async () => [{ modId: '1' }, { modId: '2' }],
             }),
         })
 
@@ -182,10 +219,8 @@ describe('PUT /v1/warframe/modules', () => {
 
         await PUT(req, res)
 
-        expect(res.end).toHaveBeenCalledOnce()
-
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(false)
-        expect(payload.error).toContain('Multiple modules')
+        expect(res.statusCode).toBe(409)
+        expect(res.body.success).toBe(false)
+        expect(res.body.error).toContain('Multiple modules')
     })
 })

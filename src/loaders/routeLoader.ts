@@ -51,6 +51,7 @@ import type { Application, Request, Response, NextFunction } from 'express'
 
 import { configGet } from '@helpers/config'
 import { makeValidator } from '@middleware/validate'
+import type { ValidationSchemas } from '@middleware/validate'
 import { throttleMiddleware } from '@middleware/throttleMiddleware'
 import { rateLimitMiddleware } from '@middleware/rateLimitMiddleware'
 import { cacheMiddleware } from '@middleware/cacheMiddleware'
@@ -60,6 +61,7 @@ import { cacheMiddleware } from '@middleware/cacheMiddleware'
 /* ------------------------------------------------------------------ */
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
+type HttpMethod = (typeof HTTP_METHODS)[number]
 const METHOD_FILES = HTTP_METHODS.map(m => `${m}.ts`)
 
 type RouteHandler = (req: Request, res: Response) => any
@@ -67,7 +69,8 @@ type RouteHandler = (req: Request, res: Response) => any
 interface RouteNode {
     path: string
     file?: string
-    handlers: Partial<Record<typeof HTTP_METHODS[number], RouteHandler>>
+    handlers: Partial<Record<HttpMethod, RouteHandler>>
+    schemas: Partial<Record<HttpMethod, ValidationSchemas>>
     children: Record<string, RouteNode>
 }
 
@@ -107,6 +110,7 @@ async function scanDirectory(
         routeTree[routePath] = {
             path: routePath,
             handlers: {},
+            schemas: {},
             children: {},
         }
     }
@@ -118,7 +122,7 @@ async function scanDirectory(
         const fullPath = path.join(dir, entry)
         if (!METHOD_FILES.includes(entry)) continue
 
-        const method = entry.replace('.ts', '') as keyof RouteNode['handlers']
+        const method = entry.replace('.ts', '') as HttpMethod
         const moduleUrl = pathToFileURL(fullPath).href
 
         const mod = await import(moduleUrl)
@@ -128,6 +132,11 @@ async function scanDirectory(
 
         if (!node.handlers[method]) {
             node.handlers[method] = mod.default
+
+            // Optional: endpoint can export `schema` (Zod) for per-route validation.
+            // If missing, we store {} and validation falls back to global checks only.
+            node.schemas[method] = (mod.schema ?? {}) as ValidationSchemas
+
             node.file = fullPath
         }
     }
@@ -159,43 +168,45 @@ function bindExpress(
 
     for (const routePath of sortedPaths) {
         const node = routeTree[routePath]
-        const supportedMethods = Object.keys(node.handlers)
+        const supportedMethods = Object.keys(node.handlers) as HttpMethod[]
 
         for (const method of supportedMethods) {
-            const handler = node.handlers[method as keyof typeof node.handlers]
+            const handler = node.handlers[method]
             if (!handler) continue
 
-            const validator = makeValidator({})
+            const validator = makeValidator(node.schemas[method] ?? {})
 
             const middlewareChain = [
-                    validator.request,
+                validator.request,
 
-                    ...(isAuthRoute(routePath)
-                        ? [
-                            rateLimitMiddleware({
-                                key: req =>
-                                    req.ip ||
-                                    (req.body?.email ?? req.body?.identifier ?? ''),
-                                max: 5,
-                                windowMs: 60_000,
-                            }),
-                        ]
-                        : []),
+                ...(isAuthRoute(routePath)
+                    ? [
+                          rateLimitMiddleware({
+                              key: req =>
+                                  req.ip ||
+                                  (req.body?.email ??
+                                      req.body?.identifier ??
+                                      ''),
+                              max: 5,
+                              windowMs: 60_000,
+                          }),
+                      ]
+                    : []),
 
-                    throttleMiddleware(maxConcurrentRequests),
-                    cacheMiddleware(),
+                throttleMiddleware(maxConcurrentRequests),
+                cacheMiddleware(),
 
-                    async (req: Request, res: Response, next: NextFunction) => {
-                        try {
-                            const result = await handler(req, res)
-                            if (!res.headersSent) {
-                                return res.json(validator.response(result))
-                            }
-                        } catch (err) {
-                            return next(err)
+                async (req: Request, res: Response, next: NextFunction) => {
+                    try {
+                        const result = await handler(req, res)
+                        if (!res.headersSent) {
+                            return res.json(validator.response(result))
                         }
-                    },
-                ]
+                    } catch (err) {
+                        return next(err)
+                    }
+                },
+            ]
 
             ;(app as any)[method.toLowerCase()](routePath, ...middlewareChain)
         }

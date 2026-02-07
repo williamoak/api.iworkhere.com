@@ -1,67 +1,53 @@
 /**
- * @myDocBlock v2.2
+ * @myDocBlock v2.3
  * @file PUT.ts
  * @external
- * @module warframe-modules
- * @tag modules
- * @version 1.0.0
+ * @module routes/v1/warframe/modules
+ * @tag warframe
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/modules
  * @summary Insert or update a Warframe module.
  *
  * @description
- *   Performs a deterministic upsert-style operation on modules using
- *   the following resolution order:
+ * Performs a deterministic upsert-style operation on modules using
+ * the following resolution order:
  *
- *     1. Update by mod_id if provided
- *     2. Update by name if exactly one matching record exists
- *     3. Insert if name resolves to zero records
- *     4. Reject with conflict if name resolves to more than one record
+ * 1. Update by mod_id if provided
+ * 2. Update by name if exactly one matching record exists
+ * 3. Insert if name resolves to zero records
+ * 4. Reject with conflict if name resolves to more than one record
  *
- *   If no mod_id or name is provided, the request is treated as an
- *   insert operation.
+ * If no mod_id or name is provided, the request is treated as an insert operation.
  *
- * @query
- *   {}
+ * @query none
  *
  * @requestExample
- *   {
- *     "method": "PUT",
- *     "url": "/v1/warframe/modules",
- *     "body": {
- *       "name": "Vitality",
- *       "description": "Increases Warframe health.",
- *       "rarity": "common",
- *       "polarity": "vazarin",
- *       "rank_max": 10
- *     }
- *   }
+ * {
+ *   "mod_id": "<MOD_ID>",
+ *   "name": "Vitality",
+ *   "description": "Increases Warframe health.",
+ *   "rarity": "common",
+ *   "polarity": "vazarin",
+ *   "rank_max": 10
+ * }
  *
  * @response
- *   {
- *     "success": true,
- *     "data": {
- *       "mod_id": "550e8400-e29b-41d4-a716-446655440000",
- *       "name": "Vitality",
- *       "description": "Increases Warframe health.",
- *       "rarity": "common",
- *       "polarity": "vazarin",
- *       "rank_max": 10
- *     }
- *   }
+ * {
+ *   "success": true,
+ *   "data": {}
+ * }
  *
  * @requires
- *   - Database connection via dbService
- *   - modules table schema
- *   - Zod validation schemas:
- *       moduleInsertSchema
- *       moduleUpdateSchema
- *       moduleUpdateByNameSchema
- *   - DTO mapping via toModuleDTO()
- *   - Write mapper via toModuleWrite()
+ * {
+ *   "tables": ["modules"],
+ *   "services": ["dbService"],
+ *   "validation": ["moduleInsertSchema", "moduleUpdateSchema", "moduleUpdateByNameSchema"],
+ *   "mappers": ["toModuleDTO", "toModuleWrite"]
+ * }
  */
 
-import type { IncomingMessage, ServerResponse } from "http";
+import type { Request, Response } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 
@@ -78,11 +64,8 @@ import { toModuleWrite } from "@src/db/mappers/moduleWrite";
 import { toModuleDTO, emptyModule } from "@src/dto/module";
 import { overlayDto } from "@src/dto/dtoOverlay";
 
-export default async function PUT(
-    req: IncomingMessage,
-    res: ServerResponse
-) {
-    const body = (req as any).body ?? {};
+export default async function PUT(req: Request, res: Response) {
+    const body = req.body ?? {};
 
     try {
         let dbResult: any = null;
@@ -95,13 +78,10 @@ export default async function PUT(
             const writePayload = toModuleWrite(parsed);
 
             if (Object.keys(writePayload).length === 0) {
-                res.statusCode = 400;
-                res.setHeader("Content-Type", "application/json");
-                res.end(JSON.stringify({
+                return res.status(400).json({
                     success: false,
                     error: "No fields provided to update",
-                }));
-                return;
+                });
             }
 
             const rows = await db
@@ -113,8 +93,8 @@ export default async function PUT(
             dbResult = rows[0] ?? null;
         }
 
-            // ---------------------------------
-            // UPDATE / INSERT by name
+        // ---------------------------------
+        // UPDATE / INSERT by name
         // ---------------------------------
         else if (body?.name) {
             const parsed = moduleUpdateByNameSchema.parse(body);
@@ -142,13 +122,10 @@ export default async function PUT(
                 const writePayload = toModuleWrite(parsed);
 
                 if (Object.keys(writePayload).length === 0) {
-                    res.statusCode = 400;
-                    res.setHeader("Content-Type", "application/json");
-                    res.end(JSON.stringify({
+                    return res.status(400).json({
                         success: false,
                         error: "No fields provided to update",
-                    }));
-                    return;
+                    });
                 }
 
                 const rows = await db
@@ -162,18 +139,15 @@ export default async function PUT(
 
             // ---- >1 matches → error
             else {
-                res.statusCode = 409;
-                res.setHeader("Content-Type", "application/json");
-                res.end(JSON.stringify({
+                return res.status(409).json({
                     success: false,
                     error: "Multiple modules match the given name",
-                }));
-                return;
+                });
             }
         }
 
-            // ---------------------------------
-            // INSERT (fallback)
+        // ---------------------------------
+        // INSERT (fallback)
         // ---------------------------------
         else {
             const parsed = moduleInsertSchema.parse(body);
@@ -187,12 +161,10 @@ export default async function PUT(
             dbResult = rows[0];
         }
 
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({
+        return res.status(200).json({
             success: true,
             data: dbResult ? toModuleDTO(dbResult) : null,
-        }));
+        });
 
     } catch (err) {
         if (err instanceof z.ZodError) {
@@ -211,24 +183,19 @@ export default async function PUT(
                 )
                 .map(([key]) => key);
 
-            res.statusCode = 400;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({
+            return res.status(400).json({
                 success: false,
                 error: "Validation failed",
                 details: err.issues,
                 missing_fields,
                 empty_fields,
-            }));
-            return;
+            });
         }
 
         console.error("PUT /modules error:", err);
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({
+        return res.status(500).json({
             success: false,
             error: "Internal server error",
-        }));
+        });
     }
 }

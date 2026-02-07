@@ -28,46 +28,43 @@
  * }
  */
 
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
+import { z } from 'zod'
 
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
+
+export const schema = {
+    body: z.object({
+        token: z.string().trim().min(1),
+    }),
+}
 
 /**
  * DELETE /v1/auth/token
  */
 export default async function DELETE(
-    req: IncomingMessage,
-    res: ServerResponse
+    req: Request,
+    res: Response
 ): Promise<void> {
     try {
-        const body = (req as any).body
-        const token = body?.token
+        const token = req.body?.token
 
         await revokeToken(token)
 
-        res.statusCode = 204
-        res.end()
+        res.status(204).end()
     } catch (err) {
         if (err instanceof AuthError) {
-            res.statusCode = err.httpStatus
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: err.code,
-                    message: err.message,
-                })
-            )
+            res.status(err.httpStatus).json({
+                error: err.code,
+                message: err.message,
+            })
             return
         }
 
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                error: 'INTERNAL_ERROR',
-                message: 'An unexpected error occurred',
-            })
-        )
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
     }
 }

@@ -55,24 +55,28 @@
  * }
  */
 
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
+import { z } from 'zod'
 
 import { resolveAuthContext, AuthError } from '@services/auth/authContext'
 import { resolveUserForApplication } from '@services/auth/authUserResolver'
 import { verifyPassword } from '@services/auth/passwordService'
 import { issueLoginTokens } from '@services/auth/tokenService'
 
+export const schema = {
+    body: z.object({
+        app_key: z.string().trim().min(1),
+        identifier: z.string().trim().min(1),
+        password: z.string().min(1),
+    }),
+}
+
 /**
- * GET /v1/auth/login
+ * POST /v1/auth/login
  */
-export default async function POST(
-    req: IncomingMessage,
-    res: ServerResponse
-): Promise<void> {
+export default async function POST(req: Request, res: Response): Promise<void> {
     try {
-        // Read and parse body (router should already have done this,
-        // but we stay defensive)
-        const body = (req as any).body
+        const body = req.body
 
         // 1. Resolve application context
         const appCtx = await resolveAuthContext(body)
@@ -93,53 +97,40 @@ export default async function POST(
         )
 
         // 5. Respond
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                user: {
-                    id: user.userId,
-                    username: user.username,
-                    email: user.email,
-                    status: 'active',
+        res.status(200).json({
+            user: {
+                id: user.userId,
+                username: user.username,
+                email: user.email,
+                status: 'active',
+            },
+            application: {
+                id: appCtx.applicationId,
+                app_key: appCtx.applicationKey,
+            },
+            tokens: {
+                access: {
+                    token: tokens.access.token,
+                    expires_at: tokens.access.expiresAt.toISOString(),
                 },
-                application: {
-                    id: appCtx.applicationId,
-                    app_key: appCtx.applicationKey,
+                refresh: {
+                    token: tokens.refresh.token,
+                    expires_at: tokens.refresh.expiresAt.toISOString(),
                 },
-                tokens: {
-                    access: {
-                        token: tokens.access.token,
-                        expires_at: tokens.access.expiresAt.toISOString(),
-                    },
-                    refresh: {
-                        token: tokens.refresh.token,
-                        expires_at: tokens.refresh.expiresAt.toISOString(),
-                    },
-                },
-            })
-        )
+            },
+        })
     } catch (err) {
         if (err instanceof AuthError) {
-            res.statusCode = err.httpStatus
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: err.code,
-                    message: err.message,
-                })
-            )
+            res.status(err.httpStatus).json({
+                error: err.code,
+                message: err.message,
+            })
             return
         }
 
-        // Unexpected error
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                error: 'INTERNAL_ERROR',
-                message: 'An unexpected error occurred',
-            })
-        )
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
     }
 }

@@ -20,7 +20,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
 
 /**
  * ------------------------------------------------------------
@@ -50,7 +50,7 @@ vi.mock('@services/auth/authContext', () => ({
  * ------------------------------------------------------------
  */
 
-import DELETE from '@routes/v1/auth/token/DELETE'
+import DELETE, { schema } from '@routes/v1/auth/token/DELETE'
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
 
@@ -60,21 +60,44 @@ import { AuthError } from '@services/auth/authContext'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+function createReq(body: any): Request {
+    return {
+        body,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse & { body?: any } {
-    return {
+type ResMock = Response & {
+    statusCode: number
+    body?: any
+    headers: Record<string, string>
+}
+
+function createRes(): ResMock {
+    const res = {
         statusCode: 0,
+        body: undefined,
         headers: {} as Record<string, string>,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
         setHeader(key: string, value: string) {
-            ;(this.headers as any)[key] = value
+            this.headers[key] = value
         },
-        end(payload?: string) {
-            if (payload) this.body = JSON.parse(payload)
+
+        end() {
+            return this
         },
-    } as any
+    }
+
+    return res as unknown as ResMock
 }
 
 beforeEach(() => {
@@ -88,6 +111,17 @@ beforeEach(() => {
  */
 
 describe('DELETE /v1/auth/token', () => {
+    test('exports a Zod request schema', async () => {
+        expect(schema).toBeTruthy()
+        expect(schema.body).toBeTruthy()
+
+        const missing = schema.body.safeParse({})
+        expect(missing.success).toBe(false)
+
+        const empty = schema.body.safeParse({ token: '' })
+        expect(empty.success).toBe(false)
+    })
+
     test('returns 204 on successful revoke', async () => {
         ;(revokeToken as any).mockResolvedValue(undefined)
 
@@ -98,18 +132,6 @@ describe('DELETE /v1/auth/token', () => {
 
         expect(res.statusCode).toBe(204)
         expect(revokeToken).toHaveBeenCalledWith('some-token')
-    })
-
-    test('is idempotent when token is missing', async () => {
-        ;(revokeToken as any).mockResolvedValue(undefined)
-
-        const req = createReq({})
-        const res = createRes()
-
-        await DELETE(req, res)
-
-        expect(res.statusCode).toBe(204)
-        expect(revokeToken).toHaveBeenCalledWith(undefined)
     })
 
     test('translates AuthError to HTTP response', async () => {

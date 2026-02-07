@@ -10,52 +10,69 @@
  * @summary Resend an email verification token.
  * @description
  * Allows a pending user to request a new email verification token.
- * This endpoint is non-enumerating and always returns success.
+ * This endpoint is intentionally non-enumerating and returns success even when
+ * the email is unknown or not eligible for resend.
+ *
+ * @query none
+ *
+ * @requestExample
+ * {
+ *   "app_key": "example-app-key",
+ *   "email": "user@example.com"
+ * }
+ *
+ * @response
+ * {
+ *   "ok": true
+ * }
+ *
+ * @requires
+ * {
+ *   "services": [
+ *     "authContext",
+ *     "emailVerificationService"
+ *   ]
+ * }
  */
 
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
+import { z } from 'zod'
 
 import { resolveAuthContext, AuthError } from '@services/auth/authContext'
 import { resendEmailVerificationToken } from '@services/auth/emailVerificationService'
 
-export default async function PUT(
-    req: IncomingMessage,
-    res: ServerResponse
-): Promise<void> {
-    try {
-        const body = (req as any).body
-        const { email } = body ?? {}
+export const schema = {
+    body: z.object({
+        app_key: z.string().trim().min(1),
+        // Non-enumerating: allow missing/blank email and still return ok
+        email: z.string().trim().optional(),
+    }),
+}
 
-        const { applicationId } = await resolveAuthContext(body)
+export default async function PUT(req: Request, res: Response): Promise<void> {
+    try {
+        const email = req.body?.email
+
+        const { applicationId } = await resolveAuthContext(req.body)
 
         await resendEmailVerificationToken({
             applicationId,
             email,
         })
 
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify({ ok: true }))
+        res.status(200).json({ ok: true })
     } catch (err) {
         if (err instanceof AuthError) {
-            res.statusCode = err.httpStatus
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: err.code,
-                    message: err.message,
-                })
-            )
+            res.status(err.httpStatus).json({
+                error: err.code,
+                message: err.message,
+            })
             return
         }
 
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                error: 'INTERNAL_ERROR',
-                message: 'An unexpected error occurred',
-            })
-        )
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
     }
 }

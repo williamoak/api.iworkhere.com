@@ -35,64 +35,51 @@
  * }
  */
 
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
+import { z } from 'zod'
 
 import { AuthError } from '@services/auth/authContext'
 import { verifyEmailToken } from '@services/auth/emailVerificationService'
 
-export default async function PUT(
-    req: IncomingMessage,
-    res: ServerResponse
-): Promise<void> {
-    try {
-        const body = (req as any).body
-        const token = body?.token
+export const schema = {
+    body: z.object({
+        token: z.string().trim().min(1),
+    }),
+}
 
-        if (!token) {
-            res.statusCode = 400
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: 'INVALID_REQUEST',
-                    message: 'verification token is required',
-                })
-            )
+export default async function PUT(req: Request, res: Response): Promise<void> {
+    try {
+        const token = req.body?.token
+
+        if (typeof token !== 'string' || token.trim().length === 0) {
+            res.status(400).json({
+                error: 'INVALID_REQUEST',
+                message: 'verification token is required',
+            })
             return
         }
 
         const user = await verifyEmailToken(token)
 
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                user: {
-                    id: user.id,
-                    email: user.email,
-                    status: 'active',
-                },
-            })
-        )
+        res.status(200).json({
+            user: {
+                id: user.id,
+                email: user.email,
+                status: 'active',
+            },
+        })
     } catch (err) {
         if (err instanceof AuthError) {
-            res.statusCode = err.httpStatus
-            res.setHeader('Content-Type', 'application/json')
-            res.end(
-                JSON.stringify({
-                    error: err.code,
-                    message: err.message,
-                })
-            )
+            res.status(err.httpStatus).json({
+                error: err.code,
+                message: err.message,
+            })
             return
         }
 
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json')
-        res.end(
-            JSON.stringify({
-                error: 'INTERNAL_ERROR',
-                message: 'An unexpected error occurred',
-            })
-        )
+        res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
     }
 }

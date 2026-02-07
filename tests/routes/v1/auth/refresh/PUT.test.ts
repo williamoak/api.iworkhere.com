@@ -12,6 +12,9 @@
  * service, returns rotated tokens on success, and translates AuthError
  * failures into HTTP responses.
  *
+ * Also verifies that the endpoint exports a Zod `schema` definition for
+ * request validation (used by the route loader middleware chain).
+ *
  * @requires
  * {
  *   "services": [
@@ -21,7 +24,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import type { Request, Response } from 'express'
 
 /**
  * ------------------------------------------------------------
@@ -51,7 +54,7 @@ vi.mock('@services/auth/authContext', () => ({
  * ------------------------------------------------------------
  */
 
-import PUT from '@routes/v1/auth/refresh/PUT'
+import PUT, { schema } from '@routes/v1/auth/refresh/PUT'
 import { refreshTokens } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
 
@@ -61,21 +64,44 @@ import { AuthError } from '@services/auth/authContext'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): IncomingMessage {
-    return ({ body } as unknown) as IncomingMessage
+function createReq(body: any): Request {
+    return {
+        body,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse & { body?: any } {
-    return {
+type ResMock = Response & {
+    statusCode: number
+    body?: any
+    headers: Record<string, string>
+}
+
+function createRes(): ResMock {
+    const res = {
         statusCode: 0,
+        body: undefined,
         headers: {} as Record<string, string>,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
         setHeader(key: string, value: string) {
-            ;(this.headers as any)[key] = value
+            this.headers[key] = value
         },
-        end(payload: string) {
-            this.body = JSON.parse(payload)
+
+        end() {
+            return this
         },
-    } as any
+    }
+
+    return res as unknown as ResMock
 }
 
 beforeEach(() => {
@@ -89,6 +115,17 @@ beforeEach(() => {
  */
 
 describe('PUT /v1/auth/refresh', () => {
+    test('exports a Zod request schema', async () => {
+        expect(schema).toBeTruthy()
+        expect(schema.body).toBeTruthy()
+
+        const parsed = schema.body.safeParse({
+            refresh_token: '',
+        })
+
+        expect(parsed.success).toBe(false)
+    })
+
     test('returns new tokens on successful refresh', async () => {
         ;(refreshTokens as any).mockResolvedValue({
             access: {

@@ -1,41 +1,36 @@
 /**
- * Swagger/OpenAPI generator based on @myDocBlock v2.2 annotations.
+ * @myDocBlock v2.3
+ * @file swaggerGen.ts
+ * @internal
+ * @module helpers
+ * @tag tooling, swagger
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path @helpers/swaggerGen.ts
+ * @summary Generate swagger.json from @myDocBlock route annotations.
+ * @description
+ * Build/dev-only Swagger/OpenAPI generator.
  *
- * ---------------------------------------------------------------------------
- * PUBLIC ENDPOINT RULE
- * ---------------------------------------------------------------------------
- * A docblock is PUBLIC if it contains `@external` anywhere.
- * The value after @external is ignored.
+ * PUBLIC ENDPOINT RULE (intentional):
+ * - A docblock is PUBLIC if (and only if) the FIRST docblock in the file
+ *   contains `@external` anywhere.
+ * - If the FIRST docblock contains `@internal`, this file is treated as private.
  *
- * ---------------------------------------------------------------------------
- * PATH RESOLUTION
- * ---------------------------------------------------------------------------
+ * PATH RESOLUTION:
  * 1) If @path exists and starts with "/", it is used as-is.
- * 2) Otherwise, the path is derived from the filesystem under src/routes.
+ * 2) Otherwise, the path is derived from the filesystem under src/routes by
+ *    removing the HTTP method filename (GET.ts/POST.ts/PUT.ts/DELETE.ts/PATCH.ts).
  *
- * NOTE:
- * - HTTP methods are NOT permitted in @path (v2.2 rule).
- * - If @path is invalid, the endpoint is skipped.
- *
- * ---------------------------------------------------------------------------
- * HTTP METHOD
- * ---------------------------------------------------------------------------
- * Inferred strictly from filename:
- *   POST.ts     → get
- *   POST.ts    → post
- *   POST.ts     → put
- *   DELETE.ts  → delete
- *   PATCH.ts   → patch
- *
- * ---------------------------------------------------------------------------
- * QUERY PARAMETERS
- * ---------------------------------------------------------------------------
- * Parsed from @query as structured JSON and emitted as OpenAPI query params.
- *
- * ---------------------------------------------------------------------------
- * SAFETY
- * ---------------------------------------------------------------------------
- * This file is a build/dev utility and MUST NOT be imported at runtime.
+ * SAFETY:
+ * - This file is a build/dev utility and MUST NOT be imported at runtime.
+ * @query none
+ * @requestExample none
+ * @response none
+ * @requires
+ * {
+ *   "inputs": ["src\\/routes\\/**\\/*.ts"],
+ *   "outputs": ["swagger.json"]
+ * }
  */
 
 import "tsconfig-paths/register";
@@ -103,6 +98,9 @@ function extractDocBlock(content: string): string | null {
 }
 
 function hasExternalMarker(raw: string): boolean {
+    // Intentional: @internal means this file should not be processed as public
+    if (/@internal\b/.test(raw)) return false;
+
     return /@external\b/.test(raw);
 }
 
@@ -145,7 +143,7 @@ function derivePathFromFile(filePath: string): string | null {
     const relative = filePath
         .replace(ROUTES_ROOT, "")
         .replace(/\\/g, "/")
-        .replace(/\/(POST|POST|POST|DELETE|PATCH)\.ts$/, "");
+        .replace(/\/(GET|POST|PUT|DELETE|PATCH)\.ts$/, "");
 
     return relative || "/";
 }
@@ -198,7 +196,7 @@ function buildQueryParameters(queryRaw: string | null) {
 
     const jsonText = queryRaw.slice(start, end + 1);
 
-    // ✅ NEW: remove JSDoc '*' prefixes
+    // ✅ remove JSDoc '*' prefixes
     const sanitized = jsonText
         .split("\n")
         .map(line => line.replace(/^\s*\*\s?/, ""))
@@ -279,9 +277,9 @@ function convertToSwagger(docblocks: DocBlockData[]) {
 // ---------------------------------------------------------------------------
 
 function run() {
-    console.log("🔍 Scanning project for @myDocBlock v2.2 files...");
+    console.log("🔍 Scanning routes for @myDocBlock files...");
 
-    const files = getAllTSFiles(path.join(PROJECT_ROOT, "src"));
+    const files = getAllTSFiles(ROUTES_ROOT);
     const parsed: DocBlockData[] = [];
 
     for (const file of files) {

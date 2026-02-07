@@ -1,22 +1,21 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'http'
+import { describe, test, expect, vi, beforeEach } from "vitest"
+import type { Request, Response } from "express"
 
 /**
  * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE HANDLER IMPORT
+ * MOCKS — MUST APPEAR BEFORE IMPORTS
  * ------------------------------------------------------------
  */
 
-vi.mock('@db/schema', () => ({
+vi.mock("@db/schema", () => ({
+    __esModule: true,
     weapons: {
-        weaponId: 'weapon_id',
-        name: 'name',
-        type: 'type',
-        damage: 'damage',
+        weaponId: "weapon_id",
     },
 }))
 
-vi.mock('@services/dbService', () => ({
+vi.mock("@services/dbService", () => ({
+    __esModule: true,
     db: {
         delete: vi.fn(),
     },
@@ -28,8 +27,8 @@ vi.mock('@services/dbService', () => ({
  * ------------------------------------------------------------
  */
 
-import { db } from '@services/dbService'
-import DELETE from '@routes/v1/warframe/weapons/DELETE'
+import DELETE from "@routes/v1/warframe/weapons/DELETE"
+import { db } from "@services/dbService"
 
 /**
  * ------------------------------------------------------------
@@ -37,16 +36,43 @@ import DELETE from '@routes/v1/warframe/weapons/DELETE'
  * ------------------------------------------------------------
  */
 
-function createReq(url: string): IncomingMessage {
-    return ({ url } as unknown) as IncomingMessage
+function createReq(query: any): Request {
+    return {
+        query,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse {
-    const res: Partial<ServerResponse> = {}
-    res.setHeader = vi.fn()
-    res.end = vi.fn()
-    return res as ServerResponse
+type ResMock = Response & {
+    statusCode: number
+    body?: any
 }
+
+function createRes(): ResMock {
+    const res = {
+        statusCode: 0,
+        body: undefined,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
+        end() {
+            return this
+        },
+    }
+
+    return res as unknown as ResMock
+}
+
+beforeEach(() => {
+    vi.resetAllMocks()
+})
 
 /**
  * ------------------------------------------------------------
@@ -54,87 +80,88 @@ function createRes(): ServerResponse {
  * ------------------------------------------------------------
  */
 
-describe('DELETE /v1/warframe/weapons', () => {
-    beforeEach(() => {
-        vi.clearAllMocks()
-    })
-
-    /**
-     * ------------------------------------------------------------
-     * SUCCESS — record exists
-     * ------------------------------------------------------------
-     */
-    test('deletes a weapon by weapon_id and returns deleted record', async () => {
+describe("DELETE /v1/warframe/weapons", () => {
+    test("deletes a weapon by weapon_id and returns deleted record", async () => {
         ;(db.delete as any).mockReturnValueOnce({
             where: () => ({
-                returning: () =>
-                    Promise.resolve([
-                        {
-                            weaponId: '880e8400-e29b-41d4-a716-446655440020',
-                            name: 'Braton',
-                            type: 'rifle',
-                            damage: 35,
-                        },
-                    ]),
+                returning: async () => [
+                    {
+                        weaponId:
+                            "880e8400-e29b-41d4-a716-446655440020",
+                        name: "Braton",
+                        type: "rifle",
+                        damage: 35,
+                    },
+                ],
             }),
         })
 
-        const req = createReq(
-            '/v1/warframe/weapons?weapon_id=880e8400-e29b-41d4-a716-446655440020'
-        )
+        const req = createReq({
+            weapon_id:
+                "880e8400-e29b-41d4-a716-446655440020",
+        })
         const res = createRes()
 
         await DELETE(req, res)
 
         expect(db.delete).toHaveBeenCalledOnce()
-        expect(res.end).toHaveBeenCalledOnce()
-
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
-        expect(payload.data.name).toBe('Braton')
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.name).toBe("Braton")
     })
 
-    /**
-     * ------------------------------------------------------------
-     * SUCCESS — no matching record
-     * ------------------------------------------------------------
-     */
-    test('succeeds with null data when no matching weapon exists', async () => {
+    test("succeeds with null data when no matching weapon exists", async () => {
         ;(db.delete as any).mockReturnValueOnce({
             where: () => ({
-                returning: () => Promise.resolve([]),
+                returning: async () => [],
             }),
         })
 
-        const req = createReq(
-            '/v1/warframe/weapons?weapon_id=nonexistent-id'
-        )
+        const req = createReq({
+            weapon_id: "nonexistent-id",
+        })
         const res = createRes()
 
         await DELETE(req, res)
 
-        expect(res.end).toHaveBeenCalledOnce()
-
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(true)
-        expect(payload.data).toBeNull()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data).toBeNull()
     })
 
-    /**
-     * ------------------------------------------------------------
-     * ERROR — missing weapon_id
-     * ------------------------------------------------------------
-     */
-    test('returns 400 when weapon_id is missing', async () => {
-        const req = createReq('/v1/warframe/weapons')
+    test("returns 400 when weapon_id is missing", async () => {
+        const req = createReq({})
         const res = createRes()
 
         await DELETE(req, res)
 
-        expect(res.end).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(400)
+        expect(res.body.success).toBe(false)
+        expect(res.body.error).toContain("weapon_id is required")
+    })
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0])
-        expect(payload.success).toBe(false)
-        expect(payload.error).toContain('weapon_id is required')
+    test("returns 500 on unexpected errors", async () => {
+        const consoleErrorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {})
+
+        ;(db.delete as any).mockImplementationOnce(() => {
+            throw new Error("boom")
+        })
+
+        const req = createReq({
+            weapon_id: "1",
+        })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            success: false,
+            error: "Internal server error",
+        })
+
+        consoleErrorSpy.mockRestore()
     })
 })

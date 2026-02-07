@@ -43,6 +43,7 @@ export default defineConfig({
             "@schemas": path.resolve(__dirname, "src/schemas"),
             "@cache": path.resolve(__dirname, "src/cache"),
             "@tests": path.resolve(__dirname, "tests"),
+            "@db": path.resolve(__dirname, "src/db")
         },
     },
 });

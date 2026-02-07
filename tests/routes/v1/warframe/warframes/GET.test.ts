@@ -1,30 +1,65 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import type { IncomingMessage, ServerResponse } from "http";
+/**
+ * @myDocBlock v2.3
+ * @file GET.test.ts
+ * @internal
+ * @module tests/routes/v1/warframe/warframes
+ * @tag warframe, warframes, test
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path tests/routes/v1/warframe/warframes/GET.test.ts
+ * @summary Unit tests for GET /v1/warframe/warframes endpoint glue logic.
+ * @description
+ * Verifies that GET /v1/warframe/warframes:
+ *   - always returns a lightweight warframe list
+ *   - returns emptyWarframe() when no resolution match is found
+ *   - resolves by warframe_id (first match wins)
+ *   - returns 500 on unexpected errors
+ *
+ * @query
+ *   {}
+ *
+ * @requestExample
+ * none
+ *
+ * @response
+ * {
+ *   "ok": true
+ * }
+ *
+ * @requires
+ * {
+ *   "routes": [
+ *     "routes/v1/warframe/warframes/GET"
+ *   ]
+ * }
+ */
+
+import { describe, test, expect, vi, beforeEach } from "vitest"
+import type { Request, Response } from "express"
 
 /**
  * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE HANDLER IMPORT
+ * MOCKS — MUST APPEAR BEFORE IMPORTS
  * ------------------------------------------------------------
  */
 
-vi.mock("@db/schema", async (importOriginal) => {
-    const actual = await importOriginal<any>();
-    return {
-        ...actual,
-        warframes: {
-            warframeId: "warframe_id",
-            name: "name",
-        },
-    };
-});
+vi.mock("@db/schema", () => ({
+    __esModule: true,
+    warframes: {
+        warframeId: "warframe_id",
+        name: "name",
+    },
+}))
 
 vi.mock("@services/dbService", () => ({
+    __esModule: true,
     db: {
         select: vi.fn(),
     },
-}));
+}))
 
 vi.mock("@src/dto/warframe", () => ({
+    __esModule: true,
     emptyWarframe: vi.fn(() => ({
         warframe_id: null,
         name: null,
@@ -66,48 +101,15 @@ vi.mock("@src/dto/warframe", () => ({
         current_shards: null,
         weapons_loadout: null,
     })),
-    toWarframeDTO: vi.fn((row) => ({
+    toWarframeDTO: vi.fn((row: any) => ({
         warframe_id: row.warframeId,
         name: row.name,
-        class: row.class ?? null,
-        lore: row.lore ?? "",
         base_health: row.baseHealth ?? null,
-        effective_health: row.effectiveHealth ?? null,
         base_shield: row.baseShield ?? null,
-        effective_shield: row.effectiveShield ?? null,
         base_armour: row.baseArmour ?? null,
-        effective_armour: row.effectiveArmour ?? null,
         base_energy: row.baseEnergy ?? null,
-        effective_energy: row.effectiveEnergy ?? null,
-        base_ability_strength: row.baseAbilityStrength ?? null,
-        effective_ability_strength: row.effectiveAbilityStrength ?? null,
-        base_range: row.baseRange ?? null,
-        effective_range: row.effectiveRange ?? null,
-        base_duration: row.baseDuration ?? null,
-        effective_duration: row.effectiveDuration ?? null,
-        base_ability_efficiency: row.baseAbilityEfficiency ?? null,
-        effective_ability_efficiency: row.effectiveAbilityEfficiency ?? null,
-        base_sprint_speed: row.baseSprintSpeed ?? null,
-        effective_sprint_speed: row.effectiveSprintSpeed ?? null,
-        base_capacity: row.baseCapacity ?? null,
-        effective_capacity: row.effectiveCapacity ?? null,
-        max_passives: row.maxPassives ?? null,
-        current_passives: row.currentPassives ?? null,
-        max_abilities: row.maxAbilities ?? null,
-        current_abilities: row.currentAbilities ?? null,
-        max_mods: row.maxMods ?? null,
-        current_mods: row.currentMods ?? null,
-        max_aura_mods: row.maxAuraMods ?? null,
-        current_aura_mods: row.currentAuraMods ?? null,
-        max_exilus_mods: row.maxExilusMods ?? null,
-        current_exilus_mods: row.currentExilusMods ?? null,
-        max_arcanes: row.maxArcanes ?? null,
-        current_arcanes: row.currentArcanes ?? null,
-        max_shards: row.maxShards ?? null,
-        current_shards: row.currentShards ?? null,
-        weapons_loadout: row.weaponsLoadout ?? null,
     })),
-}));
+}))
 
 /**
  * ------------------------------------------------------------
@@ -115,8 +117,9 @@ vi.mock("@src/dto/warframe", () => ({
  * ------------------------------------------------------------
  */
 
-import { db } from "@services/dbService";
-import GET from "@routes/v1/warframe/warframes/GET";
+import GET from "@routes/v1/warframe/warframes/GET"
+import { db } from "@services/dbService"
+import { emptyWarframe, toWarframeDTO } from "@src/dto/warframe"
 
 /**
  * ------------------------------------------------------------
@@ -124,16 +127,43 @@ import GET from "@routes/v1/warframe/warframes/GET";
  * ------------------------------------------------------------
  */
 
-function createReq(url: string): IncomingMessage {
-    return ({ url } as unknown) as IncomingMessage;
+function createReq(query: any): Request {
+    return {
+        query,
+    } as unknown as Request
 }
 
-function createRes(): ServerResponse {
-    const res: Partial<ServerResponse> = {};
-    res.setHeader = vi.fn();
-    res.end = vi.fn();
-    return res as ServerResponse;
+type ResMock = Response & {
+    statusCode: number
+    body?: any
 }
+
+function createRes(): ResMock {
+    const res = {
+        statusCode: 0,
+        body: undefined,
+
+        status(code: number) {
+            this.statusCode = code
+            return this
+        },
+
+        json(payload: any) {
+            this.body = payload
+            return this
+        },
+
+        end() {
+            return this
+        },
+    }
+
+    return res as unknown as ResMock
+}
+
+beforeEach(() => {
+    vi.resetAllMocks()
+})
 
 /**
  * ------------------------------------------------------------
@@ -142,100 +172,114 @@ function createRes(): ServerResponse {
  */
 
 describe("GET /v1/warframe/warframes", () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
-
     test("returns warframe list and empty warframe when no query params supplied", async () => {
-        (db.select as any).mockReturnValueOnce({
-            from: () =>
-                Promise.resolve([
-                    { warframe_id: "1", name: "Excalibur" },
-                    { warframe_id: "2", name: "Mag" },
-                ]),
-        });
+        ;(db.select as any).mockReturnValueOnce({
+            from: async () => [
+                { warframe_id: "1", name: "Excalibur" },
+                { warframe_id: "2", name: "Mag" },
+            ],
+        })
 
-        const req = createReq("/v1/warframe/warframes");
-        const res = createRes();
+        const req = createReq({})
+        const res = createRes()
 
-        await GET(req, res);
+        await GET(req, res)
 
-        expect(db.select).toHaveBeenCalledOnce();
-        expect(res.end).toHaveBeenCalledOnce();
+        expect(emptyWarframe).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
-
-        expect(payload.success).toBe(true);
-        expect(payload.data.warframes.length).toBe(2);
-        expect(payload.data.warframe).toMatchObject({
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.warframes).toHaveLength(2)
+        expect(res.body.data.warframe).toMatchObject({
             warframe_id: null,
             name: null,
-        });
-    });
+        })
+    })
 
     test("resolves a warframe when warframe_id is provided", async () => {
-        (db.select as any)
+        ;(db.select as any)
+            // lightweight list
             .mockReturnValueOnce({
-                from: () =>
-                    Promise.resolve([
-                        { warframe_id: "1", name: "Excalibur" },
-                    ]),
+                from: async () => [
+                    { warframe_id: "1", name: "Excalibur" },
+                ],
             })
+            // resolution query
             .mockReturnValueOnce({
                 from: () => ({
-                    where: () =>
-                        Promise.resolve([
-                            {
-                                warframeId: "1",
-                                name: "Excalibur",
-                                baseHealth: 100,
-                                baseShield: 100,
-                                baseArmour: 225,
-                                baseEnergy: 100,
-                            },
-                        ]),
+                    where: async () => [
+                        {
+                            warframeId: "1",
+                            name: "Excalibur",
+                            baseHealth: 100,
+                            baseShield: 100,
+                            baseArmour: 225,
+                            baseEnergy: 100,
+                        },
+                    ],
                 }),
-            });
+            })
 
-        const req = createReq(
-            "/v1/warframe/warframes?warframe_id=660e8400-e29b-41d4-a716-446655440010"
-        );
-        const res = createRes();
+        const req = createReq({
+            warframe_id: "660e8400-e29b-41d4-a716-446655440010",
+        })
+        const res = createRes()
 
-        await GET(req, res);
+        await GET(req, res)
 
-        expect(db.select).toHaveBeenCalledTimes(2);
-
-        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
-        expect(payload.data.warframe.name).toBe("Excalibur");
-        expect(payload.data.warframe.base_health).toBe(100);
-    });
+        expect(toWarframeDTO).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.warframe.name).toBe("Excalibur")
+        expect(res.body.data.warframe.base_health).toBe(100)
+    })
 
     test("returns empty warframe when warframe_id does not match any record", async () => {
-        (db.select as any)
+        ;(db.select as any)
             .mockReturnValueOnce({
-                from: () =>
-                    Promise.resolve([
-                        { warframe_id: "1", name: "Excalibur" },
-                    ]),
+                from: async () => [
+                    { warframe_id: "1", name: "Excalibur" },
+                ],
             })
             .mockReturnValueOnce({
                 from: () => ({
-                    where: () => Promise.resolve([]),
+                    where: async () => [],
                 }),
-            });
+            })
 
-        const req = createReq(
-            "/v1/warframe/warframes?warframe_id=nonexistent"
-        );
-        const res = createRes();
+        const req = createReq({
+            warframe_id: "nonexistent",
+        })
+        const res = createRes()
 
-        await GET(req, res);
+        await GET(req, res)
 
-        const payload = JSON.parse((res.end as any).mock.calls[0][0]);
-        expect(payload.data.warframe).toMatchObject({
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.warframe).toMatchObject({
             warframe_id: null,
             name: null,
-        });
-    });
-});
+        })
+    })
+
+    test("returns 500 on unexpected errors", async () => {
+        const consoleErrorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {})
+
+        ;(db.select as any).mockImplementationOnce(() => {
+            throw new Error("boom")
+        })
+
+        const req = createReq({})
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            success: false,
+            error: "Internal server error",
+        })
+
+        consoleErrorSpy.mockRestore()
+    })
+})

@@ -1,110 +1,47 @@
-/**
- * @myDocBlock v2.2
- * @file DELETE.ts
- * @external
- * @module warframe-weapons
- * @tag weapons
- * @version 1.0.0
- * @author william.r.oak@gmail.com
- * @path /v1/warframe/weapons
- * @summary Delete a weapon by weapon_id.
- *
- * @description
- *   Deletes a single weapon identified by the required weapon_id
- *   query parameter.
- *
- *   If no matching record exists, the operation still succeeds and
- *   returns a null data payload.
- *
- * @query
- *   {
- *     "weapon_id": {
- *       "type": "string",
- *       "format": "uuid",
- *       "required": true,
- *       "description": "Unique identifier of the weapon to delete"
- *     }
- *   }
- *
- * @requestExample
- *   {
- *     "method": "DELETE",
- *     "url": "/v1/warframe/weapons?weapon_id=880e8400-e29b-41d4-a716-446655440020"
- *   }
- *
- * @response
- *   {
- *     "success": true,
- *     "data": {
- *       "weapon_id": "880e8400-e29b-41d4-a716-446655440020",
- *       "name": "Braton",
- *       "type": "rifle",
- *       "damage": 35
- *     }
- *   }
- *
- * @requires
- *   - Database connection via dbService
- *   - weapons table schema
- */
+import type { Request, Response } from "express"
+import { eq } from "drizzle-orm"
 
-import type { IncomingMessage, ServerResponse } from "http";
-import { URL } from "url";
-
-import { db } from "@services/dbService";
-import { weapons } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { db } from "@services/dbService"
+import { weapons } from "@db/schema"
 
 /**
  * DELETE /v1/warframe/weapons
- * Query param:
- *   - weapon_id (UUID, required)
  */
-export default async function DELETE(
-    req: IncomingMessage,
-    res: ServerResponse
-) {
+export default async function DELETE(req: Request, res: Response) {
     try {
-        const url = new URL(req.url ?? "", "http://localhost");
-        const weaponId = url.searchParams.get("weapon_id");
+        const weaponIdRaw = req.query.weapon_id
+        const weaponId =
+            typeof weaponIdRaw === "string"
+                ? weaponIdRaw
+                : Array.isArray(weaponIdRaw) &&
+                typeof weaponIdRaw[0] === "string"
+                    ? weaponIdRaw[0]
+                    : undefined
 
         if (!weaponId) {
-            res.statusCode = 400;
-            res.setHeader("Content-Type", "application/json");
-            res.end(
-                JSON.stringify({
-                    success: false,
-                    error: "weapon_id is required",
-                })
-            );
-            return;
+            return res.status(400).json({
+                success: false,
+                error: "weapon_id is required",
+            })
         }
 
         const rows = await db
             .delete(weapons)
             .where(eq(weapons.weaponId, weaponId))
-            .returning();
+            .returning()
 
-        const result = rows.length > 0 ? rows[0] : null;
+        const result = rows.length > 0 ? rows[0] : null
 
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(
-            JSON.stringify({
-                success: true,
-                data: result,
-            })
-        );
+        return res.status(200).json({
+            success: true,
+            data: result,
+        })
     } catch (err) {
-        console.error("DELETE /weapons error:", err);
+        console.error("DELETE /weapons error:", err)
 
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        res.end(
-            JSON.stringify({
-                success: false,
-                error: "Internal server error",
-            })
-        );
+        return res.status(500).json({
+            success: false,
+            error: "Internal server error",
+        })
     }
 }
