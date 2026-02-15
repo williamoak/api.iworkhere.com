@@ -28,9 +28,10 @@
  * ENFORCED MIDDLEWARE ORDER
  *   1. Request validation
  *   2. Auth rate limiting (auth routes only)
- *   3. Concurrency throttling
- *   4. Centralized cache enforcement
- *   5. Route handler execution
+ *   3. Route authentication (only when route exports `authRequired = true`)
+ *   4. Concurrency throttling
+ *   5. Centralized cache enforcement
+ *   6. Route handler execution
  *
  * @requires
  * {
@@ -39,22 +40,24 @@
  *     "@middleware/validate",
  *     "@middleware/throttleMiddleware",
  *     "@middleware/rateLimitMiddleware",
+ *     "@middleware/authMiddleware",
  *     "@middleware/cacheMiddleware"
  *   ]
  * }
  */
 
-import fs from 'fs'
 import path from 'path'
-import { pathToFileURL } from 'url'
-import type { Application, Request, Response, NextFunction } from 'express'
+import {pathToFileURL} from 'url'
+import {promises as fsp} from 'fs'
+import type {Application, NextFunction, Request, Response} from 'express'
 
-import { configGet } from '@helpers/config'
-import { makeValidator } from '@middleware/validate'
-import type { ValidationSchemas } from '@middleware/validate'
-import { throttleMiddleware } from '@middleware/throttleMiddleware'
-import { rateLimitMiddleware } from '@middleware/rateLimitMiddleware'
-import { cacheMiddleware } from '@middleware/cacheMiddleware'
+import {configGet} from '@helpers/config'
+import type {ValidationSchemas} from '@middleware/validate'
+import {makeValidator} from '@middleware/validate'
+import {throttleMiddleware} from '@middleware/throttleMiddleware'
+import {rateLimitMiddleware} from '@middleware/rateLimitMiddleware'
+import {cacheMiddleware} from '@middleware/cacheMiddleware'
+import {authMiddleware} from '@middleware/authMiddleware'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -62,9 +65,15 @@ import { cacheMiddleware } from '@middleware/cacheMiddleware'
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
 type HttpMethod = (typeof HTTP_METHODS)[number]
-const METHOD_FILES = HTTP_METHODS.map(m => `${m}.ts`)
+const METHOD_FILES = new Set(HTTP_METHODS.map((m) => `${m}.ts`))
 
 type RouteHandler = (req: Request, res: Response) => any
+
+type RouteModule = {
+    default: RouteHandler
+    schema?: ValidationSchemas
+    authRequired?: boolean
+}
 
 interface RouteNode {
     path: string
@@ -72,99 +81,127 @@ interface RouteNode {
     handlers: Partial<Record<HttpMethod, RouteHandler>>
     schemas: Partial<Record<HttpMethod, ValidationSchemas>>
     children: Record<string, RouteNode>
+    authRequiredByMethod?: Partial<Record<HttpMethod, boolean>>
 }
 
 /* ------------------------------------------------------------------ */
 /* Public API                                                         */
+
 /* ------------------------------------------------------------------ */
 
 export async function loadRoutes(app: Application): Promise<void> {
     const routeTree: Record<string, RouteNode> = {}
     app.locals.routeTree = routeTree
 
-    const API_VERSION = configGet('API_VERSION') ?? 'v1'
-    const MAX_CONCURRENT_REQUESTS = Number(
+    const apiVersion = configGet('API_VERSION') ?? 'v1'
+    const maxConcurrentRequests = Number(
         configGet('MAX_CONCURRENT_REQUESTS') ?? '10'
     )
 
-    const baseDir = path.join(process.cwd(), 'src', 'routes', API_VERSION)
+    const baseDir = path.join(process.cwd(), 'src', 'routes', apiVersion)
 
-    await scanDirectory(baseDir, `/${API_VERSION}`, routeTree)
-    bindExpress(app, routeTree, MAX_CONCURRENT_REQUESTS)
+    await scanDirectory({
+        dir: baseDir,
+        routePath: `/${apiVersion}`,
+        routeTree,
+    })
 
+    bindExpress({
+        app,
+        routeTree,
+        maxConcurrentRequests,
+        apiVersion,
+    })
+
+    const endpointCount = countBoundEndpoints(routeTree)
     console.log(
-        `RouteLoader: Registered ${Object.keys(routeTree).length} routes`
+        `RouteLoader: Registered ${endpointCount} endpoint(s) across ${Object.keys(routeTree).length} route node(s)`
     )
 }
 
 /* ------------------------------------------------------------------ */
 /* Phase 1 — Route Discovery                                          */
+
 /* ------------------------------------------------------------------ */
 
-async function scanDirectory(
-    dir: string,
-    routePath: string,
+async function scanDirectory(args: {
+    dir: string
+    routePath: string
     routeTree: Record<string, RouteNode>
-): Promise<void> {
-    if (!routeTree[routePath]) {
-        routeTree[routePath] = {
+}): Promise<void> {
+    const {dir, routePath, routeTree} = args
+
+    const node =
+        routeTree[routePath] ??
+        (routeTree[routePath] = {
             path: routePath,
             handlers: {},
             schemas: {},
             children: {},
-        }
-    }
+            authRequiredByMethod: {},
+        })
 
-    const node = routeTree[routePath]
-    const entries = fs.readdirSync(dir)
+    const entries = await fsp.readdir(dir, {withFileTypes: true})
 
+    // Import handlers for method files
     for (const entry of entries) {
-        const fullPath = path.join(dir, entry)
-        if (!METHOD_FILES.includes(entry)) continue
+        if (!entry.isFile()) continue
+        if (!METHOD_FILES.has(entry.name)) continue
 
-        const method = entry.replace('.ts', '') as HttpMethod
-        const moduleUrl = pathToFileURL(fullPath).href
+        const fullPath = path.join(dir, entry.name)
+        const method = entry.name.replace('.ts', '') as HttpMethod
 
-        const mod = await import(moduleUrl)
+        const mod = (await import(pathToFileURL(fullPath).href)) as RouteModule
         if (typeof mod.default !== 'function') {
             throw new Error(`RouteLoader: ${fullPath} missing default export`)
         }
 
+        // First registration wins (prevents accidental overrides)
         if (!node.handlers[method]) {
             node.handlers[method] = mod.default
-
-            // Optional: endpoint can export `schema` (Zod) for per-route validation.
-            // If missing, we store {} and validation falls back to global checks only.
             node.schemas[method] = (mod.schema ?? {}) as ValidationSchemas
-
+            node.authRequiredByMethod = node.authRequiredByMethod ?? {}
+            node.authRequiredByMethod[method] = Boolean(mod.authRequired)
             node.file = fullPath
         }
     }
 
+    // Recurse into child directories
     for (const entry of entries) {
-        const fullPath = path.join(dir, entry)
-        if (!fs.statSync(fullPath).isDirectory()) continue
+        if (!entry.isDirectory()) continue
 
-        const childPath = `${routePath}/${entry}`
-        await scanDirectory(fullPath, childPath, routeTree)
-        node.children[entry] = routeTree[childPath]
+        const childDir = path.join(dir, entry.name)
+        const childPath = `${routePath}/${entry.name}`
+
+        await scanDirectory({
+            dir: childDir,
+            routePath: childPath,
+            routeTree,
+        })
+
+        node.children[entry.name] = routeTree[childPath]
     }
 }
 
 /* ------------------------------------------------------------------ */
 /* Phase 2 — Express Binding                                          */
+
 /* ------------------------------------------------------------------ */
 
-function bindExpress(
-    app: Application,
-    routeTree: Record<string, RouteNode>,
+function bindExpress(args: {
+    app: Application
+    routeTree: Record<string, RouteNode>
     maxConcurrentRequests: number
-): void {
+    apiVersion: string
+}): void {
+    const {app, routeTree, maxConcurrentRequests, apiVersion} = args
+
     const sortedPaths = Object.keys(routeTree).sort(
         (a, b) => a.split('/').length - b.split('/').length
     )
 
-    const isAuthRoute = (path: string) => path.startsWith('/v1/auth')
+    const isAuthRoute = (routePath: string) =>
+        routePath.startsWith(`/${apiVersion}/auth`)
 
     for (const routePath of sortedPaths) {
         const node = routeTree[routePath]
@@ -175,38 +212,41 @@ function bindExpress(
             if (!handler) continue
 
             const validator = makeValidator(node.schemas[method] ?? {})
+            const authRequired = Boolean(node.authRequiredByMethod?.[method])
 
             const middlewareChain = [
-                validator.request,
+                    validator.request,
 
-                ...(isAuthRoute(routePath)
-                    ? [
-                          rateLimitMiddleware({
-                              key: req =>
-                                  req.ip ||
-                                  (req.body?.email ??
-                                      req.body?.identifier ??
-                                      ''),
-                              max: 5,
-                              windowMs: 60_000,
-                          }),
-                      ]
-                    : []),
+                    ...(isAuthRoute(routePath)
+                        ? [
+                            rateLimitMiddleware({
+                                key: (req) =>
+                                    req.ip ||
+                                    (req.body?.email ??
+                                        req.body?.identifier ??
+                                        ''),
+                                max: 5,
+                                windowMs: 60_000,
+                            }),
+                        ]
+                        : []),
 
-                throttleMiddleware(maxConcurrentRequests),
-                cacheMiddleware(),
+                    ...(authRequired ? [authMiddleware()] : []),
 
-                async (req: Request, res: Response, next: NextFunction) => {
-                    try {
-                        const result = await handler(req, res)
-                        if (!res.headersSent) {
-                            return res.json(validator.response(result))
+                    throttleMiddleware(maxConcurrentRequests),
+                    cacheMiddleware(),
+
+                    async (req: Request, res: Response, next: NextFunction) => {
+                        try {
+                            const result = await handler(req, res)
+                            if (!res.headersSent) {
+                                return res.json(validator.response(result))
+                            }
+                        } catch (err) {
+                            return next(err)
                         }
-                    } catch (err) {
-                        return next(err)
-                    }
-                },
-            ]
+                    },
+                ]
 
             ;(app as any)[method.toLowerCase()](routePath, ...middlewareChain)
         }
@@ -215,8 +255,17 @@ function bindExpress(
     }
 }
 
+function countBoundEndpoints(routeTree: Record<string, RouteNode>): number {
+    let total = 0
+    for (const node of Object.values(routeTree)) {
+        total += Object.keys(node.handlers).length
+    }
+    return total
+}
+
 /* ------------------------------------------------------------------ */
 /* 405 Fallback                                                       */
+
 /* ------------------------------------------------------------------ */
 
 function register405(

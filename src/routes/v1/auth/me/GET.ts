@@ -58,6 +58,7 @@
 
 import type { Request, Response } from 'express'
 import { getUserById } from '@services/users/getUserById'
+export const authRequired = true
 
 /**
  * GET /v1/auth/me

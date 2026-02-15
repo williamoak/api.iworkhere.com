@@ -38,7 +38,7 @@
 import crypto from 'crypto'
 import { db } from '@services/dbService'
 import { authTokens } from '@db/schema'
-import { and, eq, isNull, lt } from 'drizzle-orm'
+import { and, eq, isNull, gt } from 'drizzle-orm'
 import { AuthError } from './authContext'
 import { configGetNumber } from '@helpers/config'
 
@@ -123,7 +123,7 @@ export async function issueLoginTokens(
 }
 
 /**
- * Rotate a refresh token and issue a new access + refresh token pair.
+ * Rotate a refresh token and issue a new access and refresh token pair.
  */
 export async function refreshTokens(
     refreshToken: unknown
@@ -146,7 +146,7 @@ export async function refreshTokens(
                 eq(authTokens.tokenHash, tokenHash),
                 eq(authTokens.tokenType, 'refresh'),
                 isNull(authTokens.revokedAt),
-                lt(authTokens.expiresAt, new Date())
+                gt(authTokens.expiresAt, new Date())
             )
         )
         .limit(1)
