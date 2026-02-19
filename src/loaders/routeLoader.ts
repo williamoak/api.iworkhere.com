@@ -3,8 +3,8 @@
  * @file routeLoader.ts
  * @internal
  * @module loaders/routeLoader
- * @tag api, routing, middleware
- * @version 3.2.0
+ * @tag api, routing, middleware, debug
+ * @version 3.2.0+debug.1
  * @author william.r.oak@gmail.com
  * @path src/loaders/routeLoader.ts
  * @summary
@@ -32,6 +32,14 @@
  *   4. Concurrency throttling
  *   5. Centralized cache enforcement
  *   6. Route handler execution
+ *
+ * DEBUG NOTES
+ *   - Enable with ROUTE_LOADER_DEBUG=1
+ *   - Adds extremely chatty per-request logs indicating:
+ *       * whether the route wrapper ran
+ *       * whether auth middleware is in the chain
+ *       * whether the actual route handler was entered
+ *       * final status code + duration
  *
  * @requires
  * {
@@ -82,6 +90,47 @@ interface RouteNode {
     schemas: Partial<Record<HttpMethod, ValidationSchemas>>
     children: Record<string, RouteNode>
     authRequiredByMethod?: Partial<Record<HttpMethod, boolean>>
+}
+
+/* ------------------------------------------------------------------ */
+/* Debug helpers                                                      */
+/* ------------------------------------------------------------------ */
+
+const ROUTE_LOADER_DEBUG = process.env.ROUTE_LOADER_DEBUG === '1'
+
+function dbg(fields: Record<string, unknown>): void {
+    if (!ROUTE_LOADER_DEBUG) return
+    // eslint-disable-next-line no-console
+    console.log(
+        JSON.stringify({
+            tag: 'routeLoader',
+            t: new Date().toISOString(),
+            ...fields,
+        })
+    )
+}
+
+function getReqId(req: Request): string {
+    const hdr = (req.get('x-request-id') ?? '').toString().trim()
+    if (hdr) return hdr.slice(0, 128)
+    return 'no-x-request-id'
+}
+
+function tracePoint(name: string, base: Record<string, unknown>) {
+    return (req: Request, _res: Response, next: NextFunction) => {
+        const reqId = getReqId(req)
+
+        dbg({
+            phase: 'mw.enter',
+            name,
+            reqId,
+            ...base,
+            method: req.method,
+            url: req.url,
+        })
+
+        return next()
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -214,11 +263,22 @@ function bindExpress(args: {
             const validator = makeValidator(node.schemas[method] ?? {})
             const authRequired = Boolean(node.authRequiredByMethod?.[method])
 
+            const baseDebug = {
+                routePath,
+                method,
+                authRequired,
+                nodeFile: node.file,
+                isAuthRoute: isAuthRoute(routePath),
+            }
+
             const middlewareChain = [
+                    tracePoint('chain.start', baseDebug),
+
                     validator.request,
 
                     ...(isAuthRoute(routePath)
                         ? [
+                            tracePoint('rateLimit.before', baseDebug),
                             rateLimitMiddleware({
                                 key: (req) =>
                                     req.ip ||
@@ -228,21 +288,86 @@ function bindExpress(args: {
                                 max: 5,
                                 windowMs: 60_000,
                             }),
+                            tracePoint('rateLimit.after', baseDebug),
                         ]
                         : []),
 
-                    ...(authRequired ? [authMiddleware()] : []),
+                    ...(authRequired
+                        ? [
+                            tracePoint('auth.before', baseDebug),
+                            authMiddleware(),
+                            tracePoint('auth.after', baseDebug),
+                        ]
+                        : []),
 
+                    tracePoint('throttle.before', baseDebug),
                     throttleMiddleware(maxConcurrentRequests),
+                    tracePoint('throttle.after', baseDebug),
+
+                    tracePoint('cache.before', baseDebug),
                     cacheMiddleware(),
+                    tracePoint('cache.after', baseDebug),
 
                     async (req: Request, res: Response, next: NextFunction) => {
+                        const reqId = getReqId(req)
+                        const start = Date.now()
+
+                        dbg({
+                            phase: 'handler_wrapper.enter',
+                            reqId,
+                            ...baseDebug,
+                            headers: ROUTE_LOADER_DEBUG ? req.headers : undefined,
+                            auth: ROUTE_LOADER_DEBUG ? (req as any).auth : undefined,
+                        })
+
+                        let finished = false
+                        const onFinish = () => {
+                            if (finished) return
+                            finished = true
+                            dbg({
+                                phase: 'handler_wrapper.finish',
+                                reqId,
+                                ...baseDebug,
+                                statusCode: res.statusCode,
+                                durationMs: Date.now() - start,
+                                headersSent: res.headersSent,
+                            })
+                        }
+
+                        res.once('finish', onFinish)
+                        res.once('close', onFinish)
+
                         try {
                             const result = await handler(req, res)
+
+                            dbg({
+                                phase: 'handler_wrapper.after_handler',
+                                reqId,
+                                ...baseDebug,
+                                headersSent: res.headersSent,
+                                resultType: typeof result,
+                                result: ROUTE_LOADER_DEBUG ? result : undefined,
+                            })
+
                             if (!res.headersSent) {
-                                return res.json(validator.response(result))
+                                const shaped = validator.response(result)
+                                dbg({
+                                    phase: 'handler_wrapper.autorespond',
+                                    reqId,
+                                    ...baseDebug,
+                                    shapedResponse: ROUTE_LOADER_DEBUG ? shaped : undefined,
+                                })
+                                return res.json(shaped)
                             }
                         } catch (err) {
+                            dbg({
+                                phase: 'handler_wrapper.error',
+                                reqId,
+                                ...baseDebug,
+                                name: err instanceof Error ? err.name : undefined,
+                                message: err instanceof Error ? err.message : String(err),
+                                stack: err instanceof Error ? err.stack : undefined,
+                            })
                             return next(err)
                         }
                     },
