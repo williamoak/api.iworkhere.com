@@ -116,6 +116,53 @@ function getReqId(req: Request): string {
     return 'no-x-request-id'
 }
 
+function getAuthRateLimitKey(req: Request): string {
+    const identifier =
+        typeof req.body?.email === 'string'
+            ? req.body.email.trim().toLowerCase()
+            : typeof req.body?.identifier === 'string'
+                ? req.body.identifier.trim().toLowerCase()
+                : ''
+
+    return `${req.ip}|${identifier}`
+}
+
+type AuthRateLimitPolicy = {
+    max: number
+    windowMs: number
+}
+
+function getAuthRateLimitPolicy(
+    routePath: string,
+    method: HttpMethod
+): AuthRateLimitPolicy {
+    const key = `${method} ${routePath}`
+
+    switch (key) {
+        case 'POST /v1/auth/login':
+        case 'PUT /v1/auth/register':
+        case 'PUT /v1/auth/passreset/initiate':
+        case 'PUT /v1/auth/emailverify/resend':
+            return {max: 5, windowMs: 60_000}
+
+        case 'PUT /v1/auth/refresh':
+            return {max: 20, windowMs: 60_000}
+
+        case 'PUT /v1/auth/emailverify':
+        case 'PUT /v1/auth/passreset/verify':
+        case 'PUT /v1/auth/passreset/complete':
+        case 'DELETE /v1/auth/token':
+            return {max: 10, windowMs: 60_000}
+
+        case 'GET /v1/auth/me':
+        case 'GET /v1/auth/eula':
+            return {max: 60, windowMs: 60_000}
+
+        default:
+            return {max: 10, windowMs: 60_000}
+    }
+}
+
 function tracePoint(name: string, base: Record<string, unknown>) {
     return (req: Request, _res: Response, next: NextFunction) => {
         const reqId = getReqId(req)
@@ -262,6 +309,7 @@ function bindExpress(args: {
 
             const validator = makeValidator(node.schemas[method] ?? {})
             const authRequired = Boolean(node.authRequiredByMethod?.[method])
+            const authRateLimit = getAuthRateLimitPolicy(routePath, method)
 
             const baseDebug = {
                 routePath,
@@ -280,13 +328,9 @@ function bindExpress(args: {
                         ? [
                             tracePoint('rateLimit.before', baseDebug),
                             rateLimitMiddleware({
-                                key: (req) =>
-                                    req.ip ||
-                                    (req.body?.email ??
-                                        req.body?.identifier ??
-                                        ''),
-                                max: 5,
-                                windowMs: 60_000,
+                                key: getAuthRateLimitKey,
+                                max: authRateLimit.max,
+                                windowMs: authRateLimit.windowMs,
                             }),
                             tracePoint('rateLimit.after', baseDebug),
                         ]
@@ -316,8 +360,8 @@ function bindExpress(args: {
                             phase: 'handler_wrapper.enter',
                             reqId,
                             ...baseDebug,
-                            headers: ROUTE_LOADER_DEBUG ? req.headers : undefined,
-                            auth: ROUTE_LOADER_DEBUG ? (req as any).auth : undefined,
+                            hasAuthorization: Boolean(req.get('authorization')),
+                            authUserIdPresent: Boolean((req as any).auth?.userId),
                         })
 
                         let finished = false

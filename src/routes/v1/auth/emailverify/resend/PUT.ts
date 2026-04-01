@@ -51,9 +51,12 @@ export const schema = {
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        const email = req.body?.email
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
+        const email = body.email
 
-        const { applicationId } = await resolveAuthContext(req.body)
+        const { applicationId } = await resolveAuthContext(body)
 
         await resendEmailVerificationToken({
             applicationId,

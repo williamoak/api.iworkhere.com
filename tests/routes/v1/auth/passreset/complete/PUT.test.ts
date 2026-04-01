@@ -11,7 +11,7 @@
  * @description
  * Verifies that the password reset completion endpoint:
  *   - exports a Zod `schema` for request validation
- *   - returns HTTP 400 for invalid request bodies
+ *   - consumes middleware-validated request payload when present
  *   - calls completePasswordReset() with token and new_password
  *   - returns HTTP 200 with { ok: true } on success
  *   - translates AuthError failures into HTTP responses
@@ -73,6 +73,7 @@ import { AuthError } from '@services/auth/authContext'
 function createReq(body: any): Request {
     return {
         body,
+        validated: undefined,
     } as unknown as Request
 }
 
@@ -153,21 +154,28 @@ describe('PUT /v1/auth/passreset/complete', () => {
         )
     })
 
-    test('returns 400 for invalid request body (missing fields)', async () => {
-        const req = createReq({
-            token: 'valid-token',
-        })
+    test('prefers middleware-validated body payload when present', async () => {
+        ;(completePasswordReset as any).mockResolvedValue(undefined)
+
+        const req = createReq({})
+        ;(req as any).validated = {
+            body: {
+                token: 'valid-token',
+                new_password: 'new-strong-password',
+            },
+        }
         const res = createRes()
 
         await PUT(req, res)
 
-        expect(res.statusCode).toBe(400)
+        expect(res.statusCode).toBe(200)
         expect(res.body).toEqual({
-            error: 'INVALID_REQUEST',
-            message: 'Invalid request body',
+            ok: true,
         })
-
-        expect(completePasswordReset).not.toHaveBeenCalled()
+        expect(completePasswordReset).toHaveBeenCalledWith(
+            'valid-token',
+            'new-strong-password'
+        )
     })
 
     test('translates AuthError to HTTP response', async () => {

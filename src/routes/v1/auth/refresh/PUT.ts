@@ -58,7 +58,10 @@ export const schema = {
  */
 export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        const refreshToken = req.body?.refresh_token
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
+        const refreshToken = body.refresh_token
 
         const tokens = await refreshTokens(refreshToken)
 

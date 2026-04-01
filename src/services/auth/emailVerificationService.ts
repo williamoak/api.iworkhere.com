@@ -163,7 +163,7 @@ export async function verifyEmailToken(token: string): Promise<{
  */
 export async function resendEmailVerificationToken(params: {
     applicationId: string
-    email: string
+    email?: string
 }): Promise<void> {
     const { applicationId, email } = params
 

@@ -4,7 +4,7 @@
  * @internal
  * @module Middleware
  * @tag api, auth, debug
- * @version 1.0.2-debug
+ * @version 1.0.3
  * @path src/middleware/authMiddleware.ts
  * @summary Access token authentication middleware (instrumented).
  *
@@ -17,9 +17,9 @@
  *
  * DEBUG NOTES
  * - Enable with AUTH_MW_DEBUG=1
- * - In debug mode, this middleware returns verbose JSON on 401 including:
- *   raw token, tokenHash, and the specific reject reason.
- * - Do not commit debug mode output behavior.
+ * - In debug mode, this middleware returns 401 debug metadata (reqId/reason)
+ *   and emits debug response headers.
+ * - Raw token values are never logged or returned.
  */
 
 import type { Request, Response, NextFunction } from 'express'
@@ -71,8 +71,10 @@ export function authMiddleware() {
             crypto.randomUUID()
 
         function reject401(reason: string, extra: Record<string, unknown> = {}) {
-            res.setHeader('x-debug-req-id', reqId)
-            res.setHeader('x-debug-auth-reason', reason)
+            if (AUTH_MW_DEBUG) {
+                res.setHeader('x-debug-req-id', reqId)
+                res.setHeader('x-debug-auth-reason', reason)
+            }
 
             dbg(reqId, 'reject', {
                 reason,
@@ -102,13 +104,12 @@ export function authMiddleware() {
                 method: req.method,
                 url: req.url,
                 ip: req.ip,
-                authorizationRaw,
                 tokenPresent: Boolean(token),
             })
 
             if (!token) {
                 return reject401('MISSING_OR_INVALID_BEARER', {
-                    authorizationRaw,
+                    hasAuthorization: Boolean(authorizationRaw),
                     bearerPrefixExpected: BEARER_PREFIX,
                 })
             }
@@ -117,7 +118,6 @@ export function authMiddleware() {
             const now = new Date()
 
             dbg(reqId, 'token', {
-                tokenRaw: token,
                 tokenHash,
                 now: now.toISOString(),
             })
@@ -142,8 +142,6 @@ export function authMiddleware() {
 
             if (rows.length === 0) {
                 return reject401('TOKEN_NOT_FOUND_OR_EXPIRED_OR_REVOKED_OR_WRONG_TYPE', {
-                    authorizationRaw,
-                    tokenRaw: token,
                     tokenHash,
                     query: {
                         tokenType: 'access',

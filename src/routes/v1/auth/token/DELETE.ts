@@ -48,7 +48,10 @@ export default async function DELETE(
     res: Response
 ): Promise<void> {
     try {
-        const token = req.body?.token
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
+        const token = body.token
 
         await revokeToken(token)
 

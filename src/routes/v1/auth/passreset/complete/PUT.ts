@@ -46,17 +46,9 @@ export const schema = {
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        // Validate request shape BEFORE calling services
-        const parsed = schema.body.safeParse(req.body)
-        if (!parsed.success) {
-            res.status(400).json({
-                error: 'INVALID_REQUEST',
-                message: 'Invalid request body',
-            })
-            return
-        }
-
-        const body = parsed.data
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
 
         await completePasswordReset(body.token, body.new_password)
 

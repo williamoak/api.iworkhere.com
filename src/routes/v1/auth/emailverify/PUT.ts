@@ -49,15 +49,10 @@ export const schema = {
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        const token = req.body?.token
-
-        if (typeof token !== 'string' || token.trim().length === 0) {
-            res.status(400).json({
-                error: 'INVALID_REQUEST',
-                message: 'verification token is required',
-            })
-            return
-        }
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
+        const token = body.token
 
         const user = await verifyEmailToken(token)
 

@@ -169,11 +169,16 @@ describe('passwordService', () => {
             ;(bcrypt.compare as any).mockResolvedValue(true)
 
             await expect(
-                enforcePasswordHistory(userId, 'new-hash')
+                enforcePasswordHistory(userId, 'new-password', 'new-hash')
             ).rejects.toMatchObject({
                 code: 'PASSWORD_REUSE',
                 httpStatus: 400,
             })
+
+            expect(bcrypt.compare).toHaveBeenCalledWith(
+                'new-password',
+                'old-hash'
+            )
         })
 
         test('inserts password history for new password', async () => {
@@ -188,7 +193,7 @@ describe('passwordService', () => {
             })
 
             await expect(
-                enforcePasswordHistory(userId, 'new-hash')
+                enforcePasswordHistory(userId, 'new-password', 'new-hash')
             ).resolves.toBeUndefined()
         })
     })

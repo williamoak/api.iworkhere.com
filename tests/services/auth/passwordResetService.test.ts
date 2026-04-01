@@ -36,6 +36,7 @@ vi.mock('@helpers/config', () => ({
 
 vi.mock('@services/auth/passwordService', () => ({
     hashPassword: vi.fn(async () => 'hashed-password'),
+    enforcePasswordHistory: vi.fn(async () => undefined),
 }))
 
 vi.mock('@db/schema', () => ({
@@ -79,6 +80,7 @@ import {
     completePasswordReset,
 } from '@services/auth/passwordResetService'
 import { AuthError } from '@services/auth/authContext'
+import { enforcePasswordHistory } from '@services/auth/passwordService'
 
 /**
  * ------------------------------------------------------------
@@ -227,6 +229,11 @@ describe('passwordResetService', () => {
             completePasswordReset('valid-token', 'newpass')
         ).resolves.toBeUndefined()
 
+        expect(enforcePasswordHistory).toHaveBeenCalledWith(
+            'u1',
+            'newpass',
+            'hashed-password'
+        )
         expect(db.transaction).toHaveBeenCalled()
     })
 })

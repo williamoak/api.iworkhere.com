@@ -1,14 +1,14 @@
 ﻿/**
  * @myDocBlock
  * @file
- * @version 1.0.3-debug
+ * @version 1.0.4
  * @path /v1/auth/me
- * @summary Canonical authenticated-identity verification endpoint (HEAVILY instrumented).
+ * @summary Canonical authenticated-identity verification endpoint.
  *
  * @description
  * DEBUG NOTES
  * - Enable logging with: AUTH_ME_DEBUG=1
- * - Logs raw Authorization header + raw bearer token + hashes (do not commit)
+ * - Logs request/auth metadata only (no raw token material)
  * - This handler does NOT check auth_tokens; middleware does. It consumes req.auth.userId.
  */
 
@@ -33,34 +33,8 @@ function dbg(reqId: string, phase: string, fields: Record<string, unknown> = {})
     )
 }
 
-function hashHex(alg: 'sha256' | 'sha1' | 'md5', input: string): string {
-    return createHash(alg).update(input).digest('hex')
-}
-
-function base64UrlToUtf8(b64url: string): string {
-    const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/')
-    const pad = b64.length % 4
-    const padded = pad ? b64 + '='.repeat(4 - pad) : b64
-    return Buffer.from(padded, 'base64').toString('utf8')
-}
-
-function tryDecodeJwt(token: string): unknown {
-    const parts = token.split('.')
-    if (parts.length !== 3) return { looksLikeJwt: false }
-
-    try {
-        const headerRaw = base64UrlToUtf8(parts[0]!)
-        const payloadRaw = base64UrlToUtf8(parts[1]!)
-        let headerJson: unknown = headerRaw
-        let payloadJson: unknown = payloadRaw
-
-        try { headerJson = JSON.parse(headerRaw) } catch { /* ignore */ }
-        try { payloadJson = JSON.parse(payloadRaw) } catch { /* ignore */ }
-
-        return { looksLikeJwt: true, headerRaw, payloadRaw, headerJson, payloadJson }
-    } catch (e) {
-        return { looksLikeJwt: true, error: e instanceof Error ? e.message : String(e) }
-    }
+function sha256(input: string): string {
+    return createHash('sha256').update(input).digest('hex')
 }
 
 export async function GET(req: Request, res: Response): Promise<void> {
@@ -81,7 +55,7 @@ export async function GET(req: Request, res: Response): Promise<void> {
         path: (req as any).path,
         originalUrl: (req as any).originalUrl,
         ip: req.ip,
-        headers: req.headers, // includes authorization
+        hasAuthorization: Boolean(req.get('authorization')),
     })
 
     try {
@@ -89,22 +63,18 @@ export async function GET(req: Request, res: Response): Promise<void> {
         const userId = (req as any).auth?.userId as string | undefined
 
         dbg(reqId, 'auth.inbound', {
-            authorizationRaw: authHeaderRaw,
+            hasAuthorization: Boolean(authHeaderRaw),
             reqAuthObject: (req as any).auth,
             userId,
         })
 
-        // Parse token (if present) and log EVERYTHING about it
+        // Parse token (if present) and log metadata only (never raw token/header content)
         if (authHeaderRaw && authHeaderRaw.toLowerCase().startsWith('bearer ')) {
             const tokenRaw = authHeaderRaw.slice('bearer '.length).trim()
 
             dbg(reqId, 'auth.token', {
-                tokenRaw,
                 tokenLen: tokenRaw.length,
-                tokenSha256: hashHex('sha256', tokenRaw),
-                tokenSha1: hashHex('sha1', tokenRaw),
-                tokenMd5: hashHex('md5', tokenRaw),
-                jwtDecoded: tokenRaw ? tryDecodeJwt(tokenRaw) : null,
+                tokenSha256: sha256(tokenRaw),
             })
         } else {
             dbg(reqId, 'auth.token', {

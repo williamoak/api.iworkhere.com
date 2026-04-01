@@ -13,7 +13,7 @@
  *   - orchestrates auth context resolution and password hashing
  *   - executes user creation and email verification issuance within a DB transaction
  *   - returns HTTP 201 with a pending user payload on success
- *   - returns HTTP 400 for missing required fields (handler-level validation)
+ *   - consumes middleware-validated request payload when present
  *
  * Also verifies that the endpoint exports a Zod `schema` definition for request
  * validation (consumed by the route loader middleware chain).
@@ -101,6 +101,7 @@ import { db } from '@services/dbService'
 function createReq(body: any): Request {
     return {
         body,
+        validated: undefined,
     } as unknown as Request
 }
 
@@ -214,19 +215,47 @@ describe('PUT /v1/auth/register', () => {
         )
     })
 
-    test('returns 400 when required fields are missing', async () => {
-        const req = createReq({
-            app_key: 'bill.iworkhere.com',
+    test('prefers middleware-validated body payload when present', async () => {
+        ;(resolveAuthContext as any).mockResolvedValue({
+            applicationId: 'app-id',
         })
+
+        ;(hashPassword as any).mockResolvedValue('hashed-password')
+
+        ;(issueEmailVerificationToken as any).mockResolvedValue({
+            token: 'raw-email-token',
+        })
+
+        ;(db.transaction as any).mockImplementation(
+            async (fn: any) =>
+                fn({
+                    insert: () => ({
+                        values: () => ({}),
+                    }),
+                })
+        )
+
+        const req = createReq({})
+        ;(req as any).validated = {
+            body: {
+                app_key: 'bill.iworkhere.com',
+                username: 'bill',
+                email: 'bill@example.com',
+                password: 'secret',
+            },
+        }
 
         const res = createRes()
 
         await PUT(req, res)
 
-        expect(res.statusCode).toBe(400)
-        expect(res.body).toEqual({
-            error: 'INVALID_REQUEST',
-            message: 'username, email, and password are required',
-        })
+        expect(res.statusCode).toBe(201)
+        expect(resolveAuthContext).toHaveBeenCalledWith(
+            expect.objectContaining({
+                app_key: 'bill.iworkhere.com',
+                username: 'bill',
+                email: 'bill@example.com',
+            })
+        )
     })
 })

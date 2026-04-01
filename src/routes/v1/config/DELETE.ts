@@ -61,6 +61,8 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@services/dbService"
 import { configTable } from "@db/schema/config"
 
+export const authRequired = true
+
 /* ------------------------------------------------------------------ */
 /* Validation                                                         */
 /* ------------------------------------------------------------------ */

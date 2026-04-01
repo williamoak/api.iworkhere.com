@@ -24,10 +24,9 @@ import {
     users,
     passwordResetTokens,
     userAuthLocal,
-    userPasswordHistory,
     authTokens,
 } from '@db/schema'
-import { hashPassword } from '@services/auth/passwordService'
+import { enforcePasswordHistory, hashPassword } from '@services/auth/passwordService'
 
 /**
  * Configuration
@@ -207,6 +206,7 @@ export async function completePasswordReset(
     }
 
     const passwordHash = await hashPassword(newPassword)
+    await enforcePasswordHistory(row.userId, newPassword, passwordHash)
 
     await db.transaction(async (tx) => {
         // Update current password
@@ -217,12 +217,6 @@ export async function completePasswordReset(
                 isEnabled: true,
             })
             .where(eq(userAuthLocal.userId, row.userId))
-
-        // Insert password history
-        await tx.insert(userPasswordHistory).values({
-            userId: row.userId,
-            passwordHash,
-        })
 
         // Revoke all auth tokens
         await tx

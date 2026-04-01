@@ -68,6 +68,7 @@ import { AuthError } from '@services/auth/authContext'
 function createReq(body: any): Request {
     return {
         body,
+        validated: undefined,
     } as unknown as Request
 }
 
@@ -147,17 +148,29 @@ describe('PUT /v1/auth/emailverify', () => {
         expect(verifyEmailToken).toHaveBeenCalledWith('valid-token')
     })
 
-    test('returns 400 if token is missing', async () => {
+    test('prefers middleware-validated body payload when present', async () => {
+        ;(verifyEmailToken as any).mockResolvedValue({
+            id: 'user-id',
+            email: 'user@example.com',
+        })
+
         const req = createReq({})
+        ;(req as any).validated = {
+            body: { token: 'valid-token' },
+        }
         const res = createRes()
 
         await PUT(req, res)
 
-        expect(res.statusCode).toBe(400)
+        expect(res.statusCode).toBe(200)
         expect(res.body).toEqual({
-            error: 'INVALID_REQUEST',
-            message: 'verification token is required',
+            user: {
+                id: 'user-id',
+                email: 'user@example.com',
+                status: 'active',
+            },
         })
+        expect(verifyEmailToken).toHaveBeenCalledWith('valid-token')
     })
 
     test('translates AuthError to HTTP response', async () => {

@@ -76,24 +76,10 @@ export const schema = {
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        const body = req.body
-        const { username, email, password } = body ?? {}
-
-        // Validate request BEFORE services
-        if (
-            typeof username !== 'string' ||
-            username.trim().length === 0 ||
-            typeof email !== 'string' ||
-            email.trim().length === 0 ||
-            typeof password !== 'string' ||
-            password.trim().length === 0
-        ) {
-            res.status(400).json({
-                error: 'INVALID_REQUEST',
-                message: 'username, email, and password are required',
-            })
-            return
-        }
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
+        const { username, email, password } = body
 
         // Resolve application context
         const { applicationId } = await resolveAuthContext(body)
@@ -116,7 +102,7 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
                 isEnabled: true,
             })
 
-            await enforcePasswordHistory(userId, passwordHash)
+            await enforcePasswordHistory(userId, password, passwordHash)
 
             await tx.insert(userApplications).values({
                 userId,

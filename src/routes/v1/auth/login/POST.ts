@@ -76,7 +76,9 @@ export const schema = {
  */
 export default async function POST(req: Request, res: Response): Promise<void> {
     try {
-        const body = req.body
+        const body =
+            (req.validated?.body as z.infer<typeof schema.body>) ??
+            req.body
 
         // 1. Resolve application context
         const appCtx = await resolveAuthContext(body)

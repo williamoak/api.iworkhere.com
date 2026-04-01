@@ -119,8 +119,17 @@ export async function hashPassword(
  */
 export async function enforcePasswordHistory(
     userId: string,
+    newPlaintextPassword: string,
     newPasswordHash: string
 ): Promise<void> {
+    if (!newPlaintextPassword) {
+        throw new AuthError(
+            'PASSWORD_INVALID',
+            'Password is invalid',
+            400
+        )
+    }
+
     const rows = await db
         .select({
             passwordHash: userPasswordHistory.passwordHash,
@@ -130,7 +139,7 @@ export async function enforcePasswordHistory(
 
     for (const row of rows) {
         const reused = await bcrypt.compare(
-            newPasswordHash,
+            newPlaintextPassword,
             row.passwordHash
         )
 

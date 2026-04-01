@@ -11,7 +11,7 @@
  * @description
  * Verifies that the password reset initiate endpoint:
  *   - exports a Zod `schema` for request validation
- *   - validates request body and returns HTTP 400 for invalid inputs
+ *   - consumes middleware-validated request payload when present
  *   - resolves auth context before initiating reset
  *   - initiates password reset and returns HTTP 200 with { status: "ok" }
  *   - translates AuthError failures into HTTP responses
@@ -74,6 +74,7 @@ import { initiatePasswordReset } from '@services/auth/passwordResetService'
 function createReq(body: any): Request {
     return {
         body,
+        validated: undefined,
     } as unknown as Request
 }
 
@@ -162,23 +163,36 @@ describe('PUT /v1/auth/passreset/initiate', () => {
         expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com')
     })
 
-    test('returns 400 for invalid request body (missing email)', async () => {
-        const req = createReq({
-            app_key: 'bill.iworkhere.com',
+    test('prefers middleware-validated body payload when present', async () => {
+        ;(resolveAuthContext as any).mockResolvedValue({
+            applicationId: 'app-id',
+            applicationKey: 'bill.iworkhere.com',
         })
+
+        ;(initiatePasswordReset as any).mockResolvedValue(undefined)
+
+        const req = createReq({})
+        ;(req as any).validated = {
+            body: {
+                app_key: 'bill.iworkhere.com',
+                email: 'user@example.com',
+            },
+        }
 
         const res = createRes()
 
         await PUT(req, res)
 
-        expect(res.statusCode).toBe(400)
+        expect(res.statusCode).toBe(200)
         expect(res.body).toEqual({
-            error: 'INVALID_REQUEST',
-            message: 'Invalid request body',
+            status: 'ok',
         })
 
-        expect(resolveAuthContext).not.toHaveBeenCalled()
-        expect(initiatePasswordReset).not.toHaveBeenCalled()
+        expect(resolveAuthContext).toHaveBeenCalledWith({
+            app_key: 'bill.iworkhere.com',
+            email: 'user@example.com',
+        })
+        expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com')
     })
 
     test('translates AuthError to HTTP response', async () => {

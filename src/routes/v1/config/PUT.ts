@@ -49,6 +49,8 @@ import { db } from '@services/dbService'
 import { configTable } from '@db/schema/config'
 import { uuidv7 } from 'uuidv7'
 
+export const authRequired = true
+
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
 /* ------------------------------------------------------------------ */
