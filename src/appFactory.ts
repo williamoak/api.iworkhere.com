@@ -4,6 +4,7 @@ import { loadRoutes } from "@loaders/routeLoader";
 import { configGet } from "@helpers/config";
 
 const DEBUG = configGet("DEBUG") === "true";
+const AUTH_ME_DEBUG = configGet("AUTH_ME_DEBUG") === "1";
 
 const allowedOriginRegex = /^https:\/\/([a-z0-9-]+)\.iworkhere\.com$/i;
 const explicitAllowedOrigins = new Set(
@@ -48,21 +49,52 @@ export async function createBaseApp() {
         credentials: false
     }));
 
-    if (DEBUG) {
+    // Body parsing
+    app.use(express.json());
+
+    if (AUTH_ME_DEBUG) {
         // Diagnostic logging for JSON requests (debug only).
         app.use((req, _res, next) => {
-            if (req.headers['content-type']?.includes('application/json')) {
-                console.log('----------------------------------------');
-                console.log('--- JSON REQUEST ---');
-                console.log(req.method, req.url);
-                console.log('----------------------------------------');
+            if (req.headers["content-type"]?.includes("application/json")) {
+                const forwardedFor = req.headers["x-forwarded-for"];
+                const realIp = req.headers["x-real-ip"];
+                const requestId = req.headers["x-request-id"];
+                const cfRay = req.headers["cf-ray"];
+                let bodyText = "<no body>";
+                if (req.body !== undefined) {
+                    try {
+                        bodyText = JSON.stringify(req.body, null, 2);
+                    } catch {
+                        bodyText = "<unserializable body>";
+                    }
+                }
+
+                console.log("----------------------------------------");
+                console.log("--- JSON REQUEST ---");
+                console.log(`${req.method} ${req.originalUrl}`);
+                console.log(`host=${req.hostname}`);
+                console.log(`ip=${req.ip}`);
+                if (forwardedFor) {
+                    console.log(`x-forwarded-for=${forwardedFor}`);
+                }
+                if (realIp) {
+                    console.log(`x-real-ip=${realIp}`);
+                }
+                if (requestId) {
+                    console.log(`x-request-id=${requestId}`);
+                }
+                if (cfRay) {
+                    console.log(`cf-ray=${cfRay}`);
+                }
+                console.log(`user-agent=${req.get("user-agent") ?? ""}`);
+                console.log(`origin=${req.get("origin") ?? ""}`);
+                console.log(`referer=${req.get("referer") ?? ""}`);
+                console.log(`body=${bodyText}`);
+                console.log("----------------------------------------");
             }
             next();
         });
     }
-
-    // Body parsing
-    app.use(express.json());
 
     // Routes
     await loadRoutes(app);

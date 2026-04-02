@@ -20,6 +20,7 @@
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
     "pg": "^8.16.3",
+    "rg": "^0.0.2",
     "swagger-ui-express": "^5.0.1",
     "undici": "^7.16.0",
     "uuid": "^13.0.0",
