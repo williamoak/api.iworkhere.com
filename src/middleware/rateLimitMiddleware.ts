@@ -27,97 +27,91 @@
  *   - express
  */
 
-import type { Request, Response, NextFunction } from 'express'
+import type { Request, Response, NextFunction } from 'express';
 
 type RateLimitEntry = {
-    count: number
-    resetAt: number
-}
+  count: number;
+  resetAt: number;
+};
 
 type RateLimitOptions = {
-    /**
-     * Function used to derive a rate-limit key from the request.
-     * Example: IP address, email, identifier, or combination.
-     */
-    key: (req: Request) => string
+  /**
+   * Function used to derive a rate-limit key from the request.
+   * Example: IP address, email, identifier, or combination.
+   */
+  key: (req: Request) => string;
 
-    /**
-     * Maximum number of allowed requests within the window.
-     */
-    max: number
+  /**
+   * Maximum number of allowed requests within the window.
+   */
+  max: number;
 
-    /**
-     * Window duration in milliseconds.
-     */
-    windowMs: number
+  /**
+   * Window duration in milliseconds.
+   */
+  windowMs: number;
 
-    /**
-     * Optional error response override.
-     */
-    error?: {
-        status?: number
-        code?: string
-        message?: string
-    }
-}
+  /**
+   * Optional error response override.
+   */
+  error?: {
+    status?: number;
+    code?: string;
+    message?: string;
+  };
+};
 
 /**
  * In-memory store (process-local).
  */
-const store = new Map<string, RateLimitEntry>()
+const store = new Map<string, RateLimitEntry>();
 
 export function rateLimitMiddleware(options: RateLimitOptions) {
-    const {
-        key,
-        max,
-        windowMs,
-        error = {},
-    } = options
+  const { key, max, windowMs, error = {} } = options;
 
-    const status = error.status ?? 429
-    const code = error.code ?? 'TOO_MANY_REQUESTS'
-    const message =
-        error.message ?? 'Too many requests, please retry later'
+  const status = error.status ?? 429;
+  const code = error.code ?? 'TOO_MANY_REQUESTS';
+  const message = error.message ?? 'Too many requests, please retry later';
 
-    return (req: Request, res: Response, next: NextFunction) => {
-        const now = Date.now()
-        const limitKey = key(req)
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    const limitKey = key(req);
 
-        if (!limitKey) {
-            // If no key can be derived, fail open
-            return next()
-        }
-
-        let entry = store.get(limitKey)
-
-        if (!entry || entry.resetAt <= now) {
-            entry = {
-                count: 0,
-                resetAt: now + windowMs,
-            }
-            store.set(limitKey, entry)
-        }
-
-        entry.count++
-
-        if (entry.count > max) {
-            const retryAfterSeconds = Math.max(
-                1,
-                Math.ceil((entry.resetAt - now) / 1000)
-            )
-
-            res.setHeader('Retry-After', String(retryAfterSeconds))
-
-            return res.status(status).json({
-                error: code,
-                message,
-            })
-        }
-
-        return next()
+    if (!limitKey) {
+      // If no key can be derived, fail open
+      return next();
     }
+
+    let entry = store.get(limitKey);
+
+    if (!entry || entry.resetAt <= now) {
+      entry = {
+        count: 0,
+        resetAt: now + windowMs,
+      };
+      store.set(limitKey, entry);
+    }
+
+    entry.count++;
+
+    if (entry.count > max) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((entry.resetAt - now) / 1000),
+      );
+
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+
+      return res.status(status).json({
+        error: code,
+        message,
+      });
+    }
+
+    return next();
+  };
 }
 
 export function __resetRateLimitStore() {
-    store.clear()
+  store.clear();
 }

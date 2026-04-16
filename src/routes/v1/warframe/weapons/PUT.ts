@@ -1,3 +1,117 @@
+/**
+ * @myDocBlock v2.3
+ * @file upsertWeapon
+ * @external
+ * @module warframe.weapons
+ * @tag warframe.weapons
+ * @version 1.0.3
+ * @author william.r.oak@gmail.com
+ * @path /v1/warframe/weapons
+ * @summary Insert or update weapon records using identifier-driven resolution
+ * @description
+ * Performs conditional insert or update operations based on the presence of identifying fields
+ * in the request body. The handler supports three mutually exclusive execution paths:
+ *
+ * 1. UPDATE by weapon_id:
+ *    - Triggered when weapon_id is present
+ *    - Validates using weaponUpdateSchema
+ *    - Updates the matching record
+ *    - Rejects if no writable fields are provided
+ *
+ * 2. RESOLVE by name (with optional class):
+ *    - Triggered when name is present and weapon_id is absent
+ *    - Default class is "normal" when not provided
+ *    - Resolution logic:
+ *        a. 0 matches → INSERT
+ *        b. 1 match → UPDATE
+ *        c. 2+ matches:
+ *            - Filter by class
+ *            - 0 matches → INSERT
+ *            - 1 match → UPDATE
+ *            - 2+ matches → 409 conflict (ambiguous)
+ *
+ * 3. INSERT:
+ *    - Triggered when neither weapon_id nor name is provided
+ *    - Validates using weaponInsertSchema
+ *    - Inserts new record
+ *
+ * All writes use toWeaponWrite() for database normalization.
+ * All responses map database rows through toWeaponDTO().
+ *
+ * Validation errors are enriched using overlayDto(), producing:
+ * - details (zod issues)
+ * - missing_fields (not provided in input)
+ * - empty_fields (provided but empty or null)
+ *
+ * This endpoint is not a strict UPSERT; behavior depends on resolution rules and may insert new records.
+ * @query
+ * {}
+ * @requestExample
+ * {
+ *   "update_by_id": {
+ *     "weapon_id": "weapon_aklex",
+ *     "description": "Updated description"
+ *   },
+ *   "resolve_by_name": {
+ *     "name": "Aklex",
+ *     "class": "secondary",
+ *     "description": "Updated description"
+ *   },
+ *   "insert": {
+ *     "name": "New Weapon",
+ *     "class": "primary",
+ *     "description": "New weapon description"
+ *   }
+ * }
+ * @response
+ * {
+ *   "200": {
+ *     "success": true,
+ *     "data": {
+ *       "weapon_id": "weapon_aklex",
+ *       "name": "Aklex",
+ *       "class": "secondary",
+ *       "description": "Updated description"
+ *     }
+ *   },
+ *   "200_null": {
+ *     "success": true,
+ *     "data": null
+ *   },
+ *   "400_validation": {
+ *     "success": false,
+ *     "error": "Validation failed",
+ *     "details": [
+ *       {
+ *         "path": ["name"],
+ *         "message": "Required"
+ *       }
+ *     ],
+ *     "missing_fields": ["name"],
+ *     "empty_fields": []
+ *   },
+ *   "400_empty_update": {
+ *     "success": false,
+ *     "error": "No fields provided to update"
+ *   },
+ *   "409": {
+ *     "success": false,
+ *     "error": "Multiple weapons match name and class"
+ *   },
+ *   "500": {
+ *     "success": false,
+ *     "error": "Internal server error"
+ *   }
+ * }
+ * @requires
+ * - Database connection via dbService must be available
+ * - weapons schema must define weaponId, name, and class fields
+ * - weaponInsertSchema, weaponUpdateSchema, weaponUpdateByNameSchema must be valid
+ * - toWeaponWrite() must map validated input to database format
+ * - toWeaponDTO() must map database rows to API response format
+ * - overlayDto() and emptyWeapon must support validation enrichment
+ */
+
 import type { Request, Response } from "express"
 import { z } from "zod"
 import { eq } from "drizzle-orm"

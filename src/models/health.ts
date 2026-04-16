@@ -9,12 +9,12 @@
  */
 
 export interface HealthResponse {
-    /** Result status of health check */
-    status: "ok" | "warn" | "fail";
+  /** Result status of health check */
+  status: 'ok' | 'warn' | 'fail';
 
-    /** Short name of the health module (folder name under /v1/health) */
-    name: string;
+  /** Short name of the health module (folder name under /v1/health) */
+  name: string;
 
-    /** Endpoint-specific data returned by the health check */
-    data: any;
+  /** Endpoint-specific data returned by the health check */
+  data: unknown;
 }

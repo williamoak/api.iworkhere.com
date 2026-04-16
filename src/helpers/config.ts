@@ -21,62 +21,56 @@
  * @requires none
  */
 
-import fs from "fs";
-import path from "path";
-import dotenv from "dotenv";
-
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 
 /**
  * Get required numeric variable
  */
 export function configGetNumber(
-    key: string,
-    options?: {
-        defaultValue?: number;
-        min?: number;
-        max?: number;
-    }
+  key: string,
+  options?: {
+    defaultValue?: number;
+    min?: number;
+    max?: number;
+  },
 ): number {
-    const raw = config[key];
+  const raw = config[key];
 
-    if (raw === undefined || raw.trim() === "") {
-        if (options?.defaultValue !== undefined) {
-            return options.defaultValue;
-        }
-        throw new Error(`Missing required numeric configuration variable: ${key}`);
+  if (raw === undefined || raw.trim() === '') {
+    if (options?.defaultValue !== undefined) {
+      return options.defaultValue;
     }
+    throw new Error(`Missing required numeric configuration variable: ${key}`);
+  }
 
-    const value = Number(raw);
+  const value = Number(raw);
 
-    if (!Number.isFinite(value)) {
-        throw new Error(`Invalid numeric value for configuration variable: ${key}`);
-    }
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid numeric value for configuration variable: ${key}`);
+  }
 
-    if (options?.min !== undefined && value < options.min) {
-        throw new Error(`Configuration variable ${key} must be >= ${options.min}`);
-    }
+  if (options?.min !== undefined && value < options.min) {
+    throw new Error(`Configuration variable ${key} must be >= ${options.min}`);
+  }
 
-    if (options?.max !== undefined && value > options.max) {
-        throw new Error(`Configuration variable ${key} must be <= ${options.max}`);
-    }
+  if (options?.max !== undefined && value > options.max) {
+    throw new Error(`Configuration variable ${key} must be <= ${options.max}`);
+  }
 
-    return value;
+  return value;
 }
 
 /**
  * Determine environment (default "development")
  */
-const env = process.env.NODE_ENV ?? "development";
+const env = process.env.NODE_ENV ?? 'development';
 
 /**
  * Env file precedence order
  */
-const envFiles = [
-    ".env",
-    ".env.local",
-    `.env.${env}`,
-    `.env.${env}.local`
-];
+const envFiles = ['.env', '.env.local', `.env.${env}`, `.env.${env}.local`];
 
 /**
  * Project root
@@ -92,15 +86,15 @@ let combined: Record<string, string | undefined> = {};
  * Load each env file (if it exists)
  */
 for (const file of envFiles) {
-    const fullPath = path.join(projectRoot, file);
+  const fullPath = path.join(projectRoot, file);
 
-    if (fs.existsSync(fullPath)) {
-        const result = dotenv.config({ path: fullPath });
+  if (fs.existsSync(fullPath)) {
+    const result = dotenv.config({ path: fullPath });
 
-        if (result.parsed) {
-            combined = { ...combined, ...result.parsed };
-        }
+    if (result.parsed) {
+      combined = { ...combined, ...result.parsed };
     }
+  }
 }
 
 /**
@@ -117,11 +111,11 @@ export const config = combined;
  * Get required variable
  */
 export function configGet(key: string): string {
-    const value = config[key];
+  const value = config[key];
 
-    if (value === undefined || value.trim() === "") {
-        throw new Error(`Missing required configuration variable: ${key}`);
-    }
+  if (value === undefined || value.trim() === '') {
+    throw new Error(`Missing required configuration variable: ${key}`);
+  }
 
-    return value;
+  return value;
 }

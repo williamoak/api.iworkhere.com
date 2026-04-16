@@ -39,29 +39,29 @@
  *   - @cache/cacheStore (must support delWhere)
  */
 
-import type { Request, Response, NextFunction } from "express"
-import { cacheStore } from "@cache/cacheStore"
+import type { Request, Response, NextFunction } from 'express';
+import { cacheStore } from '@cache/cacheStore';
 
-const DEFAULT_TTL_MS = 30_000
+const DEFAULT_TTL_MS = 30_000;
 
 /* ------------------------------------------------------------------ */
 /* Cache Key Helpers                                                   */
 /* ------------------------------------------------------------------ */
 
 function buildCacheKey(req: Request): string {
-    const version = req.baseUrl           // e.g. /v1
-    const path = req.path                 // e.g. /config
-    const query = req.originalUrl.includes("?")
-        ? req.originalUrl.split("?")[1]
-        : ""
+  const version = req.baseUrl; // e.g. /v1
+  const path = req.path; // e.g. /config
+  const query = req.originalUrl.includes('?')
+    ? req.originalUrl.split('?')[1]
+    : '';
 
-    return `${version}:${path}:${query}`
+  return `${version}:${path}:${query}`;
 }
 
 function buildCachePrefix(req: Request): string {
-    const version = req.baseUrl
-    const path = req.path
-    return `${version}:${path}:`
+  const version = req.baseUrl;
+  const path = req.path;
+  return `${version}:${path}:`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -69,60 +69,60 @@ function buildCachePrefix(req: Request): string {
 /* ------------------------------------------------------------------ */
 
 export function cacheMiddleware(ttlMs = DEFAULT_TTL_MS) {
-    return (req: Request, res: Response, next: NextFunction) => {
-        const method = req.method.toUpperCase()
+  return (req: Request, res: Response, next: NextFunction) => {
+    const method = req.method.toUpperCase();
 
-        /* ----------------------------------------------------------
-         * GET — read-through
-         * ---------------------------------------------------------- */
+    /* ----------------------------------------------------------
+     * GET — read-through
+     * ---------------------------------------------------------- */
 
-        if (method === "GET") {
-            const cacheKey = buildCacheKey(req)
-            const cached = cacheStore.get(cacheKey)
+    if (method === 'GET') {
+      const cacheKey = buildCacheKey(req);
+      const cached = cacheStore.get(cacheKey);
 
-            if (cached !== null) {
-                res.setHeader("X-Cache", "HIT")
-                return res.json(cached)
-            }
+      if (cached !== null) {
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(cached);
+      }
 
-            const originalJson = res.json.bind(res)
-            res.json = (body: unknown) => {
-                cacheStore.set(cacheKey, body, ttlMs)
-                res.setHeader("X-Cache", "MISS")
-                return originalJson(body)
-            }
+      const originalJson = res.json.bind(res);
+      res.json = (body: unknown) => {
+        cacheStore.set(cacheKey, body, ttlMs);
+        res.setHeader('X-Cache', 'MISS');
+        return originalJson(body);
+      };
 
-            return next()
-        }
-
-        /* ----------------------------------------------------------
-         * PUT — write-through
-         * ---------------------------------------------------------- */
-
-        if (method === "PUT") {
-            const cacheKey = buildCacheKey(req)
-
-            const originalJson = res.json.bind(res)
-            res.json = (body: unknown) => {
-                cacheStore.set(cacheKey, body, ttlMs)
-                return originalJson(body)
-            }
-
-            return next()
-        }
-
-        /* ----------------------------------------------------------
-         * DELETE — invalidate ALL variants of this resource
-         * ---------------------------------------------------------- */
-
-        if (method === "DELETE") {
-            const prefix = buildCachePrefix(req)
-
-            cacheStore.delWhere(key => key.startsWith(prefix))
-
-            return next()
-        }
-
-        return next()
+      return next();
     }
+
+    /* ----------------------------------------------------------
+     * PUT — write-through
+     * ---------------------------------------------------------- */
+
+    if (method === 'PUT') {
+      const cacheKey = buildCacheKey(req);
+
+      const originalJson = res.json.bind(res);
+      res.json = (body: unknown) => {
+        cacheStore.set(cacheKey, body, ttlMs);
+        return originalJson(body);
+      };
+
+      return next();
+    }
+
+    /* ----------------------------------------------------------
+     * DELETE — invalidate ALL variants of this resource
+     * ---------------------------------------------------------- */
+
+    if (method === 'DELETE') {
+      const prefix = buildCachePrefix(req);
+
+      cacheStore.delWhere((key) => key.startsWith(prefix));
+
+      return next();
+    }
+
+    return next();
+  };
 }

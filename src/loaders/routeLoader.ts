@@ -54,130 +54,130 @@
  * }
  */
 
-import path from 'path'
-import {pathToFileURL} from 'url'
-import {promises as fsp} from 'fs'
-import type {Application, NextFunction, Request, Response} from 'express'
+import path from 'path';
+import { pathToFileURL } from 'url';
+import { promises as fsp } from 'fs';
+import type { Application, NextFunction, Request, Response } from 'express';
 
-import {configGet} from '@helpers/config'
-import type {ValidationSchemas} from '@middleware/validate'
-import {makeValidator} from '@middleware/validate'
-import {throttleMiddleware} from '@middleware/throttleMiddleware'
-import {rateLimitMiddleware} from '@middleware/rateLimitMiddleware'
-import {cacheMiddleware} from '@middleware/cacheMiddleware'
-import {authMiddleware} from '@middleware/authMiddleware'
+import { configGet } from '@helpers/config';
+import type { ValidationSchemas } from '@middleware/validate';
+import { makeValidator } from '@middleware/validate';
+import { throttleMiddleware } from '@middleware/throttleMiddleware';
+import { rateLimitMiddleware } from '@middleware/rateLimitMiddleware';
+import { cacheMiddleware } from '@middleware/cacheMiddleware';
+import { authMiddleware } from '@middleware/authMiddleware';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
 /* ------------------------------------------------------------------ */
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
-type HttpMethod = (typeof HTTP_METHODS)[number]
-const METHOD_FILES = new Set(HTTP_METHODS.map((m) => `${m}.ts`))
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
+type HttpMethod = (typeof HTTP_METHODS)[number];
+const METHOD_FILES = new Set(HTTP_METHODS.map((m) => `${m}.ts`));
 
-type RouteHandler = (req: Request, res: Response) => any
+type RouteHandler = (req: Request, res: Response) => unknown;
 
 type RouteModule = {
-    default: RouteHandler
-    schema?: ValidationSchemas
-    authRequired?: boolean
-}
+  default: RouteHandler;
+  schema?: ValidationSchemas;
+  authRequired?: boolean;
+};
 
 interface RouteNode {
-    path: string
-    file?: string
-    handlers: Partial<Record<HttpMethod, RouteHandler>>
-    schemas: Partial<Record<HttpMethod, ValidationSchemas>>
-    children: Record<string, RouteNode>
-    authRequiredByMethod?: Partial<Record<HttpMethod, boolean>>
+  path: string;
+  file?: string;
+  handlers: Partial<Record<HttpMethod, RouteHandler>>;
+  schemas: Partial<Record<HttpMethod, ValidationSchemas>>;
+  children: Record<string, RouteNode>;
+  authRequiredByMethod?: Partial<Record<HttpMethod, boolean>>;
 }
 
 /* ------------------------------------------------------------------ */
 /* Debug helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-const ROUTE_LOADER_DEBUG = process.env.ROUTE_LOADER_DEBUG === '1'
+const ROUTE_LOADER_DEBUG = process.env.ROUTE_LOADER_DEBUG === '1';
 
 function dbg(fields: Record<string, unknown>): void {
-    if (!ROUTE_LOADER_DEBUG) return
-    // eslint-disable-next-line no-console
-    console.log(
-        JSON.stringify({
-            tag: 'routeLoader',
-            t: new Date().toISOString(),
-            ...fields,
-        })
-    )
+  if (!ROUTE_LOADER_DEBUG) return;
+
+  console.log(
+    JSON.stringify({
+      tag: 'routeLoader',
+      t: new Date().toISOString(),
+      ...fields,
+    }),
+  );
 }
 
 function getReqId(req: Request): string {
-    const hdr = (req.get('x-request-id') ?? '').toString().trim()
-    if (hdr) return hdr.slice(0, 128)
-    return 'no-x-request-id'
+  const hdr = (req.get('x-request-id') ?? '').toString().trim();
+  if (hdr) return hdr.slice(0, 128);
+  return 'no-x-request-id';
 }
 
 function getAuthRateLimitKey(req: Request): string {
-    const identifier =
-        typeof req.body?.email === 'string'
-            ? req.body.email.trim().toLowerCase()
-            : typeof req.body?.identifier === 'string'
-                ? req.body.identifier.trim().toLowerCase()
-                : ''
+  const identifier =
+    typeof req.body?.email === 'string'
+      ? req.body.email.trim().toLowerCase()
+      : typeof req.body?.identifier === 'string'
+        ? req.body.identifier.trim().toLowerCase()
+        : '';
 
-    return `${req.ip}|${identifier}`
+  return `${req.ip}|${identifier}`;
 }
 
 type AuthRateLimitPolicy = {
-    max: number
-    windowMs: number
-}
+  max: number;
+  windowMs: number;
+};
 
 function getAuthRateLimitPolicy(
-    routePath: string,
-    method: HttpMethod
+  routePath: string,
+  method: HttpMethod,
 ): AuthRateLimitPolicy {
-    const key = `${method} ${routePath}`
+  const key = `${method} ${routePath}`;
 
-    switch (key) {
-        case 'POST /v1/auth/login':
-        case 'PUT /v1/auth/register':
-        case 'PUT /v1/auth/passreset/initiate':
-        case 'PUT /v1/auth/emailverify/resend':
-            return {max: 5, windowMs: 60_000}
+  switch (key) {
+    case 'POST /v1/auth/login':
+    case 'PUT /v1/auth/register':
+    case 'PUT /v1/auth/passreset/initiate':
+    case 'PUT /v1/auth/emailverify/resend':
+      return { max: 5, windowMs: 60_000 };
 
-        case 'PUT /v1/auth/refresh':
-            return {max: 20, windowMs: 60_000}
+    case 'PUT /v1/auth/refresh':
+      return { max: 20, windowMs: 60_000 };
 
-        case 'PUT /v1/auth/emailverify':
-        case 'PUT /v1/auth/passreset/verify':
-        case 'PUT /v1/auth/passreset/complete':
-        case 'DELETE /v1/auth/token':
-            return {max: 10, windowMs: 60_000}
+    case 'PUT /v1/auth/emailverify':
+    case 'PUT /v1/auth/passreset/verify':
+    case 'PUT /v1/auth/passreset/complete':
+    case 'DELETE /v1/auth/token':
+      return { max: 10, windowMs: 60_000 };
 
-        case 'GET /v1/auth/me':
-        case 'GET /v1/auth/eula':
-            return {max: 60, windowMs: 60_000}
+    case 'GET /v1/auth/me':
+    case 'GET /v1/auth/eula':
+      return { max: 60, windowMs: 60_000 };
 
-        default:
-            return {max: 10, windowMs: 60_000}
-    }
+    default:
+      return { max: 10, windowMs: 60_000 };
+  }
 }
 
 function tracePoint(name: string, base: Record<string, unknown>) {
-    return (req: Request, _res: Response, next: NextFunction) => {
-        const reqId = getReqId(req)
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const reqId = getReqId(req);
 
-        dbg({
-            phase: 'mw.enter',
-            name,
-            reqId,
-            ...base,
-            method: req.method,
-            url: req.url,
-        })
+    dbg({
+      phase: 'mw.enter',
+      name,
+      reqId,
+      ...base,
+      method: req.method,
+      url: req.url,
+    });
 
-        return next()
-    }
+    return next();
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -186,33 +186,33 @@ function tracePoint(name: string, base: Record<string, unknown>) {
 /* ------------------------------------------------------------------ */
 
 export async function loadRoutes(app: Application): Promise<void> {
-    const routeTree: Record<string, RouteNode> = {}
-    app.locals.routeTree = routeTree
+  const routeTree: Record<string, RouteNode> = {};
+  app.locals.routeTree = routeTree;
 
-    const apiVersion = configGet('API_VERSION') ?? 'v1'
-    const maxConcurrentRequests = Number(
-        configGet('MAX_CONCURRENT_REQUESTS') ?? '10'
-    )
+  const apiVersion = configGet('API_VERSION') ?? 'v1';
+  const maxConcurrentRequests = Number(
+    configGet('MAX_CONCURRENT_REQUESTS') ?? '10',
+  );
 
-    const baseDir = path.join(process.cwd(), 'src', 'routes', apiVersion)
+  const baseDir = path.join(process.cwd(), 'src', 'routes', apiVersion);
 
-    await scanDirectory({
-        dir: baseDir,
-        routePath: `/${apiVersion}`,
-        routeTree,
-    })
+  await scanDirectory({
+    dir: baseDir,
+    routePath: `/${apiVersion}`,
+    routeTree,
+  });
 
-    bindExpress({
-        app,
-        routeTree,
-        maxConcurrentRequests,
-        apiVersion,
-    })
+  bindExpress({
+    app,
+    routeTree,
+    maxConcurrentRequests,
+    apiVersion,
+  });
 
-    const endpointCount = countBoundEndpoints(routeTree)
-    console.log(
-        `RouteLoader: Registered ${endpointCount} endpoint(s) across ${Object.keys(routeTree).length} route node(s)`
-    )
+  const endpointCount = countBoundEndpoints(routeTree);
+  console.log(
+    `RouteLoader: Registered ${endpointCount} endpoint(s) across ${Object.keys(routeTree).length} route node(s)`,
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -221,62 +221,62 @@ export async function loadRoutes(app: Application): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 async function scanDirectory(args: {
-    dir: string
-    routePath: string
-    routeTree: Record<string, RouteNode>
+  dir: string;
+  routePath: string;
+  routeTree: Record<string, RouteNode>;
 }): Promise<void> {
-    const {dir, routePath, routeTree} = args
+  const { dir, routePath, routeTree } = args;
 
-    const node =
-        routeTree[routePath] ??
-        (routeTree[routePath] = {
-            path: routePath,
-            handlers: {},
-            schemas: {},
-            children: {},
-            authRequiredByMethod: {},
-        })
+  const node =
+    routeTree[routePath] ??
+    (routeTree[routePath] = {
+      path: routePath,
+      handlers: {},
+      schemas: {},
+      children: {},
+      authRequiredByMethod: {},
+    });
 
-    const entries = await fsp.readdir(dir, {withFileTypes: true})
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
 
-    // Import handlers for method files
-    for (const entry of entries) {
-        if (!entry.isFile()) continue
-        if (!METHOD_FILES.has(entry.name)) continue
+  // Import handlers for method files
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!METHOD_FILES.has(entry.name)) continue;
 
-        const fullPath = path.join(dir, entry.name)
-        const method = entry.name.replace('.ts', '') as HttpMethod
+    const fullPath = path.join(dir, entry.name);
+    const method = entry.name.replace('.ts', '') as HttpMethod;
 
-        const mod = (await import(pathToFileURL(fullPath).href)) as RouteModule
-        if (typeof mod.default !== 'function') {
-            throw new Error(`RouteLoader: ${fullPath} missing default export`)
-        }
-
-        // First registration wins (prevents accidental overrides)
-        if (!node.handlers[method]) {
-            node.handlers[method] = mod.default
-            node.schemas[method] = (mod.schema ?? {}) as ValidationSchemas
-            node.authRequiredByMethod = node.authRequiredByMethod ?? {}
-            node.authRequiredByMethod[method] = Boolean(mod.authRequired)
-            node.file = fullPath
-        }
+    const mod = (await import(pathToFileURL(fullPath).href)) as RouteModule;
+    if (typeof mod.default !== 'function') {
+      throw new Error(`RouteLoader: ${fullPath} missing default export`);
     }
 
-    // Recurse into child directories
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-
-        const childDir = path.join(dir, entry.name)
-        const childPath = `${routePath}/${entry.name}`
-
-        await scanDirectory({
-            dir: childDir,
-            routePath: childPath,
-            routeTree,
-        })
-
-        node.children[entry.name] = routeTree[childPath]
+    // First registration wins (prevents accidental overrides)
+    if (!node.handlers[method]) {
+      node.handlers[method] = mod.default;
+      node.schemas[method] = (mod.schema ?? {}) as ValidationSchemas;
+      node.authRequiredByMethod = node.authRequiredByMethod ?? {};
+      node.authRequiredByMethod[method] = Boolean(mod.authRequired);
+      node.file = fullPath;
     }
+  }
+
+  // Recurse into child directories
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+
+    const childDir = path.join(dir, entry.name);
+    const childPath = `${routePath}/${entry.name}`;
+
+    await scanDirectory({
+      dir: childDir,
+      routePath: childPath,
+      routeTree,
+    });
+
+    node.children[entry.name] = routeTree[childPath];
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -285,151 +285,155 @@ async function scanDirectory(args: {
 /* ------------------------------------------------------------------ */
 
 function bindExpress(args: {
-    app: Application
-    routeTree: Record<string, RouteNode>
-    maxConcurrentRequests: number
-    apiVersion: string
+  app: Application;
+  routeTree: Record<string, RouteNode>;
+  maxConcurrentRequests: number;
+  apiVersion: string;
 }): void {
-    const {app, routeTree, maxConcurrentRequests, apiVersion} = args
+  const { app, routeTree, maxConcurrentRequests, apiVersion } = args;
 
-    const sortedPaths = Object.keys(routeTree).sort(
-        (a, b) => a.split('/').length - b.split('/').length
-    )
+  const sortedPaths = Object.keys(routeTree).sort(
+    (a, b) => a.split('/').length - b.split('/').length,
+  );
 
-    const isAuthRoute = (routePath: string) =>
-        routePath.startsWith(`/${apiVersion}/auth`)
+  const isAuthRoute = (routePath: string) =>
+    routePath.startsWith(`/${apiVersion}/auth`);
 
-    for (const routePath of sortedPaths) {
-        const node = routeTree[routePath]
-        const supportedMethods = Object.keys(node.handlers) as HttpMethod[]
+  for (const routePath of sortedPaths) {
+    const node = routeTree[routePath];
+    const supportedMethods = Object.keys(node.handlers) as HttpMethod[];
 
-        for (const method of supportedMethods) {
-            const handler = node.handlers[method]
-            if (!handler) continue
+    for (const method of supportedMethods) {
+      const handler = node.handlers[method];
+      if (!handler) continue;
 
-            const validator = makeValidator(node.schemas[method] ?? {})
-            const authRequired = Boolean(node.authRequiredByMethod?.[method])
-            const authRateLimit = getAuthRateLimitPolicy(routePath, method)
+      const validator = makeValidator(node.schemas[method] ?? {});
+      const authRequired = Boolean(node.authRequiredByMethod?.[method]);
+      const authRateLimit = getAuthRateLimitPolicy(routePath, method);
 
-            const baseDebug = {
-                routePath,
-                method,
-                authRequired,
-                nodeFile: node.file,
-                isAuthRoute: isAuthRoute(routePath),
+      const baseDebug = {
+        routePath,
+        method,
+        authRequired,
+        nodeFile: node.file,
+        isAuthRoute: isAuthRoute(routePath),
+      };
+
+      const middlewareChain = [
+        tracePoint('chain.start', baseDebug),
+
+        validator.request,
+
+        ...(isAuthRoute(routePath)
+          ? [
+              tracePoint('rateLimit.before', baseDebug),
+              rateLimitMiddleware({
+                key: getAuthRateLimitKey,
+                max: authRateLimit.max,
+                windowMs: authRateLimit.windowMs,
+              }),
+              tracePoint('rateLimit.after', baseDebug),
+            ]
+          : []),
+
+        ...(authRequired
+          ? [
+              tracePoint('auth.before', baseDebug),
+              authMiddleware(),
+              tracePoint('auth.after', baseDebug),
+            ]
+          : []),
+
+        tracePoint('throttle.before', baseDebug),
+        throttleMiddleware(maxConcurrentRequests),
+        tracePoint('throttle.after', baseDebug),
+
+        tracePoint('cache.before', baseDebug),
+        cacheMiddleware(),
+        tracePoint('cache.after', baseDebug),
+
+        async (req: Request, res: Response, next: NextFunction) => {
+          const reqId = getReqId(req);
+          const start = Date.now();
+
+          dbg({
+            phase: 'handler_wrapper.enter',
+            reqId,
+            ...baseDebug,
+            hasAuthorization: Boolean(req.get('authorization')),
+            authUserIdPresent: Boolean(
+              (req as Request & { auth?: { userId?: string } }).auth?.userId,
+            ),
+          });
+
+          let finished = false;
+          const onFinish = () => {
+            if (finished) return;
+            finished = true;
+            dbg({
+              phase: 'handler_wrapper.finish',
+              reqId,
+              ...baseDebug,
+              statusCode: res.statusCode,
+              durationMs: Date.now() - start,
+              headersSent: res.headersSent,
+            });
+          };
+
+          res.once('finish', onFinish);
+          res.once('close', onFinish);
+
+          try {
+            const result = await handler(req, res);
+
+            dbg({
+              phase: 'handler_wrapper.after_handler',
+              reqId,
+              ...baseDebug,
+              headersSent: res.headersSent,
+              resultType: typeof result,
+              result: ROUTE_LOADER_DEBUG ? result : undefined,
+            });
+
+            if (!res.headersSent) {
+              const shaped = validator.response(result);
+              dbg({
+                phase: 'handler_wrapper.autorespond',
+                reqId,
+                ...baseDebug,
+                shapedResponse: ROUTE_LOADER_DEBUG ? shaped : undefined,
+              });
+              return res.json(shaped);
             }
+          } catch (err) {
+            dbg({
+              phase: 'handler_wrapper.error',
+              reqId,
+              ...baseDebug,
+              name: err instanceof Error ? err.name : undefined,
+              message: err instanceof Error ? err.message : String(err),
+              stack: err instanceof Error ? err.stack : undefined,
+            });
+            return next(err);
+          }
+        },
+      ];
 
-            const middlewareChain = [
-                    tracePoint('chain.start', baseDebug),
-
-                    validator.request,
-
-                    ...(isAuthRoute(routePath)
-                        ? [
-                            tracePoint('rateLimit.before', baseDebug),
-                            rateLimitMiddleware({
-                                key: getAuthRateLimitKey,
-                                max: authRateLimit.max,
-                                windowMs: authRateLimit.windowMs,
-                            }),
-                            tracePoint('rateLimit.after', baseDebug),
-                        ]
-                        : []),
-
-                    ...(authRequired
-                        ? [
-                            tracePoint('auth.before', baseDebug),
-                            authMiddleware(),
-                            tracePoint('auth.after', baseDebug),
-                        ]
-                        : []),
-
-                    tracePoint('throttle.before', baseDebug),
-                    throttleMiddleware(maxConcurrentRequests),
-                    tracePoint('throttle.after', baseDebug),
-
-                    tracePoint('cache.before', baseDebug),
-                    cacheMiddleware(),
-                    tracePoint('cache.after', baseDebug),
-
-                    async (req: Request, res: Response, next: NextFunction) => {
-                        const reqId = getReqId(req)
-                        const start = Date.now()
-
-                        dbg({
-                            phase: 'handler_wrapper.enter',
-                            reqId,
-                            ...baseDebug,
-                            hasAuthorization: Boolean(req.get('authorization')),
-                            authUserIdPresent: Boolean((req as any).auth?.userId),
-                        })
-
-                        let finished = false
-                        const onFinish = () => {
-                            if (finished) return
-                            finished = true
-                            dbg({
-                                phase: 'handler_wrapper.finish',
-                                reqId,
-                                ...baseDebug,
-                                statusCode: res.statusCode,
-                                durationMs: Date.now() - start,
-                                headersSent: res.headersSent,
-                            })
-                        }
-
-                        res.once('finish', onFinish)
-                        res.once('close', onFinish)
-
-                        try {
-                            const result = await handler(req, res)
-
-                            dbg({
-                                phase: 'handler_wrapper.after_handler',
-                                reqId,
-                                ...baseDebug,
-                                headersSent: res.headersSent,
-                                resultType: typeof result,
-                                result: ROUTE_LOADER_DEBUG ? result : undefined,
-                            })
-
-                            if (!res.headersSent) {
-                                const shaped = validator.response(result)
-                                dbg({
-                                    phase: 'handler_wrapper.autorespond',
-                                    reqId,
-                                    ...baseDebug,
-                                    shapedResponse: ROUTE_LOADER_DEBUG ? shaped : undefined,
-                                })
-                                return res.json(shaped)
-                            }
-                        } catch (err) {
-                            dbg({
-                                phase: 'handler_wrapper.error',
-                                reqId,
-                                ...baseDebug,
-                                name: err instanceof Error ? err.name : undefined,
-                                message: err instanceof Error ? err.message : String(err),
-                                stack: err instanceof Error ? err.stack : undefined,
-                            })
-                            return next(err)
-                        }
-                    },
-                ]
-
-            ;(app as any)[method.toLowerCase()](routePath, ...middlewareChain)
-        }
-
-        register405(app, routePath, supportedMethods)
+      (app as Application & Record<string, (...args: unknown[]) => unknown>)[
+        method.toLowerCase()
+      ](routePath, ...middlewareChain);
     }
+
+    register405(app, routePath, supportedMethods);
+  }
 }
 
 function countBoundEndpoints(routeTree: Record<string, RouteNode>): number {
-    let total = 0
-    for (const node of Object.values(routeTree)) {
-        total += Object.keys(node.handlers).length
-    }
-    return total
+  let total = 0;
+  for (const node of Object.values(routeTree)) {
+    total += Object.keys(node.handlers).length;
+  }
+  return total;
 }
 
 /* ------------------------------------------------------------------ */
@@ -438,21 +442,21 @@ function countBoundEndpoints(routeTree: Record<string, RouteNode>): number {
 /* ------------------------------------------------------------------ */
 
 function register405(
-    app: Application,
-    routePath: string,
-    supportedMethods: string[]
+  app: Application,
+  routePath: string,
+  supportedMethods: string[],
 ): void {
-    app.all(routePath, (req, res, next) => {
-        if (supportedMethods.includes(req.method.toUpperCase())) {
-            return next()
-        }
+  app.all(routePath, (req, res, next) => {
+    if (supportedMethods.includes(req.method.toUpperCase())) {
+      return next();
+    }
 
-        return res.status(405).json({
-            error: 'METHOD_NOT_ALLOWED',
-            message: `${req.method} not allowed for ${routePath}`,
-            supportedMethods,
-        })
-    })
+    return res.status(405).json({
+      error: 'METHOD_NOT_ALLOWED',
+      message: `${req.method} not allowed for ${routePath}`,
+      supportedMethods,
+    });
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -460,6 +464,6 @@ function register405(
 /* ------------------------------------------------------------------ */
 
 export const __test__ = {
-    scanDirectory,
-    bindExpress,
-}
+  scanDirectory,
+  bindExpress,
+};

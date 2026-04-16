@@ -2,8 +2,8 @@
  * @myDocBlock v2.3
  * @file GET.ts
  * @external
- * @module routes/v1/warframe/weapons
- * @tag warframe
+ * @module warframe.weapons
+ * @tag warframe.weapons
  * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/weapons
