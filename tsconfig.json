@@ -22,17 +22,17 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@src/*": ["./src/*"],
-      "@helpers/*": ["./src/helpers/*"],
-      "@cache/*" : ["./src/cache/*"],
-      "@services/*": ["./src/services/*"],
-      "@controllers/*": ["./src/controllers/*"],
-      "@models/*": ["./src/models/*"],
-      "@middleware/*": ["./src/middleware/*"],
-      "@loaders/*": ["./src/loaders/*"],
-      "@utils/*": ["./src/utils/*"],
-      "@routes/*": ["./src/routes/*"],
-      "@db/*": ["./src/db/*"]
+      "@src/*": ["@src/*"],
+      "@helpers/*": ["@src/helpers/*"],
+      "@cache/*" : ["@src/cache/*"],
+      "@services/*": ["@src/services/*"],
+      "@controllers/*": ["@src/controllers/*"],
+      "@models/*": ["@src/models/*"],
+      "@middleware/*": ["@src/middleware/*"],
+      "@loaders/*": ["@src/loaders/*"],
+      "@utils/*": ["@src/utils/*"],
+      "@routes/*": ["@src/routes/*"],
+      "@db/*": ["@src/db/*"]
     }
   },
   "include": ["src/**/*"]

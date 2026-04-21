@@ -4,7 +4,7 @@ import type { Request, Response, NextFunction } from 'express'
 import {
     rateLimitMiddleware,
     __resetRateLimitStore,
-} from 'src/middleware/rateLimitMiddleware'
+} from '@src/middleware/rateLimitMiddleware'
 
 /**
  * ------------------------------------------------------------
