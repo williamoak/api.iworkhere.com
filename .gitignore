@@ -25,7 +25,8 @@ coverage
 *.sln
 *.sw?
 
-.env
+# no env files of any stripe in the repo
+.env*
 .env.*
 
 .output.txt
