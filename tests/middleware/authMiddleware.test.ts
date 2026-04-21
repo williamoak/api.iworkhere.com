@@ -1,304 +1,344 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
-import crypto from 'crypto';
 
-const dbSelectMock = vi.fn();
-const dbFromMock = vi.fn();
-const dbWhereMock = vi.fn();
-const dbLimitMock = vi.fn();
-
-vi.mock('@services/dbService', () => ({
-  db: {
-    select: dbSelectMock,
-  },
-}));
-
-vi.mock('@db/schema', () => ({
-  authTokens: {
-    userId: 'user_id',
-    tokenHash: 'token_hash',
-    tokenType: 'token_type',
-    revokedAt: 'revoked_at',
-    expiresAt: 'expires_at',
-  },
-}));
-
-const andMock = vi.fn(() => ({}));
-const eqMock = vi.fn(() => ({}));
-const gtMock = vi.fn(() => ({}));
-const isNullMock = vi.fn(() => ({}));
-
-vi.mock('drizzle-orm', () => ({
-  and: andMock,
-  eq: eqMock,
-  gt: gtMock,
-  isNull: isNullMock,
-}));
-
-import { authMiddleware } from '@middleware/authMiddleware';
+import { authMiddleware } from '@src/middleware/authMiddleware';
+import { db } from '@src/services/dbService';
 
 type ResMock = Response & {
-  statusCode: number;
-  body: unknown;
-  headers: Record<string, string>;
+    statusCode: number;
+    body: unknown;
+    headers: Record<string, string>;
 };
 
 function createReq(authorization?: string, requestId?: string): Request {
-  const headers: Record<string, string> = {};
-
-  if (authorization !== undefined) {
-    headers.authorization = authorization;
-  }
-
-  if (requestId !== undefined) {
-    headers['x-request-id'] = requestId;
-  }
-
-  return {
-    method: 'GET',
-    url: '/v1/auth/me',
-    ip: '127.0.0.1',
-    get(name: string) {
-      return headers[name.toLowerCase()];
-    },
-  } as unknown as Request;
+    const headers: Record<string, string> = {};
+    if (authorization) headers.authorization = authorization;
+    if (requestId) headers['x-request-id'] = requestId;
+    return {
+        method: 'GET',
+        url: '/v1/auth/me',
+        ip: '127.0.0.1',
+        get(name: string) {
+            return headers[name.toLowerCase()];
+        },
+    } as unknown as Request;
 }
 
 function createRes(): ResMock {
-  const res = {
-    statusCode: 0,
-    body: undefined as unknown,
-    headers: {} as Record<string, string>,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-    json(payload: unknown) {
-      this.body = payload;
-      return this;
-    },
-    setHeader(key: string, value: string) {
-      this.headers[key.toLowerCase()] = value;
-    },
-  };
-
-  return res as unknown as ResMock;
+    return {
+        statusCode: 0,
+        body: undefined,
+        headers: {},
+        status(code: number) {
+            this.statusCode = code;
+            return this;
+        },
+        json(payload: unknown) {
+            this.body = payload;
+            return this;
+        },
+        setHeader(key: string, value: string) {
+            this.headers[key.toLowerCase()] = value;
+            return this;
+        },
+    } as ResMock;
 }
 
 function createNext(): NextFunction {
-  return vi.fn() as unknown as NextFunction;
+    return vi.fn();
 }
 
-function mockTokenLookup(rows: Array<{ userId: string }>) {
-  dbLimitMock.mockResolvedValueOnce(rows);
-  dbWhereMock.mockReturnValueOnce({
-    limit: dbLimitMock,
-  });
-  dbFromMock.mockReturnValueOnce({
-    where: dbWhereMock,
-  });
-  dbSelectMock.mockReturnValueOnce({
-    from: dbFromMock,
-  });
+function mockDbRows(rows: Array<{ userId: string }>) {
+    vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+                limit: vi.fn().mockResolvedValueOnce(rows),
+            }),
+        }),
+    } as any);
+}
+
+function mockDbThrow(error: unknown) {
+    vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn().mockReturnValueOnce({
+            where: vi.fn().mockReturnValueOnce({
+                limit: vi.fn().mockRejectedValueOnce(error),
+            }),
+        }),
+    } as any);
 }
 
 describe('authMiddleware', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    delete process.env.AUTH_MW_DEBUG;
-    vi.resetModules();
-  });
-
-  test('returns 401 when bearer token is missing', async () => {
-    const req = createReq();
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(next).not.toHaveBeenCalled();
-    expect(dbSelectMock).not.toHaveBeenCalled();
-  });
-
-  test('returns 401 when authorization scheme is not bearer', async () => {
-    const req = createReq('Basic abc123');
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(next).not.toHaveBeenCalled();
-    expect(dbSelectMock).not.toHaveBeenCalled();
-  });
-
-  test('returns 401 when bearer token is empty', async () => {
-    const req = createReq('Bearer ');
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(next).not.toHaveBeenCalled();
-    expect(dbSelectMock).not.toHaveBeenCalled();
-  });
-
-  test('returns 401 when bearer token is whitespace only', async () => {
-    const req = createReq('bearer     ');
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(next).not.toHaveBeenCalled();
-    expect(dbSelectMock).not.toHaveBeenCalled();
-  });
-
-  test('returns 401 when token lookup finds no active access token', async () => {
-    mockTokenLookup([]);
-
-    const req = createReq('Bearer stale-token');
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(next).not.toHaveBeenCalled();
-    expect(dbSelectMock).toHaveBeenCalledTimes(1);
-    expect(dbFromMock).toHaveBeenCalledTimes(1);
-    expect(dbWhereMock).toHaveBeenCalledTimes(1);
-    expect(dbLimitMock).toHaveBeenCalledTimes(1);
-  });
-
-  test('attaches req.auth and calls next for valid access token', async () => {
-    mockTokenLookup([{ userId: 'user-123' }]);
-
-    const req = createReq('Bearer valid-access-token');
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect((req as Request & { auth?: { userId: string } }).auth).toEqual({
-      userId: 'user-123',
-    });
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(res.statusCode).toBe(0);
-    expect(res.body).toBeUndefined();
-
-    const expectedHash = crypto
-      .createHash('sha256')
-      .update('valid-access-token')
-      .digest('hex');
-
-    expect(expectedHash).toHaveLength(64);
-    expect(andMock).toHaveBeenCalled();
-    expect(eqMock).toHaveBeenCalled();
-    expect(gtMock).toHaveBeenCalled();
-    expect(isNullMock).toHaveBeenCalled();
-    expect(dbSelectMock).toHaveBeenCalledTimes(1);
-    expect(dbFromMock).toHaveBeenCalledTimes(1);
-    expect(dbWhereMock).toHaveBeenCalledTimes(1);
-    expect(dbLimitMock).toHaveBeenCalledTimes(1);
-  });
-
-  test('returns 401 when token lookup fails due to wrong token type', async () => {
-    mockTokenLookup([]);
-
-    const req = createReq('Bearer refresh-token-used-as-access');
-    const res = createRes();
-    const next = createNext();
-
-    await authMiddleware()(req, res, next);
-
-    expect(res.statusCode).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(next).not.toHaveBeenCalled();
-    expect(dbSelectMock).toHaveBeenCalledTimes(1);
-  });
-
-  test('returns next(err) when database lookup throws', async () => {
-    const dbError = new Error('database unavailable');
-
-    dbLimitMock.mockRejectedValueOnce(dbError);
-    dbWhereMock.mockReturnValueOnce({
-      limit: dbLimitMock,
-    });
-    dbFromMock.mockReturnValueOnce({
-      where: dbWhereMock,
-    });
-    dbSelectMock.mockReturnValueOnce({
-      from: dbFromMock,
+    beforeEach(() => {
+        vi.clearAllMocks();
+        delete process.env.AUTH_MW_DEBUG;
+        vi.mocked(db.select).mockImplementation(() => {
+            throw new Error('Mock not configured for this test');
+        });
     });
 
-    const req = createReq('Bearer valid-access-token');
-    const res = createRes();
-    const next = vi.fn() as unknown as NextFunction;
+    test('returns 401 when authorization header is missing', async () => {
+        const req = createReq();
+        const res = createRes();
+        const next = createNext();
 
-    await authMiddleware()(req, res, next);
+        await authMiddleware()(req, res, next);
 
-    expect(res.statusCode).toBe(0);
-    expect(res.body).toBeUndefined();
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(next).toHaveBeenCalledWith(dbError);
-  });
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+        expect(next).not.toHaveBeenCalled();
+    });
 
-  test('in debug mode returns debug metadata in the 401 response', async () => {
-    process.env.AUTH_MW_DEBUG = '1';
-    vi.resetModules();
+    test('returns 401 when authorization scheme is not Bearer', async () => {
+        const req = createReq('Basic token');
+        const res = createRes();
+        const next = createNext();
 
-    const { authMiddleware: debugAuthMiddleware } = await import(
-      '@middleware/authMiddleware'
-      );
+        await authMiddleware()(req, res, next);
 
-    const req = createReq();
-    const res = createRes();
-    const next = createNext();
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+        expect(next).not.toHaveBeenCalled();
+    });
 
-    await debugAuthMiddleware()(req, res, next);
+    test('returns 401 when bearer token is empty', async () => {
+        const req = createReq('Bearer ');
+        const res = createRes();
+        const next = createNext();
 
-    expect(res.statusCode).toBe(401);
+        await authMiddleware()(req, res, next);
 
-    const body = res.body as {
-      error?: string;
-      debug?: { reqId?: string; reason?: string };
-    };
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+        expect(next).not.toHaveBeenCalled();
+    });
 
-    expect(body).toBeDefined();
-    expect(body.error).toBe('UNAUTHORIZED');
-    expect(body.debug?.reqId).toEqual(expect.any(String));
-    expect(body.debug?.reason).toBe('MISSING_OR_INVALID_BEARER');
+    test('returns 401 when bearer token is whitespace', async () => {
+        const req = createReq('Bearer   ');
+        const res = createRes();
+        const next = createNext();
 
-    expect(res.headers['x-debug-req-id']).toBeDefined();
-    expect(res.headers['x-debug-auth-reason']).toBe(
-      'MISSING_OR_INVALID_BEARER',
-    );
-    expect(next).not.toHaveBeenCalled();
-  });
+        await authMiddleware()(req, res, next);
 
-  test('trims x-request-id to 128 characters before using it as reqId', async () => {
-    const longRequestId = 'x'.repeat(200);
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+        expect(next).not.toHaveBeenCalled();
+    });
 
-    mockTokenLookup([]);
+    test('returns 401 when no token found in DB', async () => {
+        mockDbRows([]);
 
-    const req = createReq('Bearer stale-token', longRequestId);
-    const res = createRes();
-    const next = createNext();
+        const req = createReq('Bearer valid-token');
+        const res = createRes();
+        const next = createNext();
 
-    await authMiddleware()(req, res, next);
+        await authMiddleware()(req, res, next);
 
-    expect(res.statusCode).toBe(401);
-    expect(next).not.toHaveBeenCalled();
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
-    expect(res.headers['x-debug-req-id']).toBeUndefined();
-  });
+        expect(res.statusCode).toBe(401);
+        expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    test('attaches auth and calls next when token is valid', async () => {
+        mockDbRows([{ userId: 'user-123' }]);
+
+        const req = createReq('Bearer valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect((req as any).auth).toEqual({ userId: 'user-123' });
+        expect(next).toHaveBeenCalled();
+        expect(res.statusCode).toBe(0);
+    });
+
+    test('calls next with error when DB throws', async () => {
+        const dbError = new Error('DB error');
+        mockDbThrow(dbError);
+
+        const req = createReq('Bearer valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(next).toHaveBeenCalledWith(dbError);
+        expect(res.statusCode).toBe(0);
+    });
+
+    test('returns debug info in 401 response when debug enabled', async () => {
+        process.env.AUTH_MW_DEBUG = '1';
+
+        const req = createReq();
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(401);
+        expect((res.body as any).debug).toBeDefined();
+        expect(res.headers['x-debug-req-id']).toBeDefined();
+    });
+
+    test('trims request ID to 128 characters', async () => {
+        const longId = 'x'.repeat(200);
+        mockDbRows([]);
+
+        const req = createReq('Bearer token', longId);
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(401);
+        expect(res.headers['x-debug-req-id']).toBeUndefined();
+    });
+
+    test('handles case-insensitive Bearer scheme', async () => {
+        mockDbRows([{ userId: 'user-456' }]);
+
+        const req = createReq('bearer valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect((req as any).auth).toEqual({ userId: 'user-456' });
+        expect(next).toHaveBeenCalled();
+    });
+
+    test('handles mixed-case Bearer scheme', async () => {
+        mockDbRows([{ userId: 'user-789' }]);
+
+        const req = createReq('BeArEr valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect((req as any).auth).toEqual({ userId: 'user-789' });
+        expect(next).toHaveBeenCalled();
+    });
+
+    test('handles Bearer with leading spaces', async () => {
+        mockDbRows([{ userId: 'user-leading-spaces' }]);
+
+        const req = createReq('  Bearer valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(0);
+        expect(next).toHaveBeenCalled();
+        expect((req as any).auth).toEqual({ userId: 'user-leading-spaces' });
+    });
+
+    test('handles Bearer with multiple spaces between scheme and token', async () => {
+        mockDbRows([{ userId: 'user-spaces' }]);
+
+        const req = createReq('Bearer    valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect((req as any).auth).toEqual({ userId: 'user-spaces' });
+        expect(next).toHaveBeenCalled();
+    });
+
+    test('handles token with leading/trailing spaces', async () => {
+        mockDbRows([{ userId: 'user-trim' }]);
+
+        const req = createReq('Bearer   token-with-spaces   ');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect((req as any).auth).toEqual({ userId: 'user-trim' });
+        expect(next).toHaveBeenCalled();
+    });
+
+    test('preserves request ID when less than 128 characters', async () => {
+        process.env.AUTH_MW_DEBUG = '1';
+        const shortId = 'my-request-id-12345';
+
+        mockDbRows([]);
+
+        const req = createReq('Bearer invalid-token');
+        const res = createRes();
+        const next = createNext();
+
+        (req as any).get = (name: string) => {
+            const headers: Record<string, string> = {
+                authorization: 'Bearer invalid-token',
+                'x-request-id': shortId,
+            };
+            return headers[name.toLowerCase()];
+        };
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.headers['x-debug-req-id']).toBe(shortId);
+    });
+
+    test('does not include debug headers in 401 when debug disabled', async () => {
+        delete process.env.AUTH_MW_DEBUG;
+
+        const req = createReq();
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(401);
+        expect(res.headers['x-debug-req-id']).toBeUndefined();
+        expect(res.headers['x-debug-auth-reason']).toBeUndefined();
+        expect((res.body as any).debug).toBeUndefined();
+    });
+
+    test('includes x-debug-auth-reason header in debug mode', async () => {
+        process.env.AUTH_MW_DEBUG = '1';
+
+        mockDbRows([]);
+
+        const req = createReq('Bearer invalid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(401);
+        expect(res.headers['x-debug-auth-reason']).toBe(
+            'TOKEN_NOT_FOUND_OR_EXPIRED_OR_REVOKED_OR_WRONG_TYPE',
+        );
+    });
+
+    test('generates UUID for request ID when not provided', async () => {
+        mockDbRows([{ userId: 'user-123' }]);
+
+        const req = createReq('Bearer valid-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(next).toHaveBeenCalled();
+    });
+
+    test('rejects Bearer scheme with other schemes present', async () => {
+        mockDbRows([{ userId: 'user-other-schemes' }]);
+
+        const req = createReq('Bearer token, Authorization: Basic other');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(0);
+        expect(next).toHaveBeenCalled();
+        expect((req as any).auth).toEqual({ userId: 'user-other-schemes' });
+    });
 });

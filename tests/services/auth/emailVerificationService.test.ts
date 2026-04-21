@@ -82,7 +82,7 @@ function mockSelectOnce(rows: any[]) {
 }
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 /**

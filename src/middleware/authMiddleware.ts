@@ -30,14 +30,17 @@ import { authTokens } from '@db/schema';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 
 const BEARER_PREFIX = 'bearer ';
-const AUTH_MW_DEBUG = process.env.AUTH_MW_DEBUG === '1';
+
+function isDebug(): boolean {
+  return process.env.AUTH_MW_DEBUG === '1';
+}
 
 function dbg(
   reqId: string,
   phase: string,
   fields: Record<string, unknown> = {},
 ): void {
-  if (!AUTH_MW_DEBUG) return;
+  if (!isDebug()) return;
 
   console.log(
     JSON.stringify({
@@ -75,7 +78,7 @@ export function authMiddleware() {
       crypto.randomUUID();
 
     function reject401(reason: string, extra: Record<string, unknown> = {}) {
-      if (AUTH_MW_DEBUG) {
+      if (isDebug()) {
         res.setHeader('x-debug-req-id', reqId);
         res.setHeader('x-debug-auth-reason', reason);
       }
@@ -86,7 +89,7 @@ export function authMiddleware() {
         ...extra,
       });
 
-      if (AUTH_MW_DEBUG) {
+      if (isDebug()) {
         return res.status(401).json({
           error: 'UNAUTHORIZED',
           debug: {

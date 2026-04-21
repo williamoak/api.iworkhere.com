@@ -69,7 +69,7 @@ import {
  */
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 /**

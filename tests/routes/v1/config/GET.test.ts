@@ -115,7 +115,7 @@ vi.mock("@routes/v1/config/GET", async (importOriginal) => {
 })
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 /* ------------------------------------------------------------------ */

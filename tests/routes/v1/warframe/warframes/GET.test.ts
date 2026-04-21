@@ -162,7 +162,7 @@ function createRes(): ResMock {
 }
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 /**

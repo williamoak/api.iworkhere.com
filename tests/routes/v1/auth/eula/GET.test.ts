@@ -55,7 +55,7 @@ function createRes(): ResMock {
 }
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 describe('fetchLatestEula (unit)', () => {

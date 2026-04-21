@@ -49,7 +49,7 @@ import type { ConfigWriteRepository, ConfigRecord } from '@routes/v1/config/PUT'
 const { upsertConfig } = __test__
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 describe('config PUT upsert logic (unit)', () => {

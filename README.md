@@ -194,8 +194,8 @@ Run migrations with `npm run drizzle migrate`.
 
 ## License
 
-[Add license here, e.g., MIT]
+MIT
 
 ## Version
 
-0.0.0 (Pre-release)
+0.1.0 (Pre-release)

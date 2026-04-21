@@ -55,7 +55,7 @@ function mockDbResult(rows: any[]) {
 }
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 /**

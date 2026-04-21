@@ -85,7 +85,7 @@ function createRes(): ResMock {
 const repo = __test__.dbConfigDeleteRepository
 
 beforeEach(() => {
-    vi.resetAllMocks()
+    vi.clearAllMocks()
 })
 
 /* ------------------------------------------------------------------ */
