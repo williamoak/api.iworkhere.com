@@ -2,8 +2,8 @@
  * @myDocBlock v2.3
  * @file PUT.ts
  * @external
- * @module routes/v1/warframe/modules
- * @tag warframe
+ * @module warframe.modules
+ * @tag warframe.modules
  * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/modules

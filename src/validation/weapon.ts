@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Base fields shared by insert & update
@@ -9,10 +9,10 @@ import { z } from "zod";
  *   not in the schema.
  */
 const weaponBaseFields = {
-    name: z.string().min(1),
-    class: z.string().nullable().optional(),
-    description: z.string().optional(),
-    weapon_mods: z.any().nullable().optional(),
+  name: z.string().min(1),
+  class: z.string().nullable().optional(),
+  description: z.string().optional(),
+  weapon_mods: z.any().nullable().optional(),
 };
 
 /**
@@ -21,7 +21,7 @@ const weaponBaseFields = {
  * - No weapon_id allowed
  */
 export const weaponInsertSchema = z.object({
-    ...weaponBaseFields,
+  ...weaponBaseFields,
 });
 
 /**
@@ -30,13 +30,13 @@ export const weaponInsertSchema = z.object({
  * - All other fields are optional
  */
 export const weaponUpdateSchema = z.object({
-    weapon_id: z.string().uuid(),
-    ...Object.fromEntries(
-        Object.entries(weaponBaseFields).map(([key, schema]) => [
-            key,
-            schema.optional(),
-        ])
-    ),
+  weapon_id: z.string().uuid(),
+  ...Object.fromEntries(
+    Object.entries(weaponBaseFields).map(([key, schema]) => [
+      key,
+      schema.optional(),
+    ]),
+  ),
 });
 
 /**
@@ -48,8 +48,8 @@ export const weaponUpdateSchema = z.object({
  * Used when resolving updates by name (+ optional class)
  */
 export const weaponUpdateByNameSchema = z.object({
-    name: z.string().min(1),
-    class: z.string().nullable().optional(),
-    description: z.string().optional(),
-    weapon_mods: z.any().nullable().optional(),
+  name: z.string().min(1),
+  class: z.string().nullable().optional(),
+  description: z.string().optional(),
+  weapon_mods: z.any().nullable().optional(),
 });

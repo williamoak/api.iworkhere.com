@@ -2,8 +2,8 @@
  * @myDocBlock v2.3
  * @file DELETE.ts
  * @external
- * @module routes/v1/warframe/warframes
- * @tag warframe
+ * @module warframe.warframes
+ * @tag warframe.warframes
  * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/warframe/warframes

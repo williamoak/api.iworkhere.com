@@ -6,22 +6,463 @@
   },
   "tags": [
     {
+      "name": "auth, email, verify"
+    },
+    {
+      "name": "auth, eula"
+    },
+    {
+      "name": "auth, login"
+    },
+    {
+      "name": "auth, logout, revoke"
+    },
+    {
+      "name": "auth, password, reset"
+    },
+    {
+      "name": "auth, password-reset"
+    },
+    {
+      "name": "auth, refresh"
+    },
+    {
+      "name": "auth, register"
+    },
+    {
+      "name": "config"
+    },
+    {
       "name": "health"
     },
     {
       "name": "monitor"
     },
     {
-      "name": "modules"
-    },
-    {
-      "name": "warframes"
-    },
-    {
-      "name": "weapons"
+      "name": "warframe"
     }
   ],
   "paths": {
+    "/v1/auth/emailverify": {
+      "put": {
+        "summary": "Verify a user email address.",
+        "description": "Verifies ownership of a user email address using a verification token.\nOn success, the user account is transitioned to an active state and\nthe email verification timestamp is recorded.",
+        "tags": [
+          "auth, email, verify"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/emailverify/resend": {
+      "put": {
+        "summary": "Resend an email verification token.",
+        "description": "Allows a pending user to request a new email verification token.\nThis endpoint is intentionally non-enumerating and returns success even when\nthe email is unknown or not eligible for resend.",
+        "tags": [
+          "auth, email, verify"
+        ],
+        "parameters": [
+          {
+            "name": "app_key",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/eula": {
+      "get": {
+        "summary": "Fetch the current End User License Agreement (EULA).",
+        "description": "Returns the latest EULA document stored as a dedicated record in the config\ntable (name = \"eula\"). This endpoint is intentionally isolated from general\nconfig querying: it does not accept query parameters and can only return the\nlatest EULA record.",
+        "tags": [
+          "auth, eula"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "summary": "Authenticate a user for an application and issue tokens.",
+        "description": "Authenticates a user against an application-scoped context using a\nusername or email and plaintext password. On success, issues an\naccess and refresh token pair scoped to the application.",
+        "tags": [
+          "auth, login"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passreset/complete": {
+      "put": {
+        "summary": "Complete a password reset.",
+        "description": "Consumes a valid password reset token and sets a new password.\nOn success, all existing auth tokens are revoked.",
+        "tags": [
+          "auth, password, reset"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passreset/initiate": {
+      "put": {
+        "summary": "Initiate a password reset flow.",
+        "description": "Initiates a password reset request for a user identified by email.\nThis endpoint is intentionally non-enumerating: it always returns\na success response regardless of whether the email exists.\n\nOn success, a password reset token is issued out-of-band (e.g. email).",
+        "tags": [
+          "auth, password-reset"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passreset/verify": {
+      "put": {
+        "summary": "Verify a password reset token.",
+        "description": "Validates a password reset token without changing user state.\nUsed by clients to confirm token validity before submitting\na new password.",
+        "tags": [
+          "auth, password, reset"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "put": {
+        "summary": "Rotate refresh token and issue new authentication tokens.",
+        "description": "Accepts a valid refresh token and rotates it, issuing a new access\ntoken and a new refresh token scoped to the same user and application.\n\nThe old refresh token is revoked as part of the rotation process.",
+        "tags": [
+          "auth, refresh"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/register": {
+      "put": {
+        "summary": "Register a new user for an application.",
+        "description": "Creates a new user identity and local authentication credentials,\nassociates the user with an application, and enforces password\nsecurity rules. The user is created in a pending state until\nemail verification is completed.",
+        "tags": [
+          "auth, register"
+        ],
+        "parameters": [
+          {
+            "name": "app_key",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/token": {
+      "delete": {
+        "summary": "Revoke an authentication token.",
+        "description": "Explicitly revokes an access or refresh token. Used for logout,\nsecurity events, or credential changes. Revocation is immediate.",
+        "tags": [
+          "auth, logout, revoke"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/config": {
+      "delete": {
+        "summary": "Delete a configuration record.",
+        "description": "Deletes a configuration record using one of the following deterministic\nresolution strategies (highest priority first):\n\n1) uuid — deletes the exact record by UUID\n2) name + version — deletes the exact matching record\n3) name only — deletes the record ONLY if exactly one record exists\n\nAmbiguous deletes are rejected with 409 CONFLICT.\nMissing or invalid query combinations are rejected with 400.\n\nThis is an administrative endpoint and must be access-controlled\nby middleware at the routing layer.",
+        "tags": [
+          "config"
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "query",
+            "required": false,
+            "description": "Exact UUID of the config record to delete",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Config name (used only if uuid not provided)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "description": "Config version (optional disambiguator for name)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Fetch configuration records.",
+        "description": "Deterministic, identifier-based retrieval of configuration records.\n\nResolution order:\n  1) id — fetch exact record by UUID\n  2) name + version — fetch exact record\n  3) name only — fetch ONLY if exactly one record exists\n  4) no query params — return all records\n\nInvalid or ambiguous queries are rejected with explicit errors.",
+        "tags": [
+          "config"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Exact UUID of the config record",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "Configuration key name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "description": "Exact configuration version",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Create or update a configuration record.",
+        "description": "Creates or updates a configuration record identified by (name, version).\nIf a matching record exists, its value is updated in place. Otherwise,\na new record is inserted.",
+        "tags": [
+          "config"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "summary": "Health index, schema enumerator, and aggregator using in-memory route metadata.",
@@ -188,9 +629,9 @@
     "/v1/warframe/modules": {
       "delete": {
         "summary": "Delete a module by mod_id.",
-        "description": "Deletes a single Warframe module identified by the required mod_id\n  query parameter.\n\n  If no matching record exists, the operation still succeeds and\n  returns a null data payload.",
+        "description": "Deletes a single Warframe module identified by the required mod_id query parameter.\n\nIf no matching record exists, the operation still succeeds and returns a null data payload.",
         "tags": [
-          "modules"
+          "warframe"
         ],
         "parameters": [
           {
@@ -199,8 +640,7 @@
             "required": true,
             "description": "Unique identifier of the module to delete",
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         ],
@@ -221,19 +661,18 @@
       },
       "get": {
         "summary": "Retrieve module list and optionally resolve a single module.",
-        "description": "Returns a stable response containing:\n\n  - A lightweight list of all modules\n  - A single resolved module object\n\n  Resolution priority is:\n    1. mod_id query parameters (first match wins)\n    2. Exact name match if no mod_id is supplied\n\n  If no match is found, the module field is returned as an empty\n  module DTO to preserve a stable response shape.",
+        "description": "Returns a stable response containing:\n- A lightweight list of all modules\n- A single resolved module object\n\nResolution priority is:\n1) mod_id query parameters (first match wins)\n2) Exact name match if no mod_id is supplied\n\nIf no match is found, the module field is returned as an empty module DTO\nto preserve a stable response shape.",
         "tags": [
-          "modules"
+          "warframe"
         ],
         "parameters": [
           {
             "name": "mod_id",
             "in": "query",
             "required": false,
-            "description": "Module identifiers to resolve; first match wins",
+            "description": "Module identifiers to resolve; first match wins (repeatable query param)",
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           },
           {
@@ -263,11 +702,66 @@
       },
       "put": {
         "summary": "Insert or update a Warframe module.",
-        "description": "Performs a deterministic upsert-style operation on modules using\n  the following resolution order:\n\n    1. Update by mod_id if provided\n    2. Update by name if exactly one matching record exists\n    3. Insert if name resolves to zero records\n    4. Reject with conflict if name resolves to more than one record\n\n  If no mod_id or name is provided, the request is treated as an\n  insert operation.",
+        "description": "Performs a deterministic upsert-style operation on modules using\nthe following resolution order:\n\n1. Update by mod_id if provided\n2. Update by name if exactly one matching record exists\n3. Insert if name resolves to zero records\n4. Reject with conflict if name resolves to more than one record\n\nIf no mod_id or name is provided, the request is treated as an insert operation.",
         "tags": [
-          "modules"
+          "warframe"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "mod_id",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rarity",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "polarity",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rank_max",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response"
@@ -287,9 +781,9 @@
     "/v1/warframe/warframes": {
       "delete": {
         "summary": "Delete a warframe by warframe_id.",
-        "description": "Deletes a single warframe identified by the required warframe_id\n  query parameter.\n\n  If no matching record exists, the operation still succeeds and\n  returns a null data payload.",
+        "description": "Deletes a single warframe identified by the required warframe_id query parameter.\n\nIf no matching record exists, the operation still succeeds and returns a null data payload.",
         "tags": [
-          "warframes"
+          "warframe"
         ],
         "parameters": [
           {
@@ -298,8 +792,7 @@
             "required": true,
             "description": "Unique identifier of the warframe to delete",
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         ],
@@ -319,20 +812,19 @@
         }
       },
       "get": {
-        "summary": "Retrieve warframe list and optionally resolve a single warframe.",
-        "description": "Returns a stable response containing:\n\n  - A lightweight list of all warframes\n  - A single resolved warframe object\n\n  If one or more warframe_id query parameters are supplied, the first\n  matching warframe is resolved and returned.\n\n  If no matching record is found, the warframe field is returned as an\n  empty warframe DTO to preserve a stable response shape.",
+        "summary": "Fetch warframe list and optionally a single warframe by id.",
+        "description": "Returns a lightweight list of warframes (id + name) and, if one or more\nwarframe_id query parameters are provided, also returns a single resolved\nwarframe object (the first match).",
         "tags": [
-          "warframes"
+          "warframe"
         ],
         "parameters": [
           {
             "name": "warframe_id",
             "in": "query",
             "required": false,
-            "description": "Warframe identifiers to resolve; first match wins",
+            "description": "One or more warframe IDs to resolve (repeatable query param)",
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         ],
@@ -353,11 +845,39 @@
       },
       "put": {
         "summary": "Insert or update a warframe.",
-        "description": "Performs a deterministic insert-or-update operation using the following\n  resolution order:\n\n    1. Update by warframe_id if provided (highest priority)\n    2. Resolve by name:\n       - class defaults to \"normal\" if not provided\n       - 0 matches → insert\n       - 1 match → update\n       - 2+ matches → disambiguate by resolved class\n    3. Insert if no identifier is resolvable\n\n  If multiple records still match after class disambiguation, the request\n  is rejected with a conflict error.",
+        "description": "Performs a deterministic insert-or-update operation using the following\nresolution order:\n\n1. Update by warframe_id if provided (highest priority)\n2. Resolve by name:\n   - class defaults to \"normal\" if not provided\n   - 0 matches → insert\n   - 1 match → update\n   - 2+ matches → disambiguate by resolved class\n3. Insert if no identifier is resolvable\n\nIf multiple records still match after class disambiguation, the request\nis rejected with a conflict error.",
         "tags": [
-          "warframes"
+          "warframe"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "warframe_id",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "class",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response"
@@ -376,20 +896,19 @@
     },
     "/v1/warframe/weapons": {
       "delete": {
-        "summary": "Delete a weapon by weapon_id.",
-        "description": "Deletes a single weapon identified by the required weapon_id\n  query parameter.\n\n  If no matching record exists, the operation still succeeds and\n  returns a null data payload.",
+        "summary": "Delete a weapon by identifier",
+        "description": "Deletes a weapon record from the database using the provided weapon_id query parameter.\nThe handler extracts weapon_id from the query string, supporting both string and array forms,\nand normalizes it to a single string value.\n\nIf weapon_id is missing or invalid, the request is rejected with a 400 response.\nIf provided, the database delete operation is executed and the deleted row (if any) is returned.\n\nThe endpoint always responds with success: true when the operation executes, even if no matching\nrecord is found (data will be null in that case). This behavior ensures idempotency for repeated\ndelete requests on the same identifier.\n\nErrors during execution are logged and result in a 500 INTERNAL SERVER ERROR response.",
         "tags": [
-          "weapons"
+          "warframe"
         ],
         "parameters": [
           {
             "name": "weapon_id",
             "in": "query",
             "required": true,
-            "description": "Unique identifier of the weapon to delete",
+            "description": "Unique weapon identifier to delete",
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         ],
@@ -410,19 +929,18 @@
       },
       "get": {
         "summary": "Retrieve weapon list and optionally resolve a single weapon.",
-        "description": "Returns a stable response containing:\n\n  - A lightweight list of all weapons\n  - A single resolved weapon object\n\n  Resolution order is:\n    1. One or more weapon_id query parameters (first match wins)\n    2. Exact name match\n       - If multiple records share the same name, class is used\n       - class defaults to \"normal\" when not provided\n    3. No resolvable filters → empty weapon DTO\n\n  This endpoint is read-only and has no side effects.",
+        "description": "Returns a stable response containing:\n- A lightweight list of all weapons\n- A single resolved weapon object\n\nResolution order is:\n1) One or more weapon_id query parameters (first match wins)\n2) Exact name match\n   - If multiple records share the same name, class is used\n   - class defaults to \"normal\" when not provided\n3) No resolvable filters → empty weapon DTO\n\nThis endpoint is read-only and has no side effects.",
         "tags": [
-          "weapons"
+          "warframe"
         ],
         "parameters": [
           {
             "name": "weapon_id",
             "in": "query",
             "required": false,
-            "description": "Weapon identifiers to resolve; first match wins",
+            "description": "Weapon identifiers to resolve; first match wins (repeatable query param)",
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           },
           {
@@ -438,10 +956,9 @@
             "name": "class",
             "in": "query",
             "required": false,
-            "description": "Weapon class used when resolving by name",
+            "description": "Weapon class used when resolving by name (defaults to normal)",
             "schema": {
-              "type": "string",
-              "default": "normal"
+              "type": "string"
             }
           }
         ],
@@ -461,10 +978,10 @@
         }
       },
       "put": {
-        "summary": "Insert or update a weapon.",
-        "description": "Performs a deterministic insert-or-update operation using the following\n  resolution order:\n\n    1. Update by weapon_id if provided (highest priority)\n    2. Resolve by name:\n       - class defaults to \"normal\" if not provided\n       - 0 name matches → insert\n       - 1 name match → update\n       - 2+ name matches → disambiguate by class\n           - 0 narrowed → insert\n           - 1 narrowed → update\n           - >1 narrowed → reject with conflict\n    3. Insert if no identifier is resolvable\n\n  Update operations require at least one writable field; otherwise the\n  request is rejected.",
+        "summary": "Insert or update weapon records using identifier-driven resolution",
+        "description": "Performs conditional insert or update operations based on the presence of identifying fields\nin the request body. The handler supports three mutually exclusive execution paths:\n\n1. UPDATE by weapon_id:\n   - Triggered when weapon_id is present\n   - Validates using weaponUpdateSchema\n   - Updates the matching record\n   - Rejects if no writable fields are provided\n\n2. RESOLVE by name (with optional class):\n   - Triggered when name is present and weapon_id is absent\n   - Default class is \"normal\" when not provided\n   - Resolution logic:\n       a. 0 matches → INSERT\n       b. 1 match → UPDATE\n       c. 2+ matches:\n           - Filter by class\n           - 0 matches → INSERT\n           - 1 match → UPDATE\n           - 2+ matches → 409 conflict (ambiguous)\n\n3. INSERT:\n   - Triggered when neither weapon_id nor name is provided\n   - Validates using weaponInsertSchema\n   - Inserts new record\n\nAll writes use toWeaponWrite() for database normalization.\nAll responses map database rows through toWeaponDTO().\n\nValidation errors are enriched using overlayDto(), producing:\n- details (zod issues)\n- missing_fields (not provided in input)\n- empty_fields (provided but empty or null)\n\nThis endpoint is not a strict UPSERT; behavior depends on resolution rules and may insert new records.",
         "tags": [
-          "weapons"
+          "warframe"
         ],
         "parameters": [],
         "responses": {

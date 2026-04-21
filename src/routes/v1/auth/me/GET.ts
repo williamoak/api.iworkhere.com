@@ -1,15 +1,69 @@
 ﻿/**
- * @myDocBlock
- * @file
- * @version 1.0.4
+ * @file authMe
+ * @external
+ * @module auth
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
  * @path /v1/auth/me
- * @summary Canonical authenticated-identity verification endpoint.
- *
+ * @summary Retrieve current authenticated user identity
  * @description
- * DEBUG NOTES
- * - Enable logging with: AUTH_ME_DEBUG=1
- * - Logs request/auth metadata only (no raw token material)
- * - This handler does NOT check auth_tokens; middleware does. It consumes req.auth.userId.
+ * Validates the presence of a Bearer access token and requires that authentication middleware
+ * has already attached a valid auth object to the request (req.auth.userId). This endpoint does
+ * not parse or validate the token itself beyond checking for Bearer format; token validation is
+ * assumed to be handled upstream.
+ *
+ * If a valid userId is present, retrieves the user record via getUserById and applies access gates:
+ * - Rejects locked accounts with 423 ACCOUNT_LOCKED
+ * - Rejects disabled accounts with 403 ACCOUNT_DISABLED
+ * - Rejects users who have not accepted the EULA with 403 EULA_REQUIRED
+ *
+ * Returns a minimal identity payload for the authenticated user. Does not include sensitive fields.
+ *
+ * Debug logging can be enabled via AUTH_ME_DEBUG=1. When enabled, logs structured request lifecycle
+ * events including request metadata, token hash (SHA-256), database lookup results, and response
+ * outcome. Raw tokens are never logged.
+ *
+ * This endpoint is intended to be the canonical identity verification call after login or token
+ * refresh and should be treated as the authoritative source of current user state.
+ * @query
+ * {}
+ * @requestExample
+ * {
+ *   "headers": {
+ *     "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example.payload.signature",
+ *     "x-request-id": "req-1234567890"
+ *   }
+ * }
+ * @response
+ * {
+ *   "200": {
+ *     "id": "user_123",
+ *     "username": "exampleUser",
+ *     "email": "user@example.com",
+ *     "status": "active"
+ *   },
+ *   "401": {
+ *     "error": "UNAUTHORIZED"
+ *   },
+ *   "403": {
+ *     "error": "ACCOUNT_DISABLED"
+ *   },
+ *   "403_EULA": {
+ *     "error": "EULA_REQUIRED"
+ *   },
+ *   "423": {
+ *     "error": "ACCOUNT_LOCKED"
+ *   },
+ *   "500": {
+ *     "error": "INTERNAL_SERVER_ERROR"
+ *   }
+ * }
+ * @requires
+ * - authRequired = true (enforced upstream)
+ * - Authentication middleware must attach req.auth.userId
+ * - Authorization header must be present in Bearer format
+ * - getUserById service must return a valid user object or null
+ * - Environment variable AUTH_ME_DEBUG optionally enables structured debug logging
  */
 
 import type { Request, Response } from 'express'
