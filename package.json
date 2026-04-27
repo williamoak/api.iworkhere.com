@@ -13,7 +13,9 @@
     "test:ui": "vitest --ui",
     "seed:data": "tsx src/db/seeds/run.ts",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "setup:hooks": "git config core.hooksPath .github/hooks && chmod +x .github/hooks/*",
+    "prepare": "npm run setup:hooks"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
