@@ -15,9 +15,6 @@
       "name": "auth, login"
     },
     {
-      "name": "auth, logout, revoke"
-    },
-    {
       "name": "auth, password, reset"
     },
     {
@@ -30,6 +27,9 @@
       "name": "auth, register"
     },
     {
+      "name": "auth, logout, revoke"
+    },
+    {
       "name": "config"
     },
     {
@@ -39,7 +39,13 @@
       "name": "monitor"
     },
     {
-      "name": "warframe"
+      "name": "warframe.modules"
+    },
+    {
+      "name": "warframe.warframes"
+    },
+    {
+      "name": "warframe.weapons"
     }
   ],
   "paths": {
@@ -631,7 +637,7 @@
         "summary": "Delete a module by mod_id.",
         "description": "Deletes a single Warframe module identified by the required mod_id query parameter.\n\nIf no matching record exists, the operation still succeeds and returns a null data payload.",
         "tags": [
-          "warframe"
+          "warframe.modules"
         ],
         "parameters": [
           {
@@ -663,7 +669,7 @@
         "summary": "Retrieve module list and optionally resolve a single module.",
         "description": "Returns a stable response containing:\n- A lightweight list of all modules\n- A single resolved module object\n\nResolution priority is:\n1) mod_id query parameters (first match wins)\n2) Exact name match if no mod_id is supplied\n\nIf no match is found, the module field is returned as an empty module DTO\nto preserve a stable response shape.",
         "tags": [
-          "warframe"
+          "warframe.modules"
         ],
         "parameters": [
           {
@@ -704,7 +710,7 @@
         "summary": "Insert or update a Warframe module.",
         "description": "Performs a deterministic upsert-style operation on modules using\nthe following resolution order:\n\n1. Update by mod_id if provided\n2. Update by name if exactly one matching record exists\n3. Insert if name resolves to zero records\n4. Reject with conflict if name resolves to more than one record\n\nIf no mod_id or name is provided, the request is treated as an insert operation.",
         "tags": [
-          "warframe"
+          "warframe.modules"
         ],
         "parameters": [
           {
@@ -783,7 +789,7 @@
         "summary": "Delete a warframe by warframe_id.",
         "description": "Deletes a single warframe identified by the required warframe_id query parameter.\n\nIf no matching record exists, the operation still succeeds and returns a null data payload.",
         "tags": [
-          "warframe"
+          "warframe.warframes"
         ],
         "parameters": [
           {
@@ -815,7 +821,7 @@
         "summary": "Fetch warframe list and optionally a single warframe by id.",
         "description": "Returns a lightweight list of warframes (id + name) and, if one or more\nwarframe_id query parameters are provided, also returns a single resolved\nwarframe object (the first match).",
         "tags": [
-          "warframe"
+          "warframe.warframes"
         ],
         "parameters": [
           {
@@ -847,7 +853,7 @@
         "summary": "Insert or update a warframe.",
         "description": "Performs a deterministic insert-or-update operation using the following\nresolution order:\n\n1. Update by warframe_id if provided (highest priority)\n2. Resolve by name:\n   - class defaults to \"normal\" if not provided\n   - 0 matches → insert\n   - 1 match → update\n   - 2+ matches → disambiguate by resolved class\n3. Insert if no identifier is resolvable\n\nIf multiple records still match after class disambiguation, the request\nis rejected with a conflict error.",
         "tags": [
-          "warframe"
+          "warframe.warframes"
         ],
         "parameters": [
           {
@@ -899,7 +905,7 @@
         "summary": "Delete a weapon by identifier",
         "description": "Deletes a weapon record from the database using the provided weapon_id query parameter.\nThe handler extracts weapon_id from the query string, supporting both string and array forms,\nand normalizes it to a single string value.\n\nIf weapon_id is missing or invalid, the request is rejected with a 400 response.\nIf provided, the database delete operation is executed and the deleted row (if any) is returned.\n\nThe endpoint always responds with success: true when the operation executes, even if no matching\nrecord is found (data will be null in that case). This behavior ensures idempotency for repeated\ndelete requests on the same identifier.\n\nErrors during execution are logged and result in a 500 INTERNAL SERVER ERROR response.",
         "tags": [
-          "warframe"
+          "warframe.weapons"
         ],
         "parameters": [
           {
@@ -931,7 +937,7 @@
         "summary": "Retrieve weapon list and optionally resolve a single weapon.",
         "description": "Returns a stable response containing:\n- A lightweight list of all weapons\n- A single resolved weapon object\n\nResolution order is:\n1) One or more weapon_id query parameters (first match wins)\n2) Exact name match\n   - If multiple records share the same name, class is used\n   - class defaults to \"normal\" when not provided\n3) No resolvable filters → empty weapon DTO\n\nThis endpoint is read-only and has no side effects.",
         "tags": [
-          "warframe"
+          "warframe.weapons"
         ],
         "parameters": [
           {
@@ -981,7 +987,7 @@
         "summary": "Insert or update weapon records using identifier-driven resolution",
         "description": "Performs conditional insert or update operations based on the presence of identifying fields\nin the request body. The handler supports three mutually exclusive execution paths:\n\n1. UPDATE by weapon_id:\n   - Triggered when weapon_id is present\n   - Validates using weaponUpdateSchema\n   - Updates the matching record\n   - Rejects if no writable fields are provided\n\n2. RESOLVE by name (with optional class):\n   - Triggered when name is present and weapon_id is absent\n   - Default class is \"normal\" when not provided\n   - Resolution logic:\n       a. 0 matches → INSERT\n       b. 1 match → UPDATE\n       c. 2+ matches:\n           - Filter by class\n           - 0 matches → INSERT\n           - 1 match → UPDATE\n           - 2+ matches → 409 conflict (ambiguous)\n\n3. INSERT:\n   - Triggered when neither weapon_id nor name is provided\n   - Validates using weaponInsertSchema\n   - Inserts new record\n\nAll writes use toWeaponWrite() for database normalization.\nAll responses map database rows through toWeaponDTO().\n\nValidation errors are enriched using overlayDto(), producing:\n- details (zod issues)\n- missing_fields (not provided in input)\n- empty_fields (provided but empty or null)\n\nThis endpoint is not a strict UPSERT; behavior depends on resolution rules and may insert new records.",
         "tags": [
-          "warframe"
+          "warframe.weapons"
         ],
         "parameters": [],
         "responses": {
