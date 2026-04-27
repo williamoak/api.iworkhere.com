@@ -77,14 +77,15 @@ describe("health/database handler — internal mode (success)", () => {
         }
 
         const health = result as HealthResponse;
+        const data = health.data as any;
 
         // Assert
         expect(health.status).toBe("ok");
         expect(health.name).toBe("database");
-        expect(typeof health.data.latencyMs).toBe("number");
-        expect(health.data.version).toBe("v24.1.3");
-        expect(health.data.nodeCount).toBe(1);
-        expect(health.data.mTLSActive).toBe(true);
+        expect(typeof data.latencyMs).toBe("number");
+        expect(data.version).toBe("v24.1.3");
+        expect(data.nodeCount).toBe(1);
+        expect(data.mTLSActive).toBe(true);
     });
 });
 
@@ -144,15 +145,12 @@ describe("health/database handler — internal mode (error)", () => {
         }
 
         const health = result as HealthResponse;
+        const data = health.data as any;
 
         // Assert
-        expect(health).toEqual({
-            status: "fail",
-            name: "database",
-            data: {
-                error: "Connection refused"
-            }
-        });
+        expect(health.status).toBe("fail");
+        expect(health.name).toBe("database");
+        expect(data).toEqual({ error: "Connection refused" });
     });
 });
 

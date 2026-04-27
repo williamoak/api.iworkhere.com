@@ -50,7 +50,7 @@ describe('throttleMiddleware', () => {
   }
 
   it('allows request when under concurrency limit', async () => {
-    const { throttleMiddleware } = await import('@src/middleware/throttleMiddleware');
+    const { throttleMiddleware } = await import('@middleware/throttleMiddleware');
 
     const mw = throttleMiddleware(1);
 
@@ -66,7 +66,7 @@ describe('throttleMiddleware', () => {
   });
 
   it('rejects request immediately when concurrency limit is reached', async () => {
-    const { throttleMiddleware } = await import('@src/middleware/throttleMiddleware');
+    const { throttleMiddleware } = await import('@middleware/throttleMiddleware');
 
     const mw = throttleMiddleware(1);
 
@@ -93,7 +93,7 @@ describe('throttleMiddleware', () => {
   });
 
   it('releases concurrency slot when response finishes', async () => {
-    const { throttleMiddleware } = await import('@src/middleware/throttleMiddleware');
+    const { throttleMiddleware } = await import('@middleware/throttleMiddleware');
 
     const mw = throttleMiddleware(1);
 
@@ -117,7 +117,7 @@ describe('throttleMiddleware', () => {
   });
 
   it('releases concurrency slot when response closes', async () => {
-    const { throttleMiddleware } = await import('@src/middleware/throttleMiddleware');
+    const { throttleMiddleware } = await import('@middleware/throttleMiddleware');
 
     const mw = throttleMiddleware(1);
 
@@ -141,7 +141,7 @@ describe('throttleMiddleware', () => {
   });
 
   it('keeps GET and POST requests in separate concurrency buckets', async () => {
-    const { throttleMiddleware } = await import('@src/middleware/throttleMiddleware');
+    const { throttleMiddleware } = await import('@middleware/throttleMiddleware');
 
     const mw = throttleMiddleware(1);
 

@@ -58,7 +58,7 @@ describe("backoffMiddleware", () => {
 
     it("admits request immediately when under concurrency limit", async () => {
         const { backoffMiddleware } = await import(
-            "@src/middleware/backoffMiddleware"
+            "@middleware/backoffMiddleware"
             );
 
         const mw = backoffMiddleware(1);
@@ -74,7 +74,7 @@ describe("backoffMiddleware", () => {
 
     it("waits with backoff until a slot becomes available", async () => {
         const { backoffMiddleware } = await import(
-            "@src/middleware/backoffMiddleware"
+            "@middleware/backoffMiddleware"
             );
 
         const mw = backoffMiddleware(1, 1000);
@@ -110,7 +110,7 @@ describe("backoffMiddleware", () => {
 
     it("returns 429 when maxWaitMs is exceeded", async () => {
         const { backoffMiddleware } = await import(
-            "@src/middleware/backoffMiddleware"
+            "@middleware/backoffMiddleware"
             );
 
         // Very small wait window to force rejection

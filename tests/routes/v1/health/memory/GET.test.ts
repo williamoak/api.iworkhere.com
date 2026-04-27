@@ -38,23 +38,24 @@ describe("health/memory handler — internal mode", () => {
         }
 
         const health = result as HealthResponse;
+        const data = health.data as any;
 
         expect(health.status).toBe("ok");
         expect(health.name).toBe("memory");
 
         // Process memory
-        expect(health.data.process).toHaveProperty("rss");
-        expect(health.data.process).toHaveProperty("heapTotal");
-        expect(health.data.process).toHaveProperty("heapUsed");
-        expect(health.data.process).toHaveProperty("external");
-        expect(health.data.process).toHaveProperty("arrayBuffers");
+        expect(data.process).toHaveProperty("rss");
+        expect(data.process).toHaveProperty("heapTotal");
+        expect(data.process).toHaveProperty("heapUsed");
+        expect(data.process).toHaveProperty("external");
+        expect(data.process).toHaveProperty("arrayBuffers");
 
         // System memory
-        expect(health.data.system).toHaveProperty("total");
-        expect(health.data.system).toHaveProperty("free");
-        expect(health.data.system).toHaveProperty("used");
+        expect(data.system).toHaveProperty("total");
+        expect(data.system).toHaveProperty("free");
+        expect(data.system).toHaveProperty("used");
 
-        expect(typeof health.data.system.used).toBe("number");
+        expect(typeof data.system.used).toBe("number");
     });
 });
 
@@ -79,7 +80,8 @@ describe("health/memory handler — external mode", () => {
             name: "memory"
         });
 
-        expect(payload.data).toHaveProperty("process");
-        expect(payload.data).toHaveProperty("system");
+        const payloadData = payload.data as any;
+        expect(payloadData).toHaveProperty("process");
+        expect(payloadData).toHaveProperty("system");
     });
 });

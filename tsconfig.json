@@ -6,7 +6,7 @@
     "lib": ["ES2022"],
     "skipLibCheck": true,
 
-    "moduleResolution": "Bundler",
+    "moduleResolution": "node",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -22,17 +22,20 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@src/*": ["@src/*"],
-      "@helpers/*": ["@src/helpers/*"],
-      "@cache/*" : ["@src/cache/*"],
-      "@services/*": ["@src/services/*"],
-      "@controllers/*": ["@src/controllers/*"],
-      "@models/*": ["@src/models/*"],
-      "@middleware/*": ["@src/middleware/*"],
-      "@loaders/*": ["@src/loaders/*"],
-      "@utils/*": ["@src/utils/*"],
-      "@routes/*": ["@src/routes/*"],
-      "@db/*": ["@src/db/*"]
+      "@src": ["src"],
+      "@src/*": ["src/*"],
+      "@helpers/*": ["src/helpers/*"],
+      "@cache/*": ["src/cache/*"],
+      "@services/*": ["src/services/*"],
+      "@controllers/*": ["src/controllers/*"],
+      "@models/*": ["src/models/*"],
+      "@middleware/*": ["src/middleware/*"],
+      "@loaders/*": ["src/loaders/*"],
+      "@utils/*": ["src/utils/*"],
+      "@routes/*": ["src/routes/*"],
+      "@schemas/*": ["src/schemas/*"],
+      "@tests/*": ["tests/*"],
+      "@db/*": ["src/db/*"]
     }
   },
   "include": ["src/**/*"]

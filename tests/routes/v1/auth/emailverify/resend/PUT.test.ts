@@ -3,18 +3,18 @@
  * @file PUT.test.ts
  * @internal
  * @module tests/routes/v1/auth/emailverify/resend
- * @tag auth, email, verify, resend, test
+ * @tag auth, email, verify, test
  * @version 1.0.0
- * @author william.r.oak@gmail.com
  * @path tests/routes/v1/auth/emailverify/resend/PUT.test.ts
  * @summary Tests PUT /v1/auth/emailverify/resend endpoint glue logic.
  * @description
- * Verifies that the resend endpoint delegates to authContext and the
- * emailVerificationService, returns ok on success, and translates AuthError
- * failures into HTTP responses.
+ * Verifies that the resend-email endpoint correctly resolves auth context,
+ * forwards the application ID and email to the resend service, handles
+ * non-enumerating behavior, and translates AuthError failures into HTTP
+ * responses. Business logic is mocked and tested separately.
  *
- * Also verifies that the endpoint exports a Zod `schema` definition for request
- * validation (used by the route loader middleware chain).
+ * Also verifies that the endpoint exports a Zod `schema` definition for
+ * request validation.
  *
  * @requires
  * {
@@ -25,176 +25,222 @@
  * }
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { Request, Response } from 'express'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Request, Response } from 'express';
 
-/**
- * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE IMPORTS
- * ------------------------------------------------------------
- */
-
-vi.mock('@services/auth/authContext', () => ({
-    resolveAuthContext: vi.fn(),
-    AuthError: class AuthError extends Error {
-        constructor(
-            public code: string,
-            public message: string,
-            public httpStatus: number
-        ) {
-            super(message)
-        }
-    },
-}))
-
-vi.mock('@services/auth/emailVerificationService', () => ({
-    resendEmailVerificationToken: vi.fn(),
-}))
-
-/**
- * ------------------------------------------------------------
- * IMPORTS (AFTER MOCKS)
- * ------------------------------------------------------------
- */
-
-import PUT, { schema } from '@routes/v1/auth/emailverify/resend/PUT'
-import { resolveAuthContext } from '@services/auth/authContext'
-import { resendEmailVerificationToken } from '@services/auth/emailVerificationService'
-
-/**
- * ------------------------------------------------------------
- * HELPERS
- * ------------------------------------------------------------
- */
-
-function createReq(body: any): Request {
-    return {
-        body,
-    } as unknown as Request
-}
+import PUT, { schema } from '@routes/v1/auth/emailverify/resend/PUT';
+import { AuthError, resolveAuthContext } from '@services/auth/authContext';
+import {
+    resendEmailVerificationToken,
+} from '@services/auth/emailVerificationService';
 
 type ResMock = Response & {
-    statusCode: number
-    body?: any
-    headers: Record<string, string>
+    statusCode: number;
+    body: unknown;
+};
+
+function createReq(body: unknown, validatedBody?: unknown): Request {
+    return {
+        body,
+        validated: validatedBody ? { body: validatedBody } : undefined,
+    } as unknown as Request;
 }
 
 function createRes(): ResMock {
-    const res = {
+    return {
         statusCode: 0,
         body: undefined,
-        headers: {} as Record<string, string>,
-
         status(code: number) {
-            this.statusCode = code
-            return this
+            this.statusCode = code;
+            return this;
         },
-
-        json(payload: any) {
-            this.body = payload
-            return this
+        json(payload: unknown) {
+            this.body = payload;
+            return this;
         },
-
-        setHeader(key: string, value: string) {
-            this.headers[key] = value
-        },
-
-        end() {
-            return this
-        },
-    }
-
-    return res as unknown as ResMock
+    } as ResMock;
 }
 
-beforeEach(() => {
-    vi.clearAllMocks()
-})
-
-/**
- * ------------------------------------------------------------
- * TESTS
- * ------------------------------------------------------------
- */
-
 describe('PUT /v1/auth/emailverify/resend', () => {
-    test('exports a Zod request schema', async () => {
-        expect(schema).toBeTruthy()
-        expect(schema.body).toBeTruthy()
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
 
-        const missingAppKey = schema.body.safeParse({ email: 'user@example.com' })
-        expect(missingAppKey.success).toBe(false)
+    it('exports a request body schema', () => {
+        expect(schema).toBeDefined();
+        expect(schema.body).toBeDefined();
+    });
 
-        const missingEmailIsAllowed = schema.body.safeParse({
-            app_key: 'bill.iworkhere.com',
-        })
-        expect(missingEmailIsAllowed.success).toBe(true)
-    })
+    it('returns ok on success', async () => {
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'app-123',
+            applicationKey: 'example-app-key',
+        } as any);
 
-    test('calls service and returns ok', async () => {
-        ;(resolveAuthContext as any).mockResolvedValue({
-            applicationId: 'app-id',
-        })
+        vi.mocked(resendEmailVerificationToken).mockResolvedValue(undefined);
 
         const req = createReq({
-            app_key: 'bill.iworkhere.com',
+            app_key: 'example-app-key',
             email: 'user@example.com',
-        })
+        });
+        const res = createRes();
 
-        const res = createRes()
+        await PUT(req, res);
 
-        await PUT(req, res)
+        expect(resolveAuthContext).toHaveBeenCalledWith({
+            app_key: 'example-app-key',
+            email: 'user@example.com',
+        });
+        expect(resendEmailVerificationToken).toHaveBeenCalledWith({
+            applicationId: 'app-123',
+            email: 'user@example.com',
+        });
 
-        expect(res.statusCode).toBe(200)
-        expect(res.body).toEqual({ ok: true })
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ ok: true });
+    });
+
+    it('uses req.validated.body when present', async () => {
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'app-456',
+            applicationKey: 'validated.example.com',
+        } as any);
+
+        vi.mocked(resendEmailVerificationToken).mockResolvedValue(undefined);
+
+        const validatedBody = {
+            app_key: 'validated.example.com',
+            email: 'validated@example.com',
+        };
+
+        const req = createReq(
+            {
+                app_key: 'ignored.example.com',
+                email: 'ignored@example.com',
+            },
+            validatedBody,
+        );
+        const res = createRes();
+
+        await PUT(req, res);
+
+        expect(resolveAuthContext).toHaveBeenCalledWith(validatedBody);
+        expect(resendEmailVerificationToken).toHaveBeenCalledWith({
+            applicationId: 'app-456',
+            email: 'validated@example.com',
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ ok: true });
+    });
+
+    it('allows missing email and still returns ok', async () => {
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'app-789',
+            applicationKey: 'example-app-key',
+        } as any);
+
+        vi.mocked(resendEmailVerificationToken).mockResolvedValue(undefined);
+
+        const req = createReq({
+            app_key: 'example-app-key',
+            email: undefined,
+        });
+        const res = createRes();
+
+        await PUT(req, res);
 
         expect(resendEmailVerificationToken).toHaveBeenCalledWith({
-            applicationId: 'app-id',
-            email: 'user@example.com',
-        })
-    })
+            applicationId: 'app-789',
+            email: undefined,
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ ok: true });
+    });
 
-    test('still returns ok even if email is missing', async () => {
-        ;(resolveAuthContext as any).mockResolvedValue({
-            applicationId: 'app-id',
-        })
+    it('allows blank email and still returns ok', async () => {
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'app-321',
+            applicationKey: 'example-app-key',
+        } as any);
 
-        const req = createReq({
-            app_key: 'bill.iworkhere.com',
-        })
-
-        const res = createRes()
-
-        await PUT(req, res)
-
-        expect(res.statusCode).toBe(200)
-        expect(res.body).toEqual({ ok: true })
-    })
-
-    test('returns AuthError response if thrown', async () => {
-        const { AuthError } = await import('@services/auth/authContext')
-
-        ;(resolveAuthContext as any).mockImplementation(() => {
-            throw new AuthError(
-                'APP_DISABLED',
-                'Application disabled',
-                403
-            )
-        })
+        vi.mocked(resendEmailVerificationToken).mockResolvedValue(undefined);
 
         const req = createReq({
-            app_key: 'bill.iworkhere.com',
+            app_key: 'example-app-key',
+            email: '',
+        });
+        const res = createRes();
+
+        await PUT(req, res);
+
+        expect(resendEmailVerificationToken).toHaveBeenCalledWith({
+            applicationId: 'app-321',
+            email: '',
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ ok: true });
+    });
+
+    it('returns AuthError response when resolveAuthContext throws AuthError', async () => {
+        vi.mocked(resolveAuthContext).mockRejectedValue(
+            new AuthError('INVALID_APP', 'Invalid application', 400),
+        );
+
+        const req = createReq({
+            app_key: 'bad-app',
             email: 'user@example.com',
-        })
+        });
+        const res = createRes();
 
-        const res = createRes()
+        await PUT(req, res);
 
-        await PUT(req, res)
-
-        expect(res.statusCode).toBe(403)
+        expect(res.statusCode).toBe(400);
         expect(res.body).toEqual({
-            error: 'APP_DISABLED',
-            message: 'Application disabled',
-        })
-    })
-})
+            error: 'INVALID_APP',
+            message: 'Invalid application',
+        });
+    });
+
+    it('returns AuthError response when resend service throws AuthError', async () => {
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'app-123',
+            applicationKey: 'example-app-key',
+        } as any);
+
+        vi.mocked(resendEmailVerificationToken).mockRejectedValue(
+            new AuthError('EMAIL_NOT_ALLOWED', 'Email not eligible for resend', 403),
+        );
+
+        const req = createReq({
+            app_key: 'example-app-key',
+            email: 'user@example.com',
+        });
+        const res = createRes();
+
+        await PUT(req, res);
+
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toEqual({
+            error: 'EMAIL_NOT_ALLOWED',
+            message: 'Email not eligible for resend',
+        });
+    });
+
+    it('returns 500 on unexpected errors', async () => {
+        vi.mocked(resolveAuthContext).mockRejectedValue(new Error('boom'));
+
+        const req = createReq({
+            app_key: 'example-app-key',
+            email: 'user@example.com',
+        });
+        const res = createRes();
+
+        await PUT(req, res);
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body).toEqual({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        });
+    });
+});

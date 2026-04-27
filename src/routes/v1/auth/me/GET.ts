@@ -96,12 +96,14 @@ export async function GET(req: Request, res: Response): Promise<void> {
     const reqId =
         (req.get('x-request-id')?.trim() || '').slice(0, 128) || randomUUID()
 
-    res.on('finish', () => {
-        dbg(reqId, 'finish', {
-            statusCode: res.statusCode,
-            durationMs: Date.now() - start,
+    if (typeof (res as any).on === 'function') {
+        (res as any).on('finish', () => {
+            dbg(reqId, 'finish', {
+                statusCode: res.statusCode,
+                durationMs: Date.now() - start,
+            })
         })
-    })
+    }
 
     dbg(reqId, 'enter', {
         method: req.method,
