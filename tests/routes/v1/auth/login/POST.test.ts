@@ -5,7 +5,7 @@
  * @module tests/routes/v1/auth/login
  * @tag auth, login, test
  * @version 1.0.0
- * @path tests/routes/v1/auth/login/PUT.test.ts
+ * @path tests/routes/v1/auth/login/POST.test.ts
  * @summary Tests POST /v1/auth/login endpoint glue logic.
  * @description
  * Verifies that the login endpoint correctly orchestrates auth services,
@@ -13,7 +13,7 @@
  * responses. Auth business logic is mocked and tested separately.
  *
  * Also verifies that the endpoint exports a Zod `schema` definition for
- * request validation (used by the route loader middleware chain).
+ * request validation.
  *
  * @requires
  * {
@@ -26,165 +26,259 @@
  * }
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest'
-import type { Request, Response } from 'express'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Request, Response } from 'express';
 
-/**
- * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE IMPORTS
- * ------------------------------------------------------------
- */
-
-vi.mock('@services/auth/authContext', () => ({
-    resolveAuthContext: vi.fn(),
-    AuthError: class AuthError extends Error {
-        constructor(
-            public code: string,
-            public message: string,
-            public httpStatus: number
-        ) {
-            super(message)
-        }
-    },
-}))
-
+// Local mocks MUST be declared before importing the modules that use them.
+// This keeps service unit tests free to import the real implementations.
 vi.mock('@services/auth/authUserResolver', () => ({
-    resolveUserForApplication: vi.fn(),
-}))
+  __esModule: true,
+  resolveUserForApplication: vi.fn(),
+}));
 
 vi.mock('@services/auth/passwordService', () => ({
-    verifyPassword: vi.fn(),
-}))
+  __esModule: true,
+  verifyPassword: vi.fn(),
+}));
 
 vi.mock('@services/auth/tokenService', () => ({
-    issueLoginTokens: vi.fn(),
-}))
+  __esModule: true,
+  issueLoginTokens: vi.fn(),
+}));
 
-/**
- * ------------------------------------------------------------
- * IMPORTS (AFTER MOCKS)
- * ------------------------------------------------------------
- */
-
-import POST from '@routes/v1/auth/login/POST.ts'
-import { resolveAuthContext, AuthError } from '@services/auth/authContext'
-import { resolveUserForApplication } from '@services/auth/authUserResolver'
-import { verifyPassword } from '@services/auth/passwordService'
-import { issueLoginTokens } from '@services/auth/tokenService'
-
-/**
- * ------------------------------------------------------------
- * HELPERS
- * ------------------------------------------------------------
- */
-
-function createReq(body: any): Request {
-    return {
-        body,
-    } as unknown as Request
-}
+import POST, { schema } from '@routes/v1/auth/login/POST';
+import { AuthError, resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserForApplication } from '@services/auth/authUserResolver';
+import { verifyPassword } from '@services/auth/passwordService';
+import { issueLoginTokens } from '@services/auth/tokenService';
 
 type ResMock = Response & {
-    statusCode: number
-    body?: any
-    headers: Record<string, string>
+  statusCode: number;
+  body: unknown;
+};
+
+function createReq(body: unknown, validatedBody?: unknown): Request {
+  return {
+    body,
+    validated: validatedBody ? { body: validatedBody } : undefined,
+  } as unknown as Request;
 }
 
 function createRes(): ResMock {
-    const res = {
-        statusCode: 0,
-        body: undefined,
-        headers: {} as Record<string, string>,
-
-        status(code: number) {
-            this.statusCode = code
-            return this
-        },
-
-        json(payload: any) {
-            this.body = payload
-            return this
-        },
-
-        setHeader(key: string, value: string) {
-            this.headers[key] = value
-        },
-
-        end() {
-            return this
-        },
-    }
-
-    return res as unknown as ResMock
+  return {
+    statusCode: 0,
+    body: undefined,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  } as ResMock;
 }
 
-beforeEach(() => {
-    vi.clearAllMocks()
-})
-
-/**
- * ------------------------------------------------------------
- * TESTS
- * ------------------------------------------------------------
- */
-
 describe('POST /v1/auth/login', () => {
-    test('returns tokens on successful login', async () => {
-        ;(resolveAuthContext as any).mockResolvedValue({
-            applicationId: 'app-id',
-            applicationKey: 'bill.iworkhere.com',
-        })
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-        ;(resolveUserForApplication as any).mockResolvedValue({
-            userId: 'user-id',
-            username: 'bill',
-            email: 'bill@example.com',
-            role: 'owner',
-        })
+  it('exports a request body schema', () => {
+    expect(schema).toBeDefined();
+    expect(schema.body).toBeDefined();
+  });
 
-        ;(verifyPassword as any).mockResolvedValue(undefined)
+  it('returns user, application, and tokens on success', async () => {
+    vi.mocked(resolveAuthContext).mockResolvedValue({
+      applicationId: 'app-123',
+      applicationKey: 'bill.iworkhere.com',
+    } as any);
 
-        ;(issueLoginTokens as any).mockResolvedValue({
-            access: {
-                token: 'access-token',
-                expiresAt: new Date('2030-01-01'),
-            },
-            refresh: {
-                token: 'refresh-token',
-                expiresAt: new Date('2030-02-01'),
-            },
-        })
+    vi.mocked(resolveUserForApplication).mockResolvedValue({
+      userId: 'user-123',
+      username: 'bill',
+      email: 'bill@example.com',
+    } as any);
 
-        const req = createReq({
-            app_key: 'bill.iworkhere.com',
-            identifier: 'bill',
-            password: 'password',
-        })
+    vi.mocked(verifyPassword).mockResolvedValue(undefined);
 
-        const res = createRes()
+    vi.mocked(issueLoginTokens).mockResolvedValue({
+      access: {
+        token: 'access-token',
+        expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      },
+      refresh: {
+        token: 'refresh-token',
+        expiresAt: new Date('2030-01-02T00:00:00.000Z'),
+      },
+    } as any);
 
-        await POST(req, res)
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      identifier: 'bill',
+      password: 'plaintext-password',
+    });
+    const res = createRes();
 
-        expect(res.statusCode).toBe(200)
-        expect(res.body.user.username).toBe('bill')
-        expect(res.body.tokens.access.token).toBe('access-token')
-        expect(res.body.tokens.refresh.token).toBe('refresh-token')
-    })
+    await POST(req, res);
 
-    test('translates AuthError to HTTP response', async () => {
-        ;(resolveAuthContext as any).mockRejectedValue(
-            new AuthError('APP_DISABLED', 'Application is disabled', 403)
-        )
+    expect(resolveAuthContext).toHaveBeenCalledWith({
+      app_key: 'bill.iworkhere.com',
+      identifier: 'bill',
+      password: 'plaintext-password',
+    });
+    expect(resolveUserForApplication).toHaveBeenCalledWith('bill', 'app-123');
+    expect(verifyPassword).toHaveBeenCalledWith(
+      'user-123',
+      'plaintext-password',
+    );
+    expect(issueLoginTokens).toHaveBeenCalledWith('user-123', 'app-123');
 
-        const req = createReq({ app_key: 'disabled.app' })
-        const res = createRes()
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      user: {
+        id: 'user-123',
+        username: 'bill',
+        email: 'bill@example.com',
+        status: 'active',
+      },
+      application: {
+        id: 'app-123',
+        app_key: 'bill.iworkhere.com',
+      },
+      tokens: {
+        access: {
+          token: 'access-token',
+          expires_at: '2030-01-01T00:00:00.000Z',
+        },
+        refresh: {
+          token: 'refresh-token',
+          expires_at: '2030-01-02T00:00:00.000Z',
+        },
+      },
+    });
+  });
 
-        await POST(req, res)
+  it('uses req.validated.body when present', async () => {
+    vi.mocked(resolveAuthContext).mockResolvedValue({
+      applicationId: 'app-456',
+      applicationKey: 'validated.example.com',
+    } as any);
 
-        expect(res.statusCode).toBe(403)
-        expect(res.body).toEqual({
-            error: 'APP_DISABLED',
-            message: 'Application is disabled',
-        })
-    })
-})
+    vi.mocked(resolveUserForApplication).mockResolvedValue({
+      userId: 'user-456',
+      username: 'validated-user',
+      email: 'validated@example.com',
+    } as any);
+
+    vi.mocked(verifyPassword).mockResolvedValue(undefined);
+
+    vi.mocked(issueLoginTokens).mockResolvedValue({
+      access: {
+        token: 'access-token-2',
+        expiresAt: new Date('2030-02-01T00:00:00.000Z'),
+      },
+      refresh: {
+        token: 'refresh-token-2',
+        expiresAt: new Date('2030-02-02T00:00:00.000Z'),
+      },
+    } as any);
+
+    const validatedBody = {
+      app_key: 'validated.example.com',
+      identifier: 'validated-user',
+      password: 'validated-password',
+    };
+
+    const req = createReq(
+      {
+        app_key: 'ignored.example.com',
+        identifier: 'ignored',
+        password: 'ignored',
+      },
+      validatedBody,
+    );
+    const res = createRes();
+
+    await POST(req, res);
+
+    expect(resolveAuthContext).toHaveBeenCalledWith(validatedBody);
+    expect(resolveUserForApplication).toHaveBeenCalledWith(
+      'validated-user',
+      'app-456',
+    );
+    expect(verifyPassword).toHaveBeenCalledWith(
+      'user-456',
+      'validated-password',
+    );
+    expect(issueLoginTokens).toHaveBeenCalledWith('user-456', 'app-456');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('returns AuthError response when resolveAuthContext throws AuthError', async () => {
+    vi.mocked(resolveAuthContext).mockRejectedValue(
+      new AuthError('INVALID_APP', 'Invalid application', 400),
+    );
+
+    const req = createReq({
+      app_key: 'bad-app',
+      identifier: 'bill',
+      password: 'plaintext-password',
+    });
+    const res = createRes();
+
+    await POST(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({
+      error: 'INVALID_APP',
+      message: 'Invalid application',
+    });
+  });
+
+  it('returns AuthError response when downstream auth service throws AuthError', async () => {
+    vi.mocked(resolveAuthContext).mockResolvedValue({
+      applicationId: 'app-123',
+      applicationKey: 'bill.iworkhere.com',
+    } as any);
+
+    vi.mocked(resolveUserForApplication).mockRejectedValue(
+      new AuthError('USER_NOT_ALLOWED', 'User not allowed for this app', 403),
+    );
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      identifier: 'bill',
+      password: 'plaintext-password',
+    });
+    const res = createRes();
+
+    await POST(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      error: 'USER_NOT_ALLOWED',
+      message: 'User not allowed for this app',
+    });
+  });
+
+  it('returns 500 on unexpected errors', async () => {
+    vi.mocked(resolveAuthContext).mockRejectedValue(new Error('boom'));
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      identifier: 'bill',
+      password: 'plaintext-password',
+    });
+    const res = createRes();
+
+    await POST(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({
+      error: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+    });
+  });
+});

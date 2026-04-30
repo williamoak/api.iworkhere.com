@@ -1,33 +1,11 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach, beforeAll } from 'vitest'
 
 /**
- * ------------------------------------------------------------
- * MOCKS — MUST APPEAR BEFORE IMPORTS
- * ------------------------------------------------------------
- */
-
-vi.mock('@services/dbService', () => ({
-    db: {
-        select: vi.fn(),
-    },
-}))
-
-vi.mock('@db/schema', () => ({
-    applications: {
-        id: 'id',
-        appKey: 'app_key',
-        isEnabled: 'is_enabled',
-    },
-}))
-
-/**
- * ------------------------------------------------------------
- * IMPORTS (AFTER MOCKS)
- * ------------------------------------------------------------
+ * All mocks are provided by vitest.setup.ts - no local mocks needed
  */
 
 import { db } from '@services/dbService'
-import { resolveAuthContext } from '@services/auth/authContext'
+import { resolveAuthContext as importedResolveAuthContext, AuthError as ImportedAuthError } from '@services/auth/authContext'
 
 /**
  * ------------------------------------------------------------
@@ -46,8 +24,19 @@ function mockDbResult(rows: any[]) {
 }
 
 beforeEach(() => {
-    vi.clearAllMocks()
+    // Reset only the db.select mock's call history, keep the mock itself intact
+    vi.mocked(db.select).mockClear()
 })
+
+// Use the real implementation even though the module is mocked globally in vitest.setup.ts
+let resolveAuthContext: typeof import('@services/auth/authContext').resolveAuthContext;
+let AuthError: typeof import('@services/auth/authContext').AuthError;
+
+beforeAll(async () => {
+  const actual = await vi.importActual<typeof import('@services/auth/authContext')>('@services/auth/authContext');
+  resolveAuthContext = actual.resolveAuthContext;
+  AuthError = actual.AuthError;
+});
 
 /**
  * ------------------------------------------------------------

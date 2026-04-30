@@ -58,7 +58,8 @@ describe("health/api handler (internal mode)", () => {
         expect(result.status).toBe("ok");
         expect(result.name).toBe("api");
         expect(result.data).toHaveProperty("uptime");
-        expect(typeof result.data.uptime).toBe("number");
+        const data = result.data as any;
+        expect(typeof data.uptime).toBe("number");
 
     });
 });

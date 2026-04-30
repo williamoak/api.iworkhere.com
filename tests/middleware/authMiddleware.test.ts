@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
 
-import { authMiddleware } from '@src/middleware/authMiddleware';
+import { authMiddleware } from '@middleware/authMiddleware';
 import { db } from '@src/services/dbService';
 
 type ResMock = Response & {

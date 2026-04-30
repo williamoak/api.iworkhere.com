@@ -9,7 +9,7 @@
  * @summary Tests email verification service logic.
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { describe, test, expect, vi, beforeEach, beforeAll } from 'vitest'
 
 /**
  * ------------------------------------------------------------
@@ -57,11 +57,19 @@ vi.mock('@helpers/config', () => ({
  */
 
 import { db } from '@services/dbService'
-import {
-    verifyEmailToken,
-    issueEmailVerificationToken,
-    resendEmailVerificationToken,
-} from '@services/auth/emailVerificationService'
+// We'll import the real implementation at runtime because the module is
+// globally mocked in tests/vitest.setup.ts. Use vi.importActual to obtain
+// the real functions so we can test them here.
+let verifyEmailToken: typeof import('@services/auth/emailVerificationService').verifyEmailToken;
+let issueEmailVerificationToken: typeof import('@services/auth/emailVerificationService').issueEmailVerificationToken;
+let resendEmailVerificationToken: typeof import('@services/auth/emailVerificationService').resendEmailVerificationToken;
+
+beforeAll(async () => {
+    const actual = await vi.importActual<typeof import('@services/auth/emailVerificationService')>('@services/auth/emailVerificationService');
+    verifyEmailToken = actual.verifyEmailToken;
+    issueEmailVerificationToken = actual.issueEmailVerificationToken;
+    resendEmailVerificationToken = actual.resendEmailVerificationToken;
+});
 
 /**
  * ------------------------------------------------------------

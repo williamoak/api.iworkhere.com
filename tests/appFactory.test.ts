@@ -53,7 +53,7 @@ describe("appFactory", () => {
         const { createBaseApp } = await import("@src/appFactory");
         await createBaseApp();
 
-        const corsOptions = corsMock.mock.calls[0]?.[0];
+        const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
         expect(typeof corsOptions.origin).toBe("function");
 
@@ -80,7 +80,7 @@ describe("appFactory", () => {
         const { createBaseApp } = await import("@src/appFactory");
         await createBaseApp();
 
-        const corsOptions = corsMock.mock.calls[0]?.[0];
+        const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
         expect(typeof corsOptions.origin).toBe("function");
 
@@ -104,7 +104,7 @@ describe("appFactory", () => {
         const { createBaseApp } = await import("@src/appFactory");
         await createBaseApp();
 
-        const corsOptions = corsMock.mock.calls[0]?.[0];
+        const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
         expect(typeof corsOptions.origin).toBe("function");
 
@@ -127,7 +127,7 @@ describe("appFactory", () => {
         const { createBaseApp } = await import("@src/appFactory");
         await createBaseApp();
 
-        const corsOptions = corsMock.mock.calls[0]?.[0];
+        const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
         expect(typeof corsOptions.origin).toBe("function");
 
@@ -153,7 +153,7 @@ describe("appFactory", () => {
         const { createBaseApp } = await import("@src/appFactory");
         await createBaseApp();
 
-        const corsOptions = corsMock.mock.calls[0]?.[0];
+        const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
         expect(typeof corsOptions.origin).toBe("function");
 

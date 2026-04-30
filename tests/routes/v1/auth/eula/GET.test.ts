@@ -5,138 +5,195 @@
  * @module tests/routes/v1/auth/eula
  * @tag auth, eula, test
  * @version 1.0.0
- * @author william.r.oak@gmail.com
  * @path tests/routes/v1/auth/eula/GET.test.ts
- * @summary Unit tests for auth EULA endpoint logic (repository-driven).
+ * @summary Tests GET /v1/auth/eula endpoint glue logic.
  * @description
- * Verifies that auth/eula:
- *   - returns the latest EULA record when available
- *   - returns 404 when no EULA record exists
- *   - serializes updatedAt to ISO-8601
- *   - safely handles EULA value as jsonb OR JSON string
+ * Verifies that the EULA endpoint correctly retrieves the latest record,
+ * normalizes stored values into the public response contract, and returns
+ * a 404 when no EULA exists. Repository access is mocked and tested separately.
  *
- * @query
- *   {}
+ * Also verifies that the endpoint exports a handler factory seam for unit tests.
+ *
+ * @requires
+ * {
+ *   "services": [
+ *     "dbService"
+ *   ]
+ * }
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Request, Response } from 'express'
-import { __test__ } from '@routes/v1/auth/eula/GET'
-import type { EulaRepository } from '@routes/v1/auth/eula/GET'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Request, Response } from 'express';
 
-const { fetchLatestEula, makeGetEulaHandler } = __test__
-
-function createReq(): Request {
-    return {} as unknown as Request
-}
+import { __test__, makeGetEulaHandler } from '@routes/v1/auth/eula/GET';
 
 type ResMock = Response & {
-    statusCode: number
-    body?: any
+  statusCode: number;
+  body: unknown;
+};
+
+type EulaRecord = {
+  name: 'eula';
+  version: string;
+  value: unknown;
+  updatedAt: Date;
+};
+
+function createReq(): Request {
+  return {} as Request;
 }
 
 function createRes(): ResMock {
-    const res = {
-        statusCode: 0,
-        body: undefined,
-
-        status(code: number) {
-            this.statusCode = code
-            return this
-        },
-
-        json(payload: any) {
-            this.body = payload
-            return this
-        },
-    }
-
-    return res as unknown as ResMock
+  return {
+    statusCode: 0,
+    body: undefined,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  } as ResMock;
 }
 
-beforeEach(() => {
-    vi.clearAllMocks()
-})
+function createRepo(record: EulaRecord | null) {
+  return {
+    getLatest: vi.fn().mockResolvedValue(record),
+  };
+}
 
-describe('fetchLatestEula (unit)', () => {
-    it('returns the record from the repository', async () => {
-        const repo: EulaRepository = {
-            getLatest: vi.fn().mockResolvedValue({
-                name: 'eula',
-                version: '2.10',
-                value: { effectiveDate: '2026-02-01' },
-                updatedAt: new Date('2026-02-01T00:00:00Z'),
-            }),
-        }
+describe('GET /v1/auth/eula', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-        const record = await fetchLatestEula(repo)
+  it('exports the unit-test seams', () => {
+    expect(__test__).toBeDefined();
+    expect(__test__.fetchLatestEula).toBeDefined();
+    expect(__test__.makeGetEulaHandler).toBeDefined();
+    expect(makeGetEulaHandler).toBeDefined();
+  });
 
-        expect(record?.name).toBe('eula')
-        expect(record?.version).toBe('2.10')
-        expect((record?.value as any).effectiveDate).toBe('2026-02-01')
-    })
+  it('returns 200 with normalized EULA record', async () => {
+    const record: EulaRecord = {
+      name: 'eula',
+      version: '1.00',
+      value: {
+        title: 'EULA',
+        body: 'Terms and conditions',
+      },
+      updatedAt: new Date('2030-01-01T00:00:00.000Z'),
+    };
 
-    it('returns null when repository returns null', async () => {
-        const repo: EulaRepository = {
-            getLatest: vi.fn().mockResolvedValue(null),
-        }
+    const repo = createRepo(record);
+    const handler = makeGetEulaHandler(repo);
+    const req = createReq();
+    const res = createRes();
 
-        const record = await fetchLatestEula(repo)
+    await handler(req, res);
 
-        expect(record).toBeNull()
-    })
-})
+    expect(repo.getLatest).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      name: 'eula',
+      version: '1.00',
+      value: {
+        title: 'EULA',
+        body: 'Terms and conditions',
+      },
+      updatedAt: '2030-01-01T00:00:00.000Z',
+    });
+  });
 
-describe('GET /v1/auth/eula handler (unit)', () => {
-    it('returns 200 with the EULA payload and ISO updatedAt', async () => {
-        const repo: EulaRepository = {
-            getLatest: vi.fn().mockResolvedValue({
-                name: 'eula',
-                version: '2.10',
-                value: { effectiveDate: '2026-02-01' },
-                updatedAt: new Date('2026-02-01T00:00:00Z'),
-            }),
-        }
+  it('returns 404 when no EULA exists', async () => {
+    const repo = createRepo(null);
+    const handler = makeGetEulaHandler(repo);
+    const req = createReq();
+    const res = createRes();
 
-        const handler = makeGetEulaHandler(repo)
+    await handler(req, res);
 
-        const req = createReq()
-        const res = createRes()
+    expect(repo.getLatest).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({
+      error: 'EULA not found',
+    });
+  });
 
-        await handler(req, res)
+  it('parses JSON string values into objects', async () => {
+    const record: EulaRecord = {
+      name: 'eula',
+      version: '2.00',
+      value: '{"accepted":true,"items":["a","b"]}',
+      updatedAt: new Date('2030-02-01T00:00:00.000Z'),
+    };
 
-        expect(res.statusCode).toBe(200)
-        expect(res.body).toEqual({
-            name: 'eula',
-            version: '2.10',
-            value: { effectiveDate: '2026-02-01' },
-            updatedAt: '2026-02-01T00:00:00.000Z',
-        })
-    })
+    const repo = createRepo(record);
+    const handler = makeGetEulaHandler(repo);
+    const req = createReq();
+    const res = createRes();
 
-    it('parses value when repository returns a JSON string', async () => {
-        const repo: EulaRepository = {
-            getLatest: vi.fn().mockResolvedValue({
-                name: 'eula',
-                version: '2.10',
-                value: '{"effectiveDate":"2026-02-01"}',
-                updatedAt: new Date('2026-02-01T00:00:00Z'),
-            }),
-        }
+    await handler(req, res);
 
-        const handler = makeGetEulaHandler(repo)
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      name: 'eula',
+      version: '2.00',
+      value: {
+        accepted: true,
+        items: ['a', 'b'],
+      },
+      updatedAt: '2030-02-01T00:00:00.000Z',
+    });
+  });
 
-        const req = createReq()
-        const res = createRes()
+  it('preserves non-JSON string values as-is', async () => {
+    const record: EulaRecord = {
+      name: 'eula',
+      version: '3.00',
+      value: 'plain text eula content',
+      updatedAt: new Date('2030-03-01T00:00:00.000Z'),
+    };
 
-        await handler(req, res)
+    const repo = createRepo(record);
+    const handler = makeGetEulaHandler(repo);
+    const req = createReq();
+    const res = createRes();
 
-        expect(res.statusCode).toBe(200)
-        expect(res.body).toEqual({
-            name: 'eula',
-            version: '2.10',
-            value: { effectiveDate: '2026-02-01' },
-            updatedAt: '2026-02-01T00:00:00.000Z',
-        })
-    })
-})
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      name: 'eula',
+      version: '3.00',
+      value: 'plain text eula content',
+      updatedAt: '2030-03-01T00:00:00.000Z',
+    });
+  });
+
+  it('preserves empty string values as-is', async () => {
+    const record: EulaRecord = {
+      name: 'eula',
+      version: '4.00',
+      value: '   ',
+      updatedAt: new Date('2030-04-01T00:00:00.000Z'),
+    };
+
+    const repo = createRepo(record);
+    const handler = makeGetEulaHandler(repo);
+    const req = createReq();
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      name: 'eula',
+      version: '4.00',
+      value: '   ',
+      updatedAt: '2030-04-01T00:00:00.000Z',
+    });
+  });
+});

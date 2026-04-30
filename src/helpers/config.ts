@@ -72,6 +72,13 @@ const env = process.env.NODE_ENV ?? 'development';
  */
 const envFiles = ['.env', '.env.local', `.env.${env}`, `.env.${env}.local`];
 
+// When running tests, many projects keep credentials/config in .env.development.
+// To make tests more forgiving when NODE_ENV is 'test', also attempt to load
+// `.env.development` as a fallback so values defined there are available.
+if (env === 'test') {
+  envFiles.push('.env.development');
+}
+
 /**
  * Project root
  */

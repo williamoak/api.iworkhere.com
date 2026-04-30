@@ -115,7 +115,8 @@ describe("executeChildHealth", () => {
         const result = await executeChildHealth(req, "missing");
 
         expect(result.status).toBe("fail");
-        expect(result.data.error).toContain("not found");
+        const data0 = result.data as any;
+        expect(data0.error).toContain("not found");
     });
 
     it("returns failure if no GET handler exists", async () => {
@@ -130,7 +131,8 @@ describe("executeChildHealth", () => {
         const result = await executeChildHealth(req, "api");
 
         expect(result.status).toBe("fail");
-        expect(result.data.error).toContain("No GET handler");
+        const data1 = result.data as any;
+        expect(data1.error).toContain("No GET handler");
     });
 
     it("executes a valid child GET handler", async () => {
@@ -153,7 +155,8 @@ describe("executeChildHealth", () => {
         const result = await executeChildHealth(req, "api");
 
         expect(result.status).toBe("ok");
-        expect(result.data.uptime).toBe(1);
+        const data2 = result.data as any;
+        expect(data2.uptime).toBe(1);
     });
 
     it("wraps non-standard return values", async () => {
@@ -172,7 +175,8 @@ describe("executeChildHealth", () => {
         const result = await executeChildHealth(req, "api");
 
         expect(result.status).toBe("ok");
-        expect(result.data).toEqual({ foo: "bar" });
+        const data3 = result.data as any;
+        expect(data3).toEqual({ foo: "bar" });
     });
 
     it("handles thrown errors gracefully", async () => {
@@ -193,6 +197,7 @@ describe("executeChildHealth", () => {
         const result = await executeChildHealth(req, "api");
 
         expect(result.status).toBe("fail");
-        expect(result.data.error).toContain("boom");
+        const data4 = result.data as any;
+        expect(data4.error).toContain("boom");
     });
 });
