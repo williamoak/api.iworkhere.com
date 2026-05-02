@@ -1,5 +1,9 @@
 # api.iworkhere.com
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-unknown-lightgrey)](./coverage)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 A robust TypeScript + Express REST API backend server with database connectivity, authentication, and comprehensive testing. Designed for `https://api.iworkhere.com/v1/*` endpoints, featuring dynamic route loading, middleware enforcement, and Swagger documentation.
 
 ## Features
@@ -50,7 +54,7 @@ A robust TypeScript + Express REST API backend server with database connectivity
 
 ## Environment Variables
 
-Create a `.env` file in the root directory. Required variables:
+Create a `.env` file in the root directory. A sample `.env.example` is included in the repo. Required variables:
 
 - `DB_HOST`: Database host (e.g., `localhost`)
 - `DB_PORT`: Database port (e.g., `5432`)
@@ -62,6 +66,8 @@ Create a `.env` file in the root directory. Required variables:
 - `API_VERSION`: API version (e.g., `v1`)
 - `MAX_CONCURRENT_REQUESTS`: Max concurrent requests (e.g., `100`)
 - `CORS_ALLOWED_ORIGINS`: Comma-separated allowed origins (optional)
+
+See `.env.example` for a starting point and for variables used in tests and local development.
 
 Optional debug flags:
 - `AUTH_MW_DEBUG=1`: Enable auth middleware debug logs
@@ -187,14 +193,16 @@ Run migrations with `npm run drizzle migrate`.
 
 ## Contributing
 
+Please read `CONTRIBUTING.md` for the preferred development workflow, mocking conventions used in tests, and pre-push hook instructions. In short:
+
 1. Follow the project's coding standards (ESLint, Prettier).
-2. Add tests for new features.
-3. Update Swagger docs for API changes.
+2. Add tests for new features and keep coverage healthy.
+3. Update `swagger.json` when changing public APIs (run `npm run swagger:gen`).
 4. Use the enforced middleware order for routes.
 
 ## License
 
-MIT
+This project is licensed under the MIT License — see `LICENSE` for details.
 
 ## Version
 
