@@ -24,9 +24,11 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+.output.txt
 
 # no env files of any stripe in the repo
 .env*
 .env.*
+# EXCEPT this one so repo readers can see an example
+!.env.test
 
-.output.txt
