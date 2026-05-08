@@ -17,8 +17,8 @@
  *   Later files override earlier ones. Finally, process.env overrides
  *   everything. This file MUST be imported before any modules that rely on env.
  * @requestExample none
- * @response none
- * @requires none
+ * @response [none]
+ * @requires [none]
  */
 
 import fs from 'fs';
@@ -125,4 +125,21 @@ export function configGet(key: string): string {
   }
 
   return value;
+}
+
+/**
+ * Get Google OAuth configuration.
+ */
+export function getGoogleOAuthConfig() {
+  return {
+    clientId: configGet('GOOGLE_OAUTH_CLIENT_ID'),
+    clientSecret: configGet('GOOGLE_OAUTH_CLIENT_SECRET'),
+    redirectUri: configGet('GOOGLE_OAUTH_REDIRECT_URI'),
+    authorizationUrl: configGet('GOOGLE_AUTHORIZATION_URL'),
+    tokenUrl: configGet('GOOGLE_TOKEN_URL'),
+    userInfoUrl: configGet('GOOGLE_USERINFO_URL'),
+    stateSecret: configGet('OAUTH_STATE_SECRET'),
+    successRedirectUrl: configGet('GOOGLE_OAUTH_SUCCESS_REDIRECT_URL'),
+    failureRedirectUrl: configGet('GOOGLE_OAUTH_FAILURE_REDIRECT_URL'),
+  };
 }

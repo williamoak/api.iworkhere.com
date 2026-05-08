@@ -8,8 +8,8 @@ const DB_USER     = process.env.DB_USER!;
 const DB_CERT_DIR = process.env.DB_CERT_DIR!;
 
 export default {
-    schema: "@src/db/schema/index.ts",
-    out: "@src/db/migrations",
+    schema: "./src/db/schema/index.ts",
+    out: "./src/db/migrations",
     dialect: "postgresql",          // CockroachDB uses pg dialect
     dbCredentials: {
         host: DB_HOST,

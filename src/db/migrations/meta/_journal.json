@@ -134,6 +134,13 @@
       "when": 1769797373412,
       "tag": "0018_create_config_table",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778252203376,
+      "tag": "0019_equal_lionheart",
+      "breakpoints": true
     }
   ]
 }

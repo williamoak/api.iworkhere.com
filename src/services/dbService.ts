@@ -39,6 +39,7 @@ import fs from 'fs';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { configGet } from '@helpers/config.js';
+import * as schema from '@db/schema';
 
 // === Environment variables ===
 const DB_HOST = configGet('DB_HOSTNAME');
@@ -47,7 +48,7 @@ const DB_NAME = configGet('DB_NAME');
 const DB_USER = configGet('DB_USER');
 const DB_CERT_DIR = configGet('DB_CERT_DIR');
 
-// === TLS configuration (unchanged) ===
+// === TLS configuration ===
 const ssl = {
   ca: fs.readFileSync(`${DB_CERT_DIR}/ca.crt`, 'utf8'),
   cert: fs.readFileSync(`${DB_CERT_DIR}/client.${DB_USER}.crt`, 'utf8'),
@@ -65,8 +66,9 @@ export const pool = new Pool({
   ssl,
 });
 
-// === Drizzle ORM (new) ===
-export const db = drizzle(pool);
+// === Drizzle ORM ===
+// Added <typeof schema> to fix the missing schema generic error
+export const db = drizzle<typeof schema>(pool, { schema });
 
 // === Legacy raw SQL (still available) ===
 export async function query(sql: string, params?: unknown[]) {
@@ -81,3 +83,4 @@ export async function verifyConnection() {
   const result = await pool.query('SELECT now()');
   return { now: result.rows[0].now };
 }
+
