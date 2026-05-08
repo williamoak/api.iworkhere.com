@@ -4,7 +4,7 @@
  * @external
  * @module routes/v1/auth/passreset/verify
  * @tag auth, password, reset
- * @version 1.0.0
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/auth/passreset/verify
  * @summary Verify a password reset token.
@@ -31,39 +31,47 @@
  * }
  */
 
-import type { Request, Response } from 'express'
-import { z } from 'zod'
+import type { Request, Response } from 'express';
+import { z } from 'zod';
 
-import { AuthError } from '@services/auth/authContext'
-import { verifyPasswordResetToken } from '@services/auth/passwordResetService'
+import { AuthError } from '@services/auth/authContext';
+import { verifyPasswordResetToken } from '@services/auth/passwordResetService';
 
 export const schema = {
-    body: z.object({
-        token: z.string().trim().min(1),
-    }),
-}
+  body: z.object({
+    token: z.string().trim().min(1),
+  }),
+};
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
-    try {
-        const body =
-            (req.validated?.body as z.infer<typeof schema.body>) ??
-            req.body
+  try {
+    const body =
+      (req.validated?.body as z.infer<typeof schema.body>) ?? req.body;
 
-        await verifyPasswordResetToken(body.token)
-
-        res.status(200).json({ valid: true })
-    } catch (err) {
-        if (err instanceof AuthError) {
-            res.status(err.httpStatus).json({
-                error: err.code,
-                message: err.message,
-            })
-            return
-        }
-
-        res.status(500).json({
-            error: 'INTERNAL_ERROR',
-            message: 'An unexpected error occurred',
-        })
+    // Simple guard clause for manual/unit test execution
+    if (!body || typeof body.token !== 'string' || !body.token.trim()) {
+      res.status(400).json({
+        error: 'INVALID_REQUEST',
+        message: 'Invalid request body',
+      });
+      return;
     }
+
+    await verifyPasswordResetToken(body.token);
+
+    res.status(200).json({ valid: true });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      res.status(err.httpStatus).json({
+        error: err.code,
+        message: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+    });
+  }
 }

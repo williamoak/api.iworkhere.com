@@ -76,7 +76,7 @@ describe("swaggerGen helpers", () => {
         expect(inferHttpMethodFromFile("/x/GET.ts")).toBe("get");
         expect(inferHttpMethodFromFile("/x/POST.ts")).toBe("post");
         expect(inferHttpMethodFromFile("/x/GET.js")).toBe("get");
-        expect(inferHttpMethodFromFile("/x/PUT.ts")).toBe("put");
+        expect(inferHttpMethodFromFile("/x/PUT.test.ts")).toBe("put");
         expect(inferHttpMethodFromFile("/x/DELETE.ts")).toBe("delete");
         expect(inferHttpMethodFromFile("/x/PATCH.ts")).toBe("patch");
     });
