@@ -15,7 +15,7 @@ const explicitAllowedOrigins = new Set(
 );
 
 const corsOrigin: NonNullable<CorsOptions["origin"]> = (origin, callback) => {
-    if (!origin) {
+    if (!origin || origin === "null") {
         callback(null, true);
         return;
     }

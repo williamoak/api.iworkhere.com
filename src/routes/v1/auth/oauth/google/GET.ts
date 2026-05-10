@@ -1,39 +1,53 @@
 /**
- * @myDocBlock v2.3
  * @file GET.ts
- * @external
+ * @external Google OAuth 2.0
  * @module routes/v1/auth/oauth/google
  * @tag auth, oauth, google
- * @version 1.1.0
- * @author william.r.oak@gmail.com
+ * @version 1.2.0
  * @path /v1/auth/oauth/google
- * @summary Start the Google OAuth login flow.
+ * @author william.r.oak@gmail.com
+ * @summary Initiates the Google OAuth 2.0 authorization flow.
  * @description
- * Redirects the user agent to Google's OAuth 2.0 authorization endpoint.
- * Detects the calling application context, signs the state with the app_key,
- * and builds the authorization URL.
+ * Redirects the user agent to Google s OAuth 2.0 authorization endpoint. 
+ * Detects the calling application context, signs the state (optionally 
+ * including a custom redirect_uri and flow intent for mobile deep 
+ * linking or web popups), and builds the final authorization URL.
+ *
+ * @query
+ * {
+ *   "redirect_uri": {
+ *     "type": "string",
+ *     "required": false,
+ *     "description": "Optional custom URI to redirect back to after success (e.g. mobile deep link)."
+ *   },
+ *   "flow": {
+ *     "type": "string",
+ *     "required": false,
+ *     "enum": ["popup", "redirect"],
+ *     "description": "Optional flow override. Defaults to redirect."
+ *   },
+ *   "app_key": {
+ *     "type": "string",
+ *     "required": false,
+ *     "description": "Explicit application key for resolution."
+ *   }
+ * }
+ *
  * @requestExample none
- * @response
+ * @response 
  * {
  *   "redirect": "https://accounts.google.com/o/oauth2/v2/auth"
  * }
- * @requires
- * {
- *   "environment": [
- *     "GOOGLE_AUTHORIZATION_URL",
- *     "GOOGLE_OAUTH_CLIENT_ID",
- *     "GOOGLE_OAUTH_REDIRECT_URI"
- *   ],
- *   "externalServices": [
- *     "Google OAuth 2.0 authorization en7dpoint"
- *   ]
+ * @requires {
+ *   "env": ["GOOGLE_AUTHORIZATION_URL", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_REDIRECT_URI"],
+ *   "services": ["@services/auth/applicationOriginResolver", "@services/auth/oauthStateService"]
  * }
  */
 
-import type { Request, Response } from 'express';
-import { getGoogleOAuthConfig } from '@helpers/config';
-import { resolveApplicationFromRequest } from '@services/auth/applicationOriginResolver';
-import { signState } from '@services/auth/oauthStateService';
+import type { Request, Response } from "express";
+import { getGoogleOAuthConfig } from "@helpers/config";
+import { resolveApplicationFromRequest } from "@services/auth/applicationOriginResolver";
+import { signState } from "@services/auth/oauthStateService";
 
 /**
  * GET /v1/auth/oauth/google
@@ -42,22 +56,31 @@ import { signState } from '@services/auth/oauthStateService';
  */
 export default async function GET(req: Request, res: Response): Promise<void> {
   const googleConfig = getGoogleOAuthConfig();
+  const { redirect_uri, flow } = req.query;
 
   // Resolve application from origin/refer/query for multi-consumer support
   const appCtx = await resolveApplicationFromRequest(req);
 
-  // Sign the app_key into the state for callback recovery
-  const state = signState(appCtx.applicationKey);
+  // Force cast flow to ensure it matches the StatePayload type
+  const flowType = flow === "popup" ? "popup" : "redirect";
+
+  // Sign the app_key (and optional redirect_uri/flow) into the state for callback recovery
+  const state = signState(
+      appCtx.applicationKey,
+      typeof redirect_uri === "string" ? redirect_uri : undefined,
+      flowType
+  );
 
   const authorizationUrl = new URL(googleConfig.authorizationUrl);
 
-  authorizationUrl.searchParams.set('client_id', googleConfig.clientId);
-  authorizationUrl.searchParams.set('redirect_uri', googleConfig.redirectUri);
-  authorizationUrl.searchParams.set('response_type', 'code');
-  authorizationUrl.searchParams.set('scope', 'openid email profile');
-  authorizationUrl.searchParams.set('state', state);
-  authorizationUrl.searchParams.set('access_type', 'offline');
-  authorizationUrl.searchParams.set('prompt', 'consent');
+  authorizationUrl.searchParams.set("client_id", googleConfig.clientId);
+  authorizationUrl.searchParams.set("redirect_uri", googleConfig.redirectUri);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("scope", "openid email profile");
+  authorizationUrl.searchParams.set("state", state);
+  authorizationUrl.searchParams.set("access_type", "offline");
+  authorizationUrl.searchParams.set("prompt", "consent");
 
   res.redirect(302, authorizationUrl.toString());
 }
+
