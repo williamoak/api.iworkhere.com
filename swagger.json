@@ -15,9 +15,6 @@
       "name": "auth, login"
     },
     {
-      "name": "auth, oauth, google"
-    },
-    {
       "name": "auth, password, reset"
     },
     {
@@ -154,82 +151,6 @@
           "auth, login"
         ],
         "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "409": {
-            "description": "Conflict"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/v1/auth/oauth/google": {
-      "get": {
-        "summary": "Start the Google OAuth login flow.",
-        "description": "Redirects the user agent to Google's OAuth 2.0 authorization endpoint.\nDetects the calling application context, signs the state with the app_key,\nand builds the authorization URL.",
-        "tags": [
-          "auth, oauth, google"
-        ],
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Bad request"
-          },
-          "409": {
-            "description": "Conflict"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/v1/auth/oauth/google/callback": {
-      "get": {
-        "summary": "Handle the Google OAuth callback.",
-        "description": "Handles Google's OAuth 2.0 callback after the user approves or denies access.\nThe implementation verifies the signed state to recover the application context,\nexchanges the authorization code for Google tokens, loads the Google profile,\nlinks/creates the local user, issues application tokens, and returns the\nauthentication response.",
-        "tags": [
-          "auth, oauth, google"
-        ],
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "required": false,
-            "description": "Authorization code returned by Google after successful consent.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "description": "Signed anti-forgery state value containing application context.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "error",
-            "in": "query",
-            "required": false,
-            "description": "OAuth error code returned by Google when authorization fails.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful response"
