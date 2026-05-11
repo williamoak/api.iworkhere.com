@@ -3,10 +3,11 @@
  * @external Google OAuth 2.0
  * @module routes/v1/auth/oauth/google/callback
  * @tag auth, oauth, google
- * @version 1.2.2
+ * @version 1.2.3
  * @path /v1/auth/oauth/google/callback
  * @author william.r.oak@gmail.com
  * @summary Handles the Google OAuth 2.0 callback and performs multi-platform redirection.
+ * @description controls the oAuth process callback from google to bill.iworkhere.com
  */
 
 import type { Request, Response } from "express";
@@ -129,17 +130,37 @@ export default async function GET(req: Request, res: Response): Promise<void> {
                         access_token: "${tokens.access.token}",
                         refresh_token: "${tokens.refresh.token}"
                     };
-                    if (window.opener) {
-                        window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, "*");
-                        setTimeout(() => window.close(), 200);
-                    } else {
-                        // Fallback if window lost opener context
-                        window.location.href = "https://bill.iworkhere.com/?access_token=${tokens.access.token}";
+                    
+                    try {
+                        // Attempt postMessage to parent window (most reliable method)
+                        if (window.opener && window.opener !== null) {
+                            window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, "*");
+                            setTimeout(() => window.close(), 200);
+                        } else {
+                            // Fallback 1: Use localStorage bridge + notify via storage event
+                            // Parent window listens for 'oauth-tokens' item changes
+                            try {
+                                const storageKey = "oauth-tokens";
+                                localStorage.setItem(storageKey, JSON.stringify(data));
+                                // Also set a timestamp to ensure storage event fires
+                                localStorage.setItem("oauth-tokens-updated", String(Date.now()));
+                            } catch (e) {
+                                console.error("[oauth-callback] localStorage failed:", e);
+                            }
+                            
+                            // Fallback 2: If localStorage fails, auto-close and notify via delayed redirect
+                            // (Parent should have already handled via postMessage or storage listener)
+                            setTimeout(() => window.close(), 1000);
+                        }
+                    } catch (error) {
+                        console.error("[oauth-popup] error:", error);
+                        // Last resort: redirect to app with tokens in URL
+                        window.location.href = "https://bill.iworkhere.com/?oauth_token=" + encodeURIComponent(JSON.stringify(data));
                     }
                 </script>
                 <div style="text-align: center; border: 2px solid blue; padding: 20px; background: white; border-radius: 10px; font-family: sans-serif;">
                     <h2>Login Successful</h2>
-                    <p>You can close this window now.</p>
+                    <p>Closing this window...</p>
                 </div>
             </body>
             </html>
@@ -181,4 +202,3 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     res.status(500).send("Authentication Error");
   }
 }
-
