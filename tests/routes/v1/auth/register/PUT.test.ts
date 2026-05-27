@@ -246,13 +246,76 @@ describe('PUT /v1/auth/register', () => {
 
         await PUT(req, res)
 
-        expect(res.statusCode).toBe(201)
-        expect(resolveAuthContext).toHaveBeenCalledWith(
-            expect.objectContaining({
-                app_key: 'bill.iworkhere.com',
-                username: 'bill',
-                email: 'bill@example.com',
-            })
-        )
+// ... existing code ...
+      expect(res.statusCode).toBe(201)
+      expect(resolveAuthContext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          app_key: 'bill.iworkhere.com',
+          username: 'bill',
+          email: 'bill@example.com',
+        })
+      )
     })
+
+  test('returns 409 EMAIL_TAKEN when database throws email unique constraint violation', async () => {
+    ;(resolveAuthContext as any).mockResolvedValue({
+      applicationId: 'app-id',
+    })
+    ;(hashPassword as any).mockResolvedValue('hashed-password')
+
+    // Simulate DB throwing a unique constraint violation for email
+    const dbError = new Error('duplicate key value violates unique constraint "users_email_unique"');
+    (dbError as any).code = '23505';
+    (dbError as any).constraint = 'users_email_unique';
+
+    ;(db.transaction as any).mockRejectedValueOnce(dbError)
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      username: 'bill',
+      email: 'taken@example.com',
+      password: 'goodpassword',
+    })
+
+    const res = createRes()
+
+    await PUT(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body).toEqual({
+      error: 'EMAIL_TAKEN',
+      message: 'An account with this email already exists',
+    })
+  })
+
+  test('returns 409 USERNAME_TAKEN when database throws username unique constraint violation', async () => {
+    ;(resolveAuthContext as any).mockResolvedValue({
+      applicationId: 'app-id',
+    })
+    ;(hashPassword as any).mockResolvedValue('hashed-password')
+
+    // Simulate DB throwing a unique constraint violation for username
+    const dbError = new Error('duplicate key value violates unique constraint "users_username_unique"');
+    (dbError as any).code = '23505';
+    (dbError as any).constraint = 'users_username_unique';
+
+    ;(db.transaction as any).mockRejectedValueOnce(dbError)
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      username: 'taken-username',
+      email: 'bill@example.com',
+      password: 'goodpassword',
+    })
+
+    const res = createRes()
+
+    await PUT(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body).toEqual({
+      error: 'USERNAME_TAKEN',
+      message: 'This username is already taken',
+    })
+  })
 })

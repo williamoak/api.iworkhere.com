@@ -119,6 +119,7 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
       });
     });
 
+// ... existing code ...
     res.status(201).json({
       user: {
         id: userId,
@@ -127,11 +128,41 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         status: 'pending',
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     if (err instanceof AuthError) {
       res.status(err.httpStatus).json({
         error: err.code,
         message: err.message,
+      });
+      return;
+    }
+
+    // Handle unique constraint violations (PostgreSQL/CockroachDB error code 23505)
+    const DB_ERROR = '23505';
+    if (err?.code === DB_ERROR) {
+      // Identify which constraint failed to give a precise error message
+      const constraintName = err.constraint || err.message || '';
+
+      if (constraintName.includes('email')) {
+        res.status(409).json({
+          error: 'EMAIL_TAKEN',
+          message: 'An account with this email already exists',
+        });
+        return;
+      }
+
+      if (constraintName.includes('username')) {
+        res.status(409).json({
+          error: 'USERNAME_TAKEN',
+          message: 'This username is already taken',
+        });
+        return;
+      }
+
+      // Fallback if we can't identify the constraint, but we know it's a conflict
+      res.status(409).json({
+        error: 'CONFLICT',
+        message: 'A conflict occurred with existing data',
       });
       return;
     }
