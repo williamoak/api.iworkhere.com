@@ -158,7 +158,7 @@ describe('PUT /v1/auth/register', () => {
             app_key: 'bill.iworkhere.com',
             username: 'bill',
             email: 'not-an-email',
-            password: 'secret',
+            password: 'goodpassword',
         })
 
         expect(parsed.success).toBe(false)
@@ -184,7 +184,7 @@ describe('PUT /v1/auth/register', () => {
         app_key: 'bill.iworkhere.com',
         username: 'bill',
         email: 'bill@example.com',
-        password: 'secret',
+        password: 'goodpassword',
       });
 
       const res = createRes();
@@ -238,7 +238,7 @@ describe('PUT /v1/auth/register', () => {
                 app_key: 'bill.iworkhere.com',
                 username: 'bill',
                 email: 'bill@example.com',
-                password: 'secret',
+                password: 'goodpassword',
             },
         }
 

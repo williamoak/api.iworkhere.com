@@ -51,93 +51,94 @@
  * }
  */
 
-import type { Request, Response } from 'express'
-import { z } from 'zod'
+import type { Request, Response } from 'express';
 
-import { resolveAuthContext, AuthError } from '@services/auth/authContext'
+import { resolveAuthContext, AuthError } from '@services/auth/authContext';
 import {
-    hashPassword,
-    enforcePasswordHistory,
-} from '@services/auth/passwordService'
-import { issueEmailVerificationToken } from '@services/auth/emailVerificationService'
-import { db } from '@services/dbService'
-import { users, userAuthLocal, userApplications } from '@db/schema'
+  hashPassword,
+  enforcePasswordHistory,
+} from '@services/auth/passwordService';
+import { issueEmailVerificationToken } from '@services/auth/emailVerificationService';
+import { db } from '@services/dbService';
+import { users, userAuthLocal, userApplications } from '@db/schema';
 
-import { v7 as uuidv7 } from 'uuid'
+import { v7 as uuidv7 } from 'uuid';
+
+import {
+  registrationBodySchema,
+  type RegistrationBody,
+} from '@validation/auth';
 
 export const schema = {
-    body: z.object({
-        app_key: z.string().trim().min(1),
-        username: z.string().trim().min(1),
-        email: z.string().trim().email(),
-        password: z.string().min(1),
-    }),
-}
+  body: registrationBodySchema,
+};
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
-    try {
-      const body =
-        (req.validated?.body as z.infer<typeof schema.body>) ?? req.body;
-      const { username, email, password } = body;
+  try {
+    const body =
+      (req.validated?.body as RegistrationBody) ??
+      (req.body as RegistrationBody);
 
-      // Resolve application context
-      const { applicationId } = await resolveAuthContext(body);
+    const { username, email, password } = body;
 
-      const passwordHash = await hashPassword(password);
-      const userId = uuidv7();
+    // Resolve application context
+    const { applicationId } = await resolveAuthContext(body);
 
-      // Create user + auth + app access + email verification atomically
-      await db.transaction(async (tx) => {
-        await tx.insert(users).values({
-          id: userId,
-          username,
-          email,
-          statusCode: 'pending',
-        });
+    const passwordHash = await hashPassword(password);
+    const userId = uuidv7();
 
-        await tx.insert(userAuthLocal).values({
-          userId,
-          passwordHash,
-          isEnabled: true,
-        });
-
-        await enforcePasswordHistory(userId, password, passwordHash);
-
-        await tx.insert(userApplications).values({
-          userId,
-          applicationId,
-          role: 'user',
-          isEnabled: true,
-        });
-
-        await issueEmailVerificationToken({
-          userId,
-          applicationId,
-          email,
-          tx,
-        });
+    // Create user + auth + app access + email verification atomically
+    await db.transaction(async (tx) => {
+      await tx.insert(users).values({
+        id: userId,
+        username,
+        email,
+        statusCode: 'pending',
       });
 
-      res.status(201).json({
-        user: {
-          id: userId,
-          username,
-          email,
-          status: 'pending',
-        },
+      await tx.insert(userAuthLocal).values({
+        userId,
+        passwordHash,
+        isEnabled: true,
       });
-    } catch (err) {
-        if (err instanceof AuthError) {
-            res.status(err.httpStatus).json({
-                error: err.code,
-                message: err.message,
-            })
-            return
-        }
 
-        res.status(500).json({
-            error: 'INTERNAL_ERROR',
-            message: 'An unexpected error occurred',
-        })
+      await enforcePasswordHistory(userId, password, passwordHash);
+
+      await tx.insert(userApplications).values({
+        userId,
+        applicationId,
+        role: 'user',
+        isEnabled: true,
+      });
+
+      await issueEmailVerificationToken({
+        userId,
+        applicationId,
+        email,
+        tx,
+      });
+    });
+
+    res.status(201).json({
+      user: {
+        id: userId,
+        username,
+        email,
+        status: 'pending',
+      },
+    });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      res.status(err.httpStatus).json({
+        error: err.code,
+        message: err.message,
+      });
+      return;
     }
+
+    res.status(500).json({
+      error: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+    });
+  }
 }
