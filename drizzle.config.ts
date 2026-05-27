@@ -1,6 +1,9 @@
 import type { Config } from "drizzle-kit";
 import * as fs from "fs";
 
+import * as dotenv from "dotenv";
+dotenv.config({ path: ".env.development" });
+
 const DB_HOST     = process.env.DB_HOSTNAME!;
 const DB_PORT     = Number(process.env.DB_PORT || 26257);
 const DB_NAME     = process.env.DB_NAME!;
