@@ -24,6 +24,7 @@
     "paths": {
       "@src": ["src"],
       "@src/*": ["src/*"],
+      "@db/*": ["src/db/*"],
       "@helpers/*": ["src/helpers/*"],
       "@cache/*": ["src/cache/*"],
       "@services/*": ["src/services/*"],
@@ -34,8 +35,8 @@
       "@utils/*": ["src/utils/*"],
       "@routes/*": ["src/routes/*"],
       "@schemas/*": ["src/schemas/*"],
-      "@tests/*": ["tests/*"],
-      "@db/*": ["src/db/*"]
+      "@validation/*": ["src/validation/*"],
+      "@tests/*": ["tests/*"]
     }
   },
   "include": ["src/**/*"]
