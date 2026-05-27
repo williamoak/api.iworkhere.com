@@ -20,6 +20,7 @@ import type { PgTransaction } from 'drizzle-orm/pg-core'
 import { db } from '@services/dbService'
 import { configGet } from '@helpers/config'
 import { AuthError } from '@services/auth/authContext'
+import { sendEmail } from '@helpers/mailer'
 import {
     users,
     userApplications,
@@ -40,50 +41,61 @@ type DbExecutor =
  * Must be called inside an existing transaction if provided.
  */
 export async function issueEmailVerificationToken(params: {
-  userId: string
-  applicationId: string
-  email: string
-  tx?: DbExecutor
+    userId: string
+    applicationId: string
+    email: string
+    tx?: DbExecutor
 }): Promise<{ token: string }> {
-  const { userId, applicationId, email, tx = db } = params
+    const { userId, applicationId, email, tx = db } = params
 
-  if (!userId || !applicationId || !email) {
-    throw new AuthError(
-      'INVALID_REQUEST',
-      'userId, applicationId and email are required',
-      400
+    if (!userId || !applicationId || !email) {
+        throw new AuthError(
+            'INVALID_REQUEST',
+            'userId, applicationId and email are required',
+            400
+        )
+    }
+
+    const ttlSeconds = Number(
+        configGet('EMAIL_VERIFY_TOKEN_TTL_SECONDS')
     )
-  }
 
-  const ttlSeconds = Number(
-    configGet('EMAIL_VERIFY_TOKEN_TTL_SECONDS')
-  )
+    if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
+        throw new Error(
+            'EMAIL_VERIFY_TOKEN_TTL_SECONDS misconfigured'
+        )
+    }
 
-  if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
-    throw new Error(
-      'EMAIL_VERIFY_TOKEN_TTL_SECONDS misconfigured'
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const tokenHash = crypto
+        .createHash('sha256')
+        .update(rawToken)
+        .digest('hex')
+
+    const expiresAt = new Date(
+        Date.now() + ttlSeconds * 1000
     )
-  }
 
-  const rawToken = crypto.randomBytes(32).toString('hex')
-  const tokenHash = crypto
-    .createHash('sha256')
-    .update(rawToken)
-    .digest('hex')
+    await tx.insert(emailVerificationTokens).values({
+        id: uuidv7(),
+        userId,
+        applicationId,
+        tokenHash,
+        expiresAt,
+    })
 
-  const expiresAt = new Date(
-    Date.now() + ttlSeconds * 1000
-  )
+    // Send the verification email
+    const appUrl = configGet('APP_URL')
+    const verifyUrl = `${appUrl}/verify-email?token=${rawToken}`
 
-  await tx.insert(emailVerificationTokens).values({
-    id: uuidv7(),
-    userId,
-    applicationId,
-    tokenHash,
-    expiresAt,
-  })
+    await sendEmail({
+        to: email,
+        subject: 'Verify your email address',
+        text: `Please verify your email address by visiting this link: ${verifyUrl}`,
+        html: `<p>Please verify your email address by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+    })
 
-  return { token: rawToken }
+    return { token: rawToken }
 }
 
 /**
@@ -202,16 +214,16 @@ export async function resendEmailVerificationToken(params: {
         return
     }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(emailVerificationTokens)
-      .where(eq(emailVerificationTokens.userId, user.userId))
+    await db.transaction(async (tx) => {
+        await tx
+            .delete(emailVerificationTokens)
+            .where(eq(emailVerificationTokens.userId, user.userId))
 
-    await issueEmailVerificationToken({
-      userId: user.userId,
-      applicationId,
-      email,
-      tx,
+        await issueEmailVerificationToken({
+            userId: user.userId,
+            applicationId,
+            email,
+            tx,
+        })
     })
-  })
 }
