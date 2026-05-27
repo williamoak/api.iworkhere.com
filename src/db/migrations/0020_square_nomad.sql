@@ -1,0 +1,2 @@
+ALTER TABLE "email_verification_tokens" ADD COLUMN "application_id" uuid NOT NULL;--> statement-breakpoint
+ALTER TABLE "email_verification_tokens" ADD CONSTRAINT "email_verification_tokens_application_id_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."applications"("id") ON DELETE cascade ON UPDATE no action;

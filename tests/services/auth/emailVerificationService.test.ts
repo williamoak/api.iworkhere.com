@@ -180,10 +180,11 @@ describe('issueEmailVerificationToken', () => {
             values: () => Promise.resolve(),
         })
 
-        const result = await issueEmailVerificationToken({
-            userId: 'user-id',
-            email: 'user@example.com',
-        })
+      const result = await issueEmailVerificationToken({
+        userId: 'user-id',
+        applicationId: 'app-id',
+        email: 'bill@example.com',
+      })
 
         expect(result.token).toBeTypeOf('string')
         expect(result.token.length).toBeGreaterThan(20)

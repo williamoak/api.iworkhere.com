@@ -40,48 +40,50 @@ type DbExecutor =
  * Must be called inside an existing transaction if provided.
  */
 export async function issueEmailVerificationToken(params: {
-    userId: string
-    email: string
-    tx?: DbExecutor
+  userId: string
+  applicationId: string
+  email: string
+  tx?: DbExecutor
 }): Promise<{ token: string }> {
-    const { userId, email, tx = db } = params
+  const { userId, applicationId, email, tx = db } = params
 
-    if (!userId || !email) {
-        throw new AuthError(
-            'INVALID_REQUEST',
-            'userId and email are required',
-            400
-        )
-    }
-
-    const ttlSeconds = Number(
-        configGet('EMAIL_VERIFY_TOKEN_TTL_SECONDS')
+  if (!userId || !applicationId || !email) {
+    throw new AuthError(
+      'INVALID_REQUEST',
+      'userId, applicationId and email are required',
+      400
     )
+  }
 
-    if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
-        throw new Error(
-            'EMAIL_VERIFY_TOKEN_TTL_SECONDS misconfigured'
-        )
-    }
+  const ttlSeconds = Number(
+    configGet('EMAIL_VERIFY_TOKEN_TTL_SECONDS')
+  )
 
-    const rawToken = crypto.randomBytes(32).toString('hex')
-    const tokenHash = crypto
-        .createHash('sha256')
-        .update(rawToken)
-        .digest('hex')
-
-    const expiresAt = new Date(
-        Date.now() + ttlSeconds * 1000
+  if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error(
+      'EMAIL_VERIFY_TOKEN_TTL_SECONDS misconfigured'
     )
+  }
 
-    await tx.insert(emailVerificationTokens).values({
-        id: uuidv7(),
-        userId,
-        tokenHash,
-        expiresAt,
-    })
+  const rawToken = crypto.randomBytes(32).toString('hex')
+  const tokenHash = crypto
+    .createHash('sha256')
+    .update(rawToken)
+    .digest('hex')
 
-    return { token: rawToken }
+  const expiresAt = new Date(
+    Date.now() + ttlSeconds * 1000
+  )
+
+  await tx.insert(emailVerificationTokens).values({
+    id: uuidv7(),
+    userId,
+    applicationId,
+    tokenHash,
+    expiresAt,
+  })
+
+  return { token: rawToken }
 }
 
 /**
@@ -200,15 +202,16 @@ export async function resendEmailVerificationToken(params: {
         return
     }
 
-    await db.transaction(async (tx) => {
-        await tx
-            .delete(emailVerificationTokens)
-            .where(eq(emailVerificationTokens.userId, user.userId))
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.userId, user.userId))
 
-        await issueEmailVerificationToken({
-            userId: user.userId,
-            email,
-            tx,
-        })
+    await issueEmailVerificationToken({
+      userId: user.userId,
+      applicationId,
+      email,
+      tx,
     })
+  })
 }

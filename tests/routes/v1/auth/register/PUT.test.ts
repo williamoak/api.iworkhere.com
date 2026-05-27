@@ -165,54 +165,51 @@ describe('PUT /v1/auth/register', () => {
     })
 
     test('creates a user, issues email verification token, and returns 201', async () => {
-        ;(resolveAuthContext as any).mockResolvedValue({
-            applicationId: 'app-id',
-        })
+      (resolveAuthContext as any).mockResolvedValue({
+        applicationId: 'app-id',
+      });
+      (hashPassword as any).mockResolvedValue('hashed-password');
+      (issueEmailVerificationToken as any).mockResolvedValue({
+        token: 'raw-email-token',
+      });
+      (db.transaction as any).mockImplementation(async (fn: any) =>
+        fn({
+          insert: () => ({
+            values: () => ({}),
+          }),
+        }),
+      );
 
-        ;(hashPassword as any).mockResolvedValue('hashed-password')
+      const req = createReq({
+        app_key: 'bill.iworkhere.com',
+        username: 'bill',
+        email: 'bill@example.com',
+        password: 'secret',
+      });
 
-        ;(issueEmailVerificationToken as any).mockResolvedValue({
-            token: 'raw-email-token',
-        })
+      const res = createRes();
 
-        ;(db.transaction as any).mockImplementation(
-            async (fn: any) =>
-                fn({
-                    insert: () => ({
-                        values: () => ({}),
-                    }),
-                })
-        )
+      await PUT(req, res);
 
-        const req = createReq({
-            app_key: 'bill.iworkhere.com',
-            username: 'bill',
-            email: 'bill@example.com',
-            password: 'secret',
-        })
+      expect(res.statusCode).toBe(201);
 
-        const res = createRes()
+      expect(res.body).toEqual({
+        user: {
+          id: expect.any(String),
+          username: 'bill',
+          email: 'bill@example.com',
+          status: 'pending',
+        },
+      });
 
-        await PUT(req, res)
-
-        expect(res.statusCode).toBe(201)
-
-        expect(res.body).toEqual({
-            user: {
-                id: expect.any(String),
-                username: 'bill',
-                email: 'bill@example.com',
-                status: 'pending',
-            },
-        })
-
-        expect(issueEmailVerificationToken).toHaveBeenCalledWith(
-            expect.objectContaining({
-                userId: expect.any(String),
-                email: 'bill@example.com',
-                tx: expect.any(Object),
-            })
-        )
+      expect(issueEmailVerificationToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: expect.any(String),
+          applicationId: 'app-id',
+          email: 'bill@example.com',
+          tx: expect.any(Object),
+        }),
+      );
     })
 
     test('prefers middleware-validated body payload when present', async () => {

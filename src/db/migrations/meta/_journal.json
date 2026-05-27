@@ -141,6 +141,13 @@
       "when": 1778252203376,
       "tag": "0019_equal_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1779897991403,
+      "tag": "0020_square_nomad",
+      "breakpoints": true
     }
   ]
 }

@@ -76,56 +76,56 @@ export const schema = {
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
     try {
-        const body =
-            (req.validated?.body as z.infer<typeof schema.body>) ??
-            req.body
-        const { username, email, password } = body
+      const body =
+        (req.validated?.body as z.infer<typeof schema.body>) ?? req.body;
+      const { username, email, password } = body;
 
-        // Resolve application context
-        const { applicationId } = await resolveAuthContext(body)
+      // Resolve application context
+      const { applicationId } = await resolveAuthContext(body);
 
-        const passwordHash = await hashPassword(password)
-        const userId = uuidv7()
+      const passwordHash = await hashPassword(password);
+      const userId = uuidv7();
 
-        // Create user + auth + app access + email verification atomically
-        await db.transaction(async (tx) => {
-            await tx.insert(users).values({
-                id: userId,
-                username,
-                email,
-                statusCode: 'pending',
-            })
+      // Create user + auth + app access + email verification atomically
+      await db.transaction(async (tx) => {
+        await tx.insert(users).values({
+          id: userId,
+          username,
+          email,
+          statusCode: 'pending',
+        });
 
-            await tx.insert(userAuthLocal).values({
-                userId,
-                passwordHash,
-                isEnabled: true,
-            })
+        await tx.insert(userAuthLocal).values({
+          userId,
+          passwordHash,
+          isEnabled: true,
+        });
 
-            await enforcePasswordHistory(userId, password, passwordHash)
+        await enforcePasswordHistory(userId, password, passwordHash);
 
-            await tx.insert(userApplications).values({
-                userId,
-                applicationId,
-                role: 'user',
-                isEnabled: true,
-            })
+        await tx.insert(userApplications).values({
+          userId,
+          applicationId,
+          role: 'user',
+          isEnabled: true,
+        });
 
-            await issueEmailVerificationToken({
-                userId,
-                email,
-                tx,
-            })
-        })
+        await issueEmailVerificationToken({
+          userId,
+          applicationId,
+          email,
+          tx,
+        });
+      });
 
-        res.status(201).json({
-            user: {
-                id: userId,
-                username,
-                email,
-                status: 'pending',
-            },
-        })
+      res.status(201).json({
+        user: {
+          id: userId,
+          username,
+          email,
+          status: 'pending',
+        },
+      });
     } catch (err) {
         if (err instanceof AuthError) {
             res.status(err.httpStatus).json({
