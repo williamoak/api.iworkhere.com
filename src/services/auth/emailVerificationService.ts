@@ -45,7 +45,7 @@ export async function issueEmailVerificationToken(params: {
     applicationId: string
     email: string
     tx?: DbExecutor
-}): Promise<{ token: string }> {
+}): Promise<{ token: string; email: string }> {
     const { userId, applicationId, email, tx = db } = params
 
     if (!userId || !applicationId || !email) {
@@ -84,18 +84,7 @@ export async function issueEmailVerificationToken(params: {
         expiresAt,
     })
 
-    // Send the verification email
-    const appUrl = configGet('APP_URL')
-    const verifyUrl = `${appUrl}/verify-email?token=${rawToken}`
-
-    await sendEmail({
-        to: email,
-        subject: 'Verify your email address',
-        text: `Please verify your email address by visiting this link: ${verifyUrl}`,
-        html: `<p>Please verify your email address by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
-    })
-
-    return { token: rawToken }
+    return { token: rawToken, email }
 }
 
 /**
@@ -214,16 +203,46 @@ export async function resendEmailVerificationToken(params: {
         return
     }
 
+    let verificationToken = '';
     await db.transaction(async (tx) => {
         await tx
             .delete(emailVerificationTokens)
             .where(eq(emailVerificationTokens.userId, user.userId))
 
-        await issueEmailVerificationToken({
+        const tokenResult = await issueEmailVerificationToken({
             userId: user.userId,
             applicationId,
             email,
             tx,
         })
+        verificationToken = tokenResult.token;
     })
+
+    // Send verification email after token creation
+    // Failures are logged but don't prevent resend response
+    await sendVerificationEmail({
+        email,
+        token: verificationToken,
+        userId: user.userId,
+    })
+}
+
+export async function sendVerificationEmail(params: {
+    email: string;
+    token: string;
+    userId?: string;
+}): Promise<void> {
+    const { email, token, userId } = params;
+    const appUrl = configGet('APP_URL');
+    const verifyUrl = `${appUrl}/v1/auth/emailverify?token=${token}`;
+
+    await sendEmail({
+        to: email,
+        subject: 'Verify your email address',
+        text: `Please verify your email address by visiting this link: ${verifyUrl}`,
+        html: `<p>Please verify your email address by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+        throwOnError: false,
+        auditUserId: userId,
+        auditType: 'verification',
+    });
 }

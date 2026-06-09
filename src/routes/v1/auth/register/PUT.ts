@@ -58,7 +58,10 @@ import {
   hashPassword,
   enforcePasswordHistory,
 } from '@services/auth/passwordService';
-import { issueEmailVerificationToken } from '@services/auth/emailVerificationService';
+import {
+  issueEmailVerificationToken,
+  sendVerificationEmail,
+} from '@services/auth/emailVerificationService';
 import { db } from '@services/dbService';
 import { users, userAuthLocal, userApplications } from '@db/schema';
 
@@ -88,6 +91,7 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
     const userId = uuidv7();
 
     // Create user + auth + app access + email verification atomically
+    let verificationToken = '';
     await db.transaction(async (tx) => {
       await tx.insert(users).values({
         id: userId,
@@ -111,15 +115,23 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         isEnabled: true,
       });
 
-      await issueEmailVerificationToken({
+      const tokenResult = await issueEmailVerificationToken({
         userId,
         applicationId,
         email,
         tx,
       });
+      verificationToken = tokenResult.token;
     });
 
-// ... existing code ...
+    // Send verification email after successful registration
+    // Failures are logged but don't prevent registration
+    await sendVerificationEmail({
+      email,
+      token: verificationToken,
+      userId,
+    });
+
     res.status(201).json({
       user: {
         id: userId,
