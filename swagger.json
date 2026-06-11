@@ -53,6 +53,28 @@
   ],
   "paths": {
     "/v1/auth/emailverify": {
+      "get": {
+        "summary": "Verify email via GET (browser link).",
+        "description": "Handles verification requests originating from email links.\n  Reads the token from the query string, performs verification,\n  and redirects the user to the application.",
+        "tags": [
+          "auth, email, verify"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
       "put": {
         "summary": "Verify a user email address.",
         "description": "Verifies ownership of a user email address using a verification token.\nOn success, the user account is transitioned to an active state and\nthe email verification timestamp is recorded.",
