@@ -205,8 +205,8 @@ The email verification workflow ensures users verify ownership of their email ad
 # SMTP Configuration (for email sending)
 SMTP_HOST=smtp-relay.brevo.com
 SMTP_PORT=587
-SMTP_USER=acc086001@smtp-brevo.com
-SMTP_PASS=H3C6EByS9grPwMvt
+SMTP_USER=someAcc098790@smtp-brevo.com
+SMTP_PASS=some-secret-goes-here
 SMTP_FROM_EMAIL=noreply@iworkhere.com
 
 # Application URL (for verification links)
