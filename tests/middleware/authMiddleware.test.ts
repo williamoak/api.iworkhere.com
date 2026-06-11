@@ -18,8 +18,9 @@ function createReq(authorization?: string, requestId?: string): Request {
         method: 'GET',
         url: '/v1/auth/me',
         ip: '127.0.0.1',
-        get(name: string) {
-            return headers[name.toLowerCase()];
+        get(name: string): any {
+            const val = headers[name.toLowerCase()];
+            return name.toLowerCase() === 'set-cookie' ? [val] : val;
         },
     } as unknown as Request;
 }
