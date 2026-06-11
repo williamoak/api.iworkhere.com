@@ -56,6 +56,7 @@ export default defineConfig({
       '@validation': path.resolve(__dirname, 'src/validation'),
       '@tests': path.resolve(__dirname, 'tests'),
       '@db': path.resolve(__dirname, 'src/db'),
+      '@jobs': path.resolve(__dirname, 'src/jobs'),
     },
   },
 });

@@ -197,15 +197,20 @@ describe('issueEmailVerificationToken', () => {
     expect(result.token).toBeTypeOf('string')
     expect(result.token.length).toBeGreaterThan(20)
     expect(db.insert).toHaveBeenCalledOnce()
+  })
 
-    // Verify that sendEmail was called
-    const { sendEmail } = await import('@helpers/mailer');
-    expect(sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: 'bill@example.com',
-        subject: expect.any(String),
+  test('throws if database insertion fails', async () => {
+    ;(db.insert as any).mockReturnValue({
+        values: () => Promise.reject(new Error('DB_ERROR')),
+    })
+
+    await expect(
+      issueEmailVerificationToken({
+        userId: 'user-id',
+        applicationId: 'app-id',
+        email: 'bill@example.com',
       })
-    );
+    ).rejects.toThrow('DB_ERROR')
   })
 
   test('throws if inputs are missing', async () => {
@@ -273,5 +278,9 @@ describe('resendEmailVerificationToken', () => {
     })
 
     expect(db.transaction).toHaveBeenCalledOnce()
+
+    // Verify that sendEmail was called
+    const { sendEmail } = await import('@helpers/mailer');
+    expect(sendEmail).toHaveBeenCalled();
   })
 })

@@ -2,13 +2,23 @@
  * @file mailer.ts
  * @module helpers/mailer
  * @summary Centralized email sending utility using Nodemailer.
+ * @description
+ *   Sends emails via SMTP. Email failures are logged but don't throw by default,
+ *   allowing registration/resend flows to continue even if the mailer is unavailable.
+ *   Callers can optionally enforce failures via the throwOnError flag.
+ *   All sends are logged to the email_audit_logs table for auditing.
  */
 
 import nodemailer from 'nodemailer';
 import { configGet } from '@helpers/config';
+import { logEmailAudit } from '@services/auth/emailAuditService';
 
 // Create a reusable transporter using SMTP settings from the environment
 let transporter: nodemailer.Transporter | null = null;
+
+export function resetTransporter() {
+    transporter = null;
+}
 
 function getTransporter() {
     if (!transporter) {
@@ -30,8 +40,19 @@ export async function sendEmail(params: {
     subject: string;
     text: string;
     html?: string;
+    throwOnError?: boolean;
+    auditUserId?: string;
+    auditType?: 'verification' | 'password_reset';
 }): Promise<void> {
-    const { to, subject, text, html } = params;
+    const {
+        to,
+        subject,
+        text,
+        html,
+        throwOnError = false,
+        auditUserId,
+        auditType,
+    } = params;
     const from = configGet('SMTP_FROM_EMAIL');
 
     const mailOptions = {
@@ -46,16 +67,42 @@ export async function sendEmail(params: {
 
     try {
         const info = await mailer.sendMail(mailOptions);
-        console.log(`Email sent to ${to}: ${info.messageId}`);
+        console.log(`[mailer] Email sent to ${to} (messageId: ${info.messageId})`);
 
         // If using Ethereal email for testing, this prints a URL to view the email
         if (configGet('SMTP_HOST').includes('ethereal')) {
-            console.log(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+            console.log(`[mailer] Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+        }
+
+        // Log successful send
+        if (auditType) {
+            await logEmailAudit({
+                userId: auditUserId,
+                email: to,
+                emailType: auditType,
+                status: 'sent',
+            });
         }
     } catch (error) {
-        console.error('Error sending email:', error);
-        // Depending on your requirements, you might want to throw this error
-        // or just log it so the user registration doesn't fail if the mailer is down.
-        throw new Error('Failed to send email');
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(
+            `[mailer] Failed to send email to ${to}: ${errorMessage}`,
+        );
+
+        // Log failed send
+        if (auditType) {
+            await logEmailAudit({
+                userId: auditUserId,
+                email: to,
+                emailType: auditType,
+                status: 'failed',
+                errorMessage,
+            });
+        }
+
+        if (throwOnError) {
+            throw error;
+        }
+        // If throwOnError is false, silently continue (error already logged)
     }
 }

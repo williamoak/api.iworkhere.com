@@ -27,6 +27,7 @@
       "@db/*": ["src/db/*"],
       "@helpers/*": ["src/helpers/*"],
       "@cache/*": ["src/cache/*"],
+      "@jobs/*": ["src/jobs/*"],
       "@services/*": ["src/services/*"],
       "@controllers/*": ["src/controllers/*"],
       "@models/*": ["src/models/*"],

@@ -66,6 +66,7 @@ vi.mock('@services/auth/passwordService', () => ({
 
 vi.mock('@services/auth/emailVerificationService', () => ({
     issueEmailVerificationToken: vi.fn(),
+    sendVerificationEmail: vi.fn(),
 }))
 
 vi.mock('@services/dbService', () => ({

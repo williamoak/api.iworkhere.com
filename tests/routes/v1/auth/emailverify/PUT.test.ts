@@ -189,4 +189,13 @@ describe('PUT /v1/auth/emailverify', () => {
             message: 'Token is invalid',
         })
     })
+
+    test('returns 401 when token is missing', async () => {
+        const req = createReq({})
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(401)
+    })
 })

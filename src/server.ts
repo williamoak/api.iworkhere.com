@@ -48,6 +48,7 @@ import { configGet } from "@helpers/config";
 import { createBaseApp } from "@src/appFactory";
 import { verifyConnection } from "@services/dbService";
 import { loadSwagger } from "@loaders/swagger";
+import { startCleanupJob } from "@jobs/cleanupExpiredTokens";
 
 // ---------------------------------------------------------------------------
 // Bootstrap server (HTTP-only; TLS handled by nginx)
@@ -59,6 +60,14 @@ async function bootstrap() {
 
     // Build the Express app using the unified factory
     const app = await createBaseApp();
+
+    // -------------------------------------------------------------------
+    // Background Jobs
+    // -------------------------------------------------------------------
+    const cleanupIntervalMs = Number(
+      process.env.CLEANUP_JOB_INTERVAL_MS ?? 3_600_000
+    );
+    startCleanupJob(cleanupIntervalMs);
 
     // -------------------------------------------------------------------
     // DEV-ONLY: Swagger UI
