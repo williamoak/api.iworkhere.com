@@ -3,15 +3,6 @@ import { logEmailAudit } from '@services/auth/emailAuditService'
 import { db } from '@services/dbService'
 
 /**
- * Mock dependencies
- */
-vi.mock('@services/dbService', () => ({
-    db: {
-        insert: vi.fn(),
-    },
-}))
-
-/**
  * Test suite
  */
 describe('emailAuditService', () => {

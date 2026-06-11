@@ -46,6 +46,15 @@ vi.mock('@db/schema', () => ({
     token: 'token',
     expiresAt: 'expiresAt',
   },
+  emailAuditLogs: {
+    id: 'id',
+    userId: 'userId',
+    email: 'email',
+    emailType: 'emailType',
+    status: 'status',
+    errorMessage: 'errorMessage',
+    createdAt: 'createdAt',
+  },
   passwordResetTokens: {
     id: 'id',
     userId: 'userId',
@@ -62,6 +71,7 @@ vi.mock('drizzle-orm', () => ({
   or: vi.fn(),
   eq: vi.fn(),
   gt: vi.fn(),
+  lt: vi.fn(),
   isNull: vi.fn(),
   inArray: vi.fn(),
 }));
@@ -115,9 +125,11 @@ vi.mock('@services/dbService', () => {
   return {
     __esModule: true,
     db: {
+      insert: vi.fn(),
       select: vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
+            then: (resolve: any) => resolve([]),
             limit: vi.fn().mockResolvedValue([]),
           }),
         }),

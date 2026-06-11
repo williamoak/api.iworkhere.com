@@ -20,16 +20,20 @@ vi.mock('@services/auth/emailAuditService', () => ({
     logEmailAudit: vi.fn(),
 }))
 
-vi.mock('nodemailer', () => ({
-    default: {
-        createTransport: vi.fn(() => ({
-            sendMail: vi.fn(),
-        })),
+vi.mock('nodemailer', () => {
+    const mockSendMail = vi.fn();
+    const transport = { sendMail: mockSendMail };
+    return {
+        default: {
+            createTransport: vi.fn(() => transport),
+            getTestMessageUrl: vi.fn(() => 'http://ethereal.email/message/123'),
+        },
+        createTransport: vi.fn(() => transport),
         getTestMessageUrl: vi.fn(() => 'http://ethereal.email/message/123'),
-    },
-}))
+    };
+});
 
-import { sendEmail } from '@helpers/mailer'
+import { sendEmail, resetTransporter } from '@helpers/mailer'
 import { logEmailAudit } from '@services/auth/emailAuditService'
 import nodemailer from 'nodemailer'
 
@@ -41,6 +45,7 @@ describe('mailer', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        resetTransporter() // <--- Add this
 
         // Get reference to the mocked sendMail
         const transport = nodemailer.createTransport({} as any)
@@ -145,7 +150,7 @@ describe('mailer', () => {
                 messageId: 'msg-123',
             })
 
-            const consoleSpy = vi.spyOn(console, 'log').mockImplementation()
+            const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
             await sendEmail({
                 to: 'user@example.com',

@@ -16,6 +16,10 @@ import { logEmailAudit } from '@services/auth/emailAuditService';
 // Create a reusable transporter using SMTP settings from the environment
 let transporter: nodemailer.Transporter | null = null;
 
+export function resetTransporter() {
+    transporter = null;
+}
+
 function getTransporter() {
     if (!transporter) {
         transporter = nodemailer.createTransport({
