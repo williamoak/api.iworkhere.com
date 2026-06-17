@@ -46,6 +46,7 @@ import { desc, eq } from 'drizzle-orm'
 
 import { db } from '@services/dbService'
 import { configTable } from '@db/schema/config'
+import { markdownToHtml } from '@helpers/markdownToHtml'
 
 const EULA_CONFIG_NAME = 'eula'
 
@@ -108,7 +109,12 @@ const dbEulaRepository: EulaRepository = {
 export async function fetchLatestEula(
     repo: EulaRepository
 ): Promise<EulaRecord | null> {
-    return repo.getLatest()
+    const record = await repo.getLatest()
+    if (!record) return null
+    return {
+        ...record,
+        value: normalizeEulaValue(record.value)
+    }
 }
 
 /**
@@ -127,10 +133,15 @@ export function makeGetEulaHandler(repo: EulaRepository) {
             })
         }
 
+        const textContent = typeof record.value === 'object' && record.value !== null && 'text' in record.value
+            ? String((record.value as any).text)
+            : String(record.value)
+
         return res.status(200).json({
             name: record.name,
             version: record.version,
-            value: normalizeEulaValue(record.value),
+            value: markdownToHtml(textContent),
+            lineCount: textContent.split('\n').length,
             updatedAt: record.updatedAt.toISOString(),
         })
     }

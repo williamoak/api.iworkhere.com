@@ -1,6 +1,10 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import cors, { type CorsOptions } from "cors";
 import { loadRoutes } from "@loaders/routeLoader";
+import adminRoutes from "@src/admin/adminApp";
+import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
+import { welcomePage } from "@src/root/index";
 import { configGet } from "@helpers/config";
 
 const DEBUG = configGet("DEBUG") === "true";
@@ -51,6 +55,8 @@ export async function createBaseApp() {
 
     // Body parsing
     app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+    app.use(cookieParser());
 
     if (AUTH_ME_DEBUG) {
         // Diagnostic logging for JSON requests (debug only).
@@ -97,7 +103,12 @@ export async function createBaseApp() {
     }
 
     // Routes
+    app.get('/', webAuthMiddleware, (req, res) => {
+        console.log("Root route / hit!");
+        res.send(welcomePage(!!req.auth));
+    });
     await loadRoutes(app);
+    app.use('/admin', adminRoutes);
 
     if (DEBUG) {
         console.dir(app.locals.routeTree["/v1/health"], { depth: 10 });

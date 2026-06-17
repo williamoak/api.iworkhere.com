@@ -14,6 +14,7 @@ vi.mock("@loaders/routeLoader", () => ({
 
 vi.mock("@helpers/config", () => ({
     configGet: vi.fn(() => "false"),
+    configGetNumber: vi.fn(() => 3600),
 }));
 
 // --- TESTS ---

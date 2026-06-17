@@ -5,6 +5,7 @@
 # Swagger/OpenAPI generation, automated parsing, and consistent documentation.
 #
 # GENERAL RULES
+# - @myDocBlock is always the first text in a script file. before imports
 # - Use standard /** */ docblock format.
 # - Never nest multiline comments inside other multiline comments.
 # - The following fields must appear in the exact order shown below.

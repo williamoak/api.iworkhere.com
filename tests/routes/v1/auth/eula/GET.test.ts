@@ -81,8 +81,7 @@ describe('GET /v1/auth/eula', () => {
       name: 'eula',
       version: '1.00',
       value: {
-        title: 'EULA',
-        body: 'Terms and conditions',
+        text: 'Terms and conditions',
       },
       updatedAt: new Date('2030-01-01T00:00:00.000Z'),
     };
@@ -99,10 +98,8 @@ describe('GET /v1/auth/eula', () => {
     expect(res.body).toEqual({
       name: 'eula',
       version: '1.00',
-      value: {
-        title: 'EULA',
-        body: 'Terms and conditions',
-      },
+      value: 'Terms and conditions',
+      lineCount: 1,
       updatedAt: '2030-01-01T00:00:00.000Z',
     });
   });
@@ -126,7 +123,7 @@ describe('GET /v1/auth/eula', () => {
     const record: EulaRecord = {
       name: 'eula',
       version: '2.00',
-      value: '{"accepted":true,"items":["a","b"]}',
+      value: '{"text":"Terms and conditions"}',
       updatedAt: new Date('2030-02-01T00:00:00.000Z'),
     };
 
@@ -141,10 +138,8 @@ describe('GET /v1/auth/eula', () => {
     expect(res.body).toEqual({
       name: 'eula',
       version: '2.00',
-      value: {
-        accepted: true,
-        items: ['a', 'b'],
-      },
+      value: 'Terms and conditions',
+      lineCount: 1,
       updatedAt: '2030-02-01T00:00:00.000Z',
     });
   });
@@ -169,6 +164,7 @@ describe('GET /v1/auth/eula', () => {
       name: 'eula',
       version: '3.00',
       value: 'plain text eula content',
+      lineCount: 1,
       updatedAt: '2030-03-01T00:00:00.000Z',
     });
   });
@@ -193,6 +189,7 @@ describe('GET /v1/auth/eula', () => {
       name: 'eula',
       version: '4.00',
       value: '   ',
+      lineCount: 1,
       updatedAt: '2030-04-01T00:00:00.000Z',
     });
   });
