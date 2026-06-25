@@ -45,8 +45,9 @@
  */
 
 import type { Request, Response } from "express";
+import { config } from "@helpers/config";
 import { getGoogleOAuthConfig } from "@helpers/config";
-import { resolveApplicationFromRequest } from "@services/auth/applicationOriginResolver";
+import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
 
 /**
@@ -56,20 +57,50 @@ import { signState } from "@services/auth/oauthStateService";
  */
 export default async function GET(req: Request, res: Response): Promise<void> {
   const googleConfig = getGoogleOAuthConfig();
-  const { redirect_uri, flow } = req.query;
+  let { redirect_uri, flow } = req.query;
 
   // Resolve application from origin/refer/query for multi-consumer support
   const appCtx = await resolveApplicationFromRequest(req);
+  console.log('[DEBUG] [oauth/google/GET] initiation', {
+      query: req.query,
+      appKey: appCtx.applicationKey
+  });
+
+  if (!redirect_uri) {
+      try {
+          const origin = getCallerOrigin(req);
+          if (origin) {
+              redirect_uri = origin;
+          } else if (config['APP_URL']) {
+              redirect_uri = config['APP_URL'] as string;
+          }
+      } catch (err) {
+          console.warn('[GET] Failed to resolve origin for redirect_uri, falling back to APP_URL', err);
+          if (config['APP_URL']) {
+            redirect_uri = config['APP_URL'] as string;
+          }
+      }
+  }
 
   // Force cast flow to ensure it matches the StatePayload type
   const flowType = flow === "popup" ? "popup" : "redirect";
 
   // Sign the app_key (and optional redirect_uri/flow) into the state for callback recovery
+  if (typeof redirect_uri === "string" && redirect_uri.startsWith("/")) {
+    const origin = getCallerOrigin(req) ?? config['APP_URL'] as string ?? '';
+    if (origin) {
+        const base = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+        redirect_uri = base + redirect_uri;
+    }
+  }
+
+  console.log('[DEBUG] [oauth/google/GET] Before state signing', { redirect_uri, flowType });
   const state = signState(
       appCtx.applicationKey,
       typeof redirect_uri === "string" ? redirect_uri : undefined,
       flowType
   );
+  console.log('[DEBUG] [oauth/google/GET] state signed', { state });
 
   const authorizationUrl = new URL(googleConfig.authorizationUrl);
 

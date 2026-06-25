@@ -42,6 +42,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   try {
     const statePayload = verifyState(state);
+    console.log('[DEBUG] [oauth/callback/GET] state payload', { statePayload });
     const appCtx = await resolveAuthContext({ app_key: statePayload.app_key });
 
     const tokenResponse = await fetch(googleConfig.tokenUrl, {
@@ -116,15 +117,32 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     // --- ENHANCED SWITCHBOARD LOGIC ---
 
     // 1. Detect if the receiver is a Native/Mobile app (Uses a deep link scheme like exp:// or billapp://)
-    const isDeepLink = statePayload.redirect_uri?.includes("://") || statePayload.redirect_uri?.includes("--/");
+    const isDeepLink = (statePayload.redirect_uri?.includes("://") || statePayload.redirect_uri?.includes("--/")) &&
+                       !statePayload.redirect_uri?.startsWith("http");
+
+    console.log('[DEBUG] [oauth-callback] Checking switchboard:', {
+        flow: statePayload.flow,
+        isDeepLink,
+        redirect_uri: statePayload.redirect_uri
+    });
 
     // 2. Web Popup Flow (ONLY if not a deep link and flow is set to popup)
     if (statePayload.flow === "popup" && !isDeepLink) {
+        console.log('[DEBUG] [oauth-callback] Setting auth_token cookie for popup flow');
+        res.cookie('auth_token', tokens.access.token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: tokens.access.expiresAt.getTime() - Date.now(),
+          path: '/',
+        });
+        const targetOrigin = new URL(statePayload.redirect_uri).origin;
+        console.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
+
         res.status(200).send(`
             <!DOCTYPE html>
             <html>
             <head><title>Authenticated</title></head>
-            <body style="background: #f0fff4; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif;">
+            <body>
                 <script>
                     const data = {
                         access_token: "${tokens.access.token}",
@@ -132,33 +150,15 @@ export default async function GET(req: Request, res: Response): Promise<void> {
                     };
                     
                     try {
-                        // Attempt postMessage to parent window (most reliable method)
-                        if (window.opener && window.opener !== null) {
-                            window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, "*");
-                            setTimeout(() => window.close(), 200);
-                        } else {
-                            // Fallback 1: Use localStorage bridge + notify via storage event
-                            // Parent window listens for 'oauth-tokens' item changes
-                            try {
-                                const storageKey = "oauth-tokens";
-                                localStorage.setItem(storageKey, JSON.stringify(data));
-                                // Also set a timestamp to ensure storage event fires
-                                localStorage.setItem("oauth-tokens-updated", String(Date.now()));
-                            } catch (e) {
-                                console.error("[oauth-callback] localStorage failed:", e);
-                            }
-                            
-                            // Fallback 2: If localStorage fails, auto-close and notify via delayed redirect
-                            // (Parent should have already handled via postMessage or storage listener)
-                            setTimeout(() => window.close(), 1000);
-                        }
+                        window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, "${targetOrigin}");
+                        setTimeout(() => window.close(), 1000);
                     } catch (error) {
                         console.error("[oauth-popup] error:", error);
                         // Last resort: redirect to app with tokens in URL
-                        window.location.href = "https://bill.iworkhere.com/?oauth_token=" + encodeURIComponent(JSON.stringify(data));
+                        window.location.href = "${statePayload.redirect_uri}?oauth_token=" + encodeURIComponent(JSON.stringify(data));
                     }
                 </script>
-                <div style="text-align: center; border: 2px solid blue; padding: 20px; background: white; border-radius: 10px; font-family: sans-serif;">
+                <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
                     <h2>Login Successful</h2>
                     <p>Closing this window...</p>
                 </div>
@@ -171,8 +171,24 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     // 3. Mobile/Native or Standard Redirect Flow
     if (statePayload.redirect_uri) {
         const redirectUrl = new URL(statePayload.redirect_uri);
-        redirectUrl.searchParams.set("access_token", tokens.access.token);
-        redirectUrl.searchParams.set("refresh_token", tokens.refresh.token);
+
+        // Only append tokens if it's NOT a web URL
+        if (redirectUrl.protocol !== 'http:' && redirectUrl.protocol !== 'https:') {
+            redirectUrl.searchParams.set("access_token", tokens.access.token);
+            redirectUrl.searchParams.set("refresh_token", tokens.refresh.token);
+        }
+
+        // If it's a web URL (http/https), set the auth cookie for web authentication
+        if (redirectUrl.protocol === 'http:' || redirectUrl.protocol === 'https:') {
+          console.log('[DEBUG] [oauth-callback] Setting auth_token cookie');
+          res.cookie('auth_token', tokens.access.token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: tokens.access.expiresAt.getTime() - Date.now(),
+            path: '/',
+          });
+        }
+
         res.redirect(302, redirectUrl.toString());
         return;
     }

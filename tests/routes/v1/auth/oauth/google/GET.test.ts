@@ -4,6 +4,8 @@ import type { Request, Response } from "express";
 vi.mock("@services/auth/applicationOriginResolver", () => ({
   __esModule: true,
   resolveApplicationFromRequest: vi.fn(),
+  getCallerOrigin: vi.fn(),
+  normalizeOrigin: vi.fn(),
 }));
 
 vi.mock("@services/auth/oauthStateService", () => ({
@@ -52,7 +54,7 @@ describe("GET /v1/auth/oauth/google", () => {
 
     expect(resolveApplicationFromRequest).toHaveBeenCalledWith(req);
     // Explicitly check for the default "redirect" flow
-    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", undefined, "redirect");
+    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", "https://bill.iworkhere.com", "redirect");
 
     expect(res.statusCode).toBe(302);
     expect(res.redirectUrl).toContain("https://accounts.google.com/o/oauth2/v2/auth");
@@ -89,7 +91,7 @@ describe("GET /v1/auth/oauth/google", () => {
 
     await GET(req, res);
 
-    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", undefined, "redirect");
+    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", "https://bill.iworkhere.com", "redirect");
     expect(res.statusCode).toBe(302);
   });
 });

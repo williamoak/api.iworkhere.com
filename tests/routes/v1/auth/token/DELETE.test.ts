@@ -60,9 +60,9 @@ import { AuthError } from '@services/auth/authContext'
  * ------------------------------------------------------------
  */
 
-function createReq(body: any): Request {
+function createReq(cookies: any): Request {
     return {
-        body,
+        cookies,
     } as unknown as Request
 }
 
@@ -80,6 +80,14 @@ function createRes(): ResMock {
 
         status(code: number) {
             this.statusCode = code
+            return this
+        },
+
+        clearCookie(name: string) {
+            return this
+        },
+
+        cookie(name: string, value: string, options: any) {
             return this
         },
 
@@ -116,16 +124,13 @@ describe('DELETE /v1/auth/token', () => {
         expect(schema.body).toBeTruthy()
 
         const missing = schema.body.safeParse({})
-        expect(missing.success).toBe(false)
-
-        const empty = schema.body.safeParse({ token: '' })
-        expect(empty.success).toBe(false)
+        expect(missing.success).toBe(true)
     })
 
     test('returns 204 on successful revoke', async () => {
         ;(revokeToken as any).mockResolvedValue(undefined)
 
-        const req = createReq({ token: 'some-token' })
+        const req = createReq({ auth_token: 'some-token' })
         const res = createRes()
 
         await DELETE(req, res)
@@ -139,7 +144,7 @@ describe('DELETE /v1/auth/token', () => {
             new AuthError('INVALID_TOKEN', 'Token is invalid', 401)
         )
 
-        const req = createReq({ token: 'bad-token' })
+        const req = createReq({ auth_token: 'bad-token' })
         const res = createRes()
 
         await DELETE(req, res)

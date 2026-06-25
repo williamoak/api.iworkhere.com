@@ -57,6 +57,7 @@ export async function createBaseApp() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
+    app.use(express.static("public"));
 
     if (AUTH_ME_DEBUG) {
         // Diagnostic logging for JSON requests (debug only).
@@ -105,6 +106,7 @@ export async function createBaseApp() {
     // Routes
     app.get('/', webAuthMiddleware, (req, res) => {
         console.log("Root route / hit!");
+        res.set('Cache-Control', 'no-store');
         res.send(welcomePage(!!req.auth));
     });
     await loadRoutes(app);

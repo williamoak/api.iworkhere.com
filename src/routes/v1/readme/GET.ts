@@ -4,6 +4,7 @@ import { markdownToHtml } from '@helpers/markdownToHtml'
 import path from 'path'
 
 export default async function GET(_req: Request, res: Response) {
+    console.log("fetching readme")
     try {
         const readmePath = path.resolve(process.cwd(), 'README.md')
         const readmeContent = await fs.readFile(readmePath, 'utf8')

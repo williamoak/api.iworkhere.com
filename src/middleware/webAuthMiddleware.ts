@@ -26,6 +26,7 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 export async function webAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
+  console.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
   const token = req.cookies.auth_token;
 
   if (!token) {

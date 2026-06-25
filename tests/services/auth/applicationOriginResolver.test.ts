@@ -17,6 +17,12 @@ vi.mock('@services/dbService', () => ({
     },
 }))
 
+vi.mock('@helpers/config', () => ({
+    config: {
+        APP_URL: undefined
+    }
+}))
+
 vi.mock('@db/schema', () => ({
     applications: { id: 'app_id', appKey: 'app_key', isEnabled: true },
     applicationOrigins: { isEnabled: true },

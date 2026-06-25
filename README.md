@@ -1,6 +1,6 @@
 # api.iworkhere.com
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/williamoak/api.iworkhere.com/actions/workflows/ci.yml/badge.svg)](https://github.com/williamoak/api.iworkhere.com/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-unknown-lightgrey)](./coverage)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 

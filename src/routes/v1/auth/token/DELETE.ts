@@ -29,16 +29,15 @@
  */
 
 import type { Request, Response } from 'express'
-import { z } from 'zod'
 
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
 
+import { z } from 'zod';
+
 export const schema = {
-    body: z.object({
-        token: z.string().trim().min(1),
-    }),
-}
+  body: z.object({}).optional(),
+};
 
 /**
  * DELETE /v1/auth/token
@@ -48,13 +47,23 @@ export default async function DELETE(
     res: Response
 ): Promise<void> {
     try {
-        const body =
-            (req.validated?.body as z.infer<typeof schema.body>) ??
-            req.body
-        const token = body.token
+        const token = req.cookies.auth_token;
+        if (!token) {
+            // If no token, nothing to revoke.
+            res.cookie("auth_token", "", {
+            expires: new Date(0),
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production'
+        });
+            res.status(204).end();
+            return;
+        }
 
         await revokeToken(token)
 
+        res.clearCookie('auth_token', { path: '/' });
+        console.log('[DEBUG] [DELETE] auth_token cookie set to expire, secure:', process.env.NODE_ENV === 'production');
         res.status(204).end()
     } catch (err) {
         if (err instanceof AuthError) {

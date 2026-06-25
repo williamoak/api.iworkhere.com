@@ -46,12 +46,13 @@ import { eq } from 'drizzle-orm';
 import { applications, applicationOrigins } from '@db/schema';
 import { db } from '@services/dbService';
 import { AuthError, type AuthContext, resolveAuthContext } from './authContext';
+import { config } from '@helpers/config';
 
 type AppKeySource = {
   app_key?: unknown;
 };
 
-function normalizeOrigin(value: string): string {
+export function normalizeOrigin(value: string): string {
   const parsed = new URL(value);
 
   return parsed.origin.toLowerCase();
@@ -74,7 +75,7 @@ function getExplicitAppKey(req: Request): string | undefined {
   return undefined;
 }
 
-function getCallerOrigin(req: Request): string | undefined {
+export function getCallerOrigin(req: Request): string | undefined {
   const originHeader = req.get('origin');
 
   if (originHeader) {
@@ -119,7 +120,7 @@ async function resolveAuthContextFromOrigin(
   if (rows.length === 0) {
     throw new AuthError(
       'APP_ORIGIN_NOT_FOUND',
-      'Application origin is not registered',
+      `Application origin is not registered: ${origin}`,
       401,
     );
   }
@@ -158,7 +159,15 @@ export async function resolveApplicationFromRequest(
     });
   }
 
-  const origin = getCallerOrigin(req);
+  let origin = getCallerOrigin(req);
+
+  if (!origin && config['APP_URL']) {
+    try {
+      origin = normalizeOrigin(config['APP_URL']);
+    } catch (err) {
+      console.warn('Invalid APP_URL in config:', config['APP_URL'], err);
+    }
+  }
 
   if (!origin) {
     throw new AuthError(

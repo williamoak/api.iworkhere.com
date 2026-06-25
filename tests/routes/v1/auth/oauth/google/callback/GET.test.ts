@@ -46,6 +46,7 @@ type ResMock = Response & {
   json(payload: unknown): any;
   redirect(code: number, url: string): any;
   send(html: string): any;
+  cookie(name: string, value: string, options?: any): any;
 };
 
 function createRes(): ResMock {
@@ -58,6 +59,7 @@ function createRes(): ResMock {
     json(payload: unknown) { this.body = payload; return this; },
     redirect(code: number, url: string) { this.statusCode = code; this.redirectUrl = url; return this; },
     send(html: string) { this.sentHtml = html; return this; },
+    cookie(name: string, value: string, options?: any) { return this; },
   } as ResMock;
 }
 
@@ -97,7 +99,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
   });
 
   it("returns HTML for popup flow", async () => {
-    vi.mocked(verifyState).mockReturnValue({ app_key: "bill.iworkhere.com", flow: "popup" } as any);
+    vi.mocked(verifyState).mockReturnValue({ app_key: "bill.iworkhere.com", flow: "popup", redirect_uri: "https://bill.iworkhere.com" } as any);
     vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
     vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
 

@@ -1,4 +1,4 @@
-import { db } from "@services/dbService";
+import { db } from '@services/dbService';
 
 /**
  * Seed application_origins for Bill and Michael's consumers.
@@ -9,14 +9,19 @@ import { db } from "@services/dbService";
 
 const CONSUMERS = [
   {
-    app_key: "bill.iworkhere.com",
-    origin: "https://bill.iworkhere.com",
-    name: "Bill Web"
+    app_key: 'bill.iworkhere.com',
+    origin: 'https://bill.iworkhere.com',
+    name: 'Bill Web',
   },
   {
-    app_key: "michael.iworkhere.com",
-    origin: "https://michael.iworkhere.com",
-    name: "Michael Web"
+    app_key: 'michael.iworkhere.com',
+    origin: 'https://michael.iworkhere.com',
+    name: 'Michael Web',
+  },
+  {
+    app_key: 'api.iworkhere.com',
+    origin: 'https://api.iworkhere.com',
+    name: 'API Server',
   }
 ];
 
@@ -58,7 +63,9 @@ for (const consumer of CONSUMERS) {
     `);
 
   if (appResult.rows.length === 0) {
-    throw new Error(`application_origins_seed: application '${consumer.app_key}' not found`);
+    throw new Error(
+      `application_origins_seed: application '${consumer.app_key}' not found`,
+    );
   }
 
   const applicationId = appResult.rows[0].id;
@@ -93,4 +100,4 @@ for (const consumer of CONSUMERS) {
     `);
 }
 
-console.log("🌱 Application origins seeded for Bill and Michael");
+console.log('🌱 Application origins seeded for Bill and Michael');
