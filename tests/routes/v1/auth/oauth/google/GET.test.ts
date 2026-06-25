@@ -13,6 +13,17 @@ vi.mock("@services/auth/oauthStateService", () => ({
   signState: vi.fn(),
 }));
 
+vi.mock("@helpers/config", () => ({
+  config: {
+    APP_URL: "https://bill.iworkhere.com",
+  },
+  getGoogleOAuthConfig: vi.fn().mockReturnValue({
+    authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    clientId: "client-id",
+    redirectUri: "http://localhost:4300/v1/auth/oauth/google/callback",
+  }),
+}));
+
 import GET from "@routes/v1/auth/oauth/google/GET";
 import { resolveApplicationFromRequest } from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
