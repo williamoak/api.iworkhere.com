@@ -130,6 +130,11 @@ button:hover {
     filter: brightness(105%);
 }
 
+button:active {
+    transform: translateY(2px);
+    box-shadow: 0 0px 2px rgba(0,0,0,0.2);
+}
+
 .eula-panel {
     display: none;
     position: fixed;

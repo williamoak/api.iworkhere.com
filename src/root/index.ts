@@ -124,14 +124,14 @@ export const welcomePage = (isAuthenticated: boolean) => `
                 const googleLoginBtn = document.getElementById('google-login-btn');
                 if (googleLoginBtn) {
                     googleLoginBtn.onclick = () => {
-                        const width = 600;
-                        const height = 600;
+                        const width = 500;
+                        const height = 650;
                         const left = window.screen.width / 2 - width / 2;
                         const top = window.screen.height / 2 - height / 2;
                         const popup = window.open(
                             '/v1/auth/oauth/google?redirect_uri=/admin&flow=popup',
                             'GoogleLogin',
-                            'width=' + width + ',height=' + height + ',top=' + top + ',left=' + left
+                            'popup=yes,width=' + width + ',height=' + height + ',top=' + top + ',left=' + left + ',status=no,menubar=no,toolbar=no'
                         );
                         
                         window.addEventListener('message', (event) => {

@@ -9,6 +9,7 @@
     "start": "node dist/start.js",
     "swagger:gen": "tsx src/helpers/swaggerGen.ts",
     "test": "vitest run --silent",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "seed:data": "tsx src/db/seeds/run.ts",
