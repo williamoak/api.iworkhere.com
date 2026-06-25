@@ -135,6 +135,9 @@ export default async function GET(req: Request, res: Response): Promise<void> {
           maxAge: tokens.access.expiresAt.getTime() - Date.now(),
           path: '/',
         });
+        if (!statePayload.redirect_uri) {
+            throw new Error("Missing redirect_uri for popup flow");
+        }
         const targetOrigin = new URL(statePayload.redirect_uri).origin;
         console.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
 
