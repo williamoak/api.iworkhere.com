@@ -4,6 +4,7 @@ export const welcomePage = (isAuthenticated: boolean) => `
 <head>
     <title>iWorkHere API</title>
     <link rel="stylesheet" href="/css/main.css">
+    <script src="/js/registrationHandler.js"></script>
 </head>
 <body class="pastel-blue-bg center-layout">
     <div class="card">
@@ -17,7 +18,7 @@ export const welcomePage = (isAuthenticated: boolean) => `
                         <label>Password:</label> <input type="password" name="password" id="password" placeholder="••••••••" required>
                     </div>
                     <div class="button-group">
-                        <button type="button" title="Register a new user account">Register</button>
+                        <button type="button" title="Register a new user account" id="open-register-btn">Register</button>
                         <button type="button" title="Forgot password">Forgot Password</button>
                         <button type="submit" id="login-btn" disabled title="Login for access">Login</button>
                         <button type="button" title="Login with Google" class="google-btn" id="google-login-btn">
@@ -39,6 +40,23 @@ export const welcomePage = (isAuthenticated: boolean) => `
                 <button type="button" id="eula-done" style="display:none;">Done</button>
             </div>
         </div>
+        <div id="registration-panel" class="registration-panel">
+            <h2>Register</h2>
+            <div class="form-grid">
+                <label>Username:</label> <input type="text" id="reg-username" placeholder="Username">
+                <label>Email:</label> <input type="email" id="reg-email" placeholder="user@domain.com">
+                <label>Password:</label> 
+                <div class="password-container">
+                    <input type="password" id="reg-password" placeholder="••••••••">
+                    <button type="button" class="password-toggle-btn" id="reg-password-toggle">👁️</button>
+                </div>
+            </div>
+            <div class="button-group">
+                <button type="button" id="reg-submit" disabled>Submit</button>
+                <button type="button" id="reg-view-eula-btn">View EULA</button>
+                <button type="button" id="reg-cancel">Cancel</button>
+            </div>
+        </div>
         <script>
             async function loadDocument(url, title) {
                 const eulaPanel = document.getElementById('eula-panel');
@@ -51,6 +69,8 @@ export const welcomePage = (isAuthenticated: boolean) => `
                 const backToTopBtn = document.getElementById('eula-back-to-top');
 
                 eulaPanel.classList.add('open');
+                const regPanel = document.getElementById('registration-panel');
+                if (regPanel) regPanel.classList.remove('open');
                 eulaTitle.innerText = title;
                 eulaContent.scrollTop = 0;
                 backToTopBtn.style.display = 'none';
@@ -153,7 +173,6 @@ export const welcomePage = (isAuthenticated: boolean) => `
                 if (readmeBtn) {
                     readmeBtn.onclick = () => loadDocument('/v1/readme', 'README');
                 }
-
 
                 eulaContent.onscroll = () => {
                     if (eulaContent.scrollTop > 100) {

@@ -151,11 +151,58 @@ button:active {
     flex-direction: column;
 }
 
-.eula-panel.open {
+.registration-panel {
+    display: none;
+    position: fixed;
+    top: 30vh;
+    height: 33.6vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40vw;
+    background: #e0f2f1;
+    padding: 20px 30px;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    z-index: 1000;
+    flex-direction: column;
+}
+
+.registration-panel .form-grid {
+    gap: 3px;
+    margin-bottom: 20px;
+}
+
+.password-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 5px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 2px 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.registration-panel h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+}
+
+.registration-panel .button-group {
+    margin-top: 25px;
+}
+
+.eula-panel.open, .registration-panel.open {
     display: flex;
 }
 
-.eula-panel.expanded { width: 90vw; }
+.eula-panel.expanded, .registration-panel.expanded { width: 90vw; }
 #eula-content { overflow-y: auto; flex-grow: 1; margin: 15px 0; position: relative; }
 .eula-panel .button-group { justify-content: center; gap: 20px; margin-top: 0; }
 #eula-back-to-top { display: none; position: sticky; bottom: 10px; right: 10px; background: #fff; border: 1px solid #ccc; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; z-index: 1001; font-size: 20px; float: right; clear: both; padding: 0; }
