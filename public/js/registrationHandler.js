@@ -8,21 +8,25 @@ window.RegistrationManager = {
     
     // UI Elements
     panel: null,
+    pendingPanel: null,
     usernameInput: null,
     emailInput: null,
     passwordInput: null,
 
     init() {
         this.panel = document.getElementById('registration-panel');
+        this.pendingPanel = document.getElementById('registration-pending-panel');
         this.usernameInput = document.getElementById('reg-username');
         this.emailInput = document.getElementById('reg-email');
         this.passwordInput = document.getElementById('reg-password');
         this.passwordToggleBtn = document.getElementById('reg-password-toggle');
         this.submitBtn = document.getElementById('reg-submit');
+        this.emailDisplay = document.getElementById('reg-email-display');
 
         const openBtn = document.getElementById('open-register-btn');
         const cancelBtn = document.getElementById('reg-cancel');
         const viewEulaBtn = document.getElementById('reg-view-eula-btn');
+        const pendingAcceptBtn = document.getElementById('reg-pending-accept');
 
         if (openBtn) openBtn.onclick = () => this.panel.classList.add('open');
         
@@ -35,6 +39,7 @@ window.RegistrationManager = {
         };
 
         if (this.submitBtn) this.submitBtn.onclick = () => this.submit();
+        if (pendingAcceptBtn) pendingAcceptBtn.onclick = () => window.location.href = '/admin';
         
         if (this.passwordToggleBtn) {
             this.passwordToggleBtn.onclick = () => {
@@ -95,6 +100,7 @@ window.RegistrationManager = {
 
     close() {
         this.panel.classList.remove('open');
+        this.pendingPanel.classList.remove('open');
         this.clearData();
     },
 
@@ -116,8 +122,9 @@ window.RegistrationManager = {
             const result = await response.json();
 
             if (response.ok) {
-                alert('Registration successful! Please check your email for verification.');
-                this.close();
+                this.panel.classList.remove('open');
+                this.pendingPanel.classList.add('open');
+                this.emailDisplay.textContent = result.user.email;
             } else {
                 alert('Registration failed: ' + (result.message || 'Unknown error'));
             }

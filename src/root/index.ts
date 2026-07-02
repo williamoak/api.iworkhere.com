@@ -57,6 +57,13 @@ export const welcomePage = (isAuthenticated: boolean) => `
                 <button type="button" id="reg-cancel">Cancel</button>
             </div>
         </div>
+        <div id="registration-pending-panel" class="registration-panel" style="display: none;">
+            <h2>Registration Pending</h2>
+            <p>Account created. Registration Pending, check your email @ <span id="reg-email-display"></span> for a verification link.</p>
+            <div class="button-group">
+                <button type="button" id="reg-pending-accept">Accept</button>
+            </div>
+        </div>
         <script>
             async function loadDocument(url, title) {
                 const eulaPanel = document.getElementById('eula-panel');
