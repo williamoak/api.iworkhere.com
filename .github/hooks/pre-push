@@ -3,14 +3,14 @@ set -e
 
 echo "[hooks] Running pre-push: generate swagger"
 
-# Run the project's swagger generator; if it fails the push will be aborted.
-if ! npm run swagger:gen --silent; then
-  echo "❌ swagger generation failed — aborting push."
+if ! npm run test; then
+  echo "❌ test failed — aborting push."
   exit 1
 fi
 
-if ! npm run test; then
-  echo "❌ test failed — aborting push."
+# Run the project's swagger generator; if it fails the push will be aborted.
+if ! npm run swagger:gen --silent; then
+  echo "❌ swagger generation failed — aborting push."
   exit 1
 fi
 
