@@ -9,6 +9,11 @@ if ! npm run swagger:gen --silent; then
   exit 1
 fi
 
+if ! npm run test; then
+  echo "❌ test failed — aborting push."
+  exit 1
+fi
+
 echo "✅ swagger generated successfully"
 exit 0
 

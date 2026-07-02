@@ -32,6 +32,3 @@ jobs:
       - name: Audit dependencies (critical)
         # Fail the job on CRITICAL vulnerabilities; adjust level if desired.
         run: npm audit --audit-level=critical
-
-      - name: Run test suite
-        run: npm test
