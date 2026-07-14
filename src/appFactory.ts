@@ -1,10 +1,11 @@
 import express from "express";
+import path from "path";
 import cookieParser from "cookie-parser";
 import cors, { type CorsOptions } from "cors";
 import { loadRoutes } from "@loaders/routeLoader";
 import adminRoutes from "@src/admin/adminApp";
 import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
-import { welcomePage } from "@src/root/index";
+import { welcomePage } from "@src/admin/client/welcomePage";
 import { configGet } from "@helpers/config";
 
 const DEBUG = configGet("DEBUG") === "true";
@@ -58,6 +59,7 @@ export async function createBaseApp() {
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
     app.use(express.static("public"));
+    app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
 
     if (DEBUG) {
         console.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);

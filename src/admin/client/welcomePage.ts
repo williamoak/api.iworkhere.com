@@ -3,8 +3,8 @@ export const welcomePage = (isAuthenticated: boolean) => `
 <html>
 <head>
     <title>iWorkHere API</title>
-    <link rel="stylesheet" href="/css/main.css">
-    <script src="/js/registrationHandler.js"></script>
+    <link rel="stylesheet" href="/admin/assets/css/main.css">
+    <script src="/admin/assets/js/registrationHandler.js"></script>
 </head>
 <body class="pastel-blue-bg center-layout">
     <div class="card">
@@ -30,7 +30,7 @@ export const welcomePage = (isAuthenticated: boolean) => `
                         <button type="button" title="Forgot password">Forgot Password</button>
                         <button type="submit" id="login-btn" disabled title="Login for access">Login</button>
                         <button type="button" title="Login with Google" class="google-btn" id="google-login-btn">
-                            <img src="/google.svg" alt="Google" style="width: 20px; height: 20px; vertical-align: middle;">
+                            <img src="/admin/assets/img/google.svg" alt="Google" style="width: 20px; height: 20px; vertical-align: middle;">
                         </button>
                     </div>
                 </form>

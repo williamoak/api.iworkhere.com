@@ -44,7 +44,7 @@ router.get('/', webAuthMiddleware, async (req: any, res) => {
     <html>
     <head>
       <title>Admin Dashboard</title>
-      <link rel="stylesheet" href="/css/main.css">
+      <link rel="stylesheet" href="/admin/assets/css/main.css">
     </head>
     <body class="pastel-blue-bg">
     <div class="main-container">
