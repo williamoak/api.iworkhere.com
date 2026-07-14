@@ -8,7 +8,10 @@ const { insertBuilderMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@helpers/config", () => ({ getGoogleOAuthConfig: vi.fn() }));
+vi.mock("@helpers/config", () => ({ 
+  getGoogleOAuthConfig: vi.fn(),
+  configGet: vi.fn().mockReturnValue(false),
+}));
 vi.mock("@services/auth/oauthStateService", () => ({ verifyState: vi.fn() }));
 vi.mock("@services/auth/authContext", () => ({ resolveAuthContext: vi.fn() }));
 vi.mock("@services/auth/tokenService", () => ({ issueLoginTokens: vi.fn() }));

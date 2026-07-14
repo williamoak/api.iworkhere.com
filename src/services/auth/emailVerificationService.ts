@@ -32,7 +32,7 @@ import { v7 as uuidv7 } from 'uuid'
 /**
  * Shared executor type that supports both db and tx.
  */
-type DbExecutor =
+export type DbExecutor =
     | NodePgDatabase<any>
     | PgTransaction<any, any, any>
 
@@ -76,13 +76,20 @@ export async function issueEmailVerificationToken(params: {
         Date.now() + ttlSeconds * 1000
     )
 
-    await tx.insert(emailVerificationTokens).values({
-        id: uuidv7(),
-        userId,
-        applicationId,
-        tokenHash,
-        expiresAt,
-    })
+    try {
+        console.log('[emailVerificationService] Inserting token into DB...', { userId, applicationId, tokenHash });
+        await tx.insert(emailVerificationTokens).values({
+            id: uuidv7(),
+            userId,
+            applicationId,
+            tokenHash,
+            expiresAt,
+        });
+        console.log('[emailVerificationService] Token inserted successfully.');
+    } catch (err) {
+        console.error('[emailVerificationService] Token insertion failed:', err);
+        throw err;
+    }
 
     return { token: rawToken, email }
 }
@@ -107,6 +114,8 @@ export async function verifyEmailToken(token: string): Promise<{
         .update(token)
         .digest('hex')
 
+    console.log('[emailVerificationService] Verifying tokenHash:', tokenHash);
+
     const rows = await db
         .select({
             userId: users.id,
@@ -122,7 +131,10 @@ export async function verifyEmailToken(token: string): Promise<{
         .where(eq(emailVerificationTokens.tokenHash, tokenHash))
         .limit(1)
 
+    console.log('[emailVerificationService] Query result length:', rows.length);
+
     if (rows.length === 0) {
+        console.log('[emailVerificationService] Token not found in DB');
         throw new AuthError(
             'INVALID_TOKEN',
             'Verification token is invalid',
@@ -131,6 +143,7 @@ export async function verifyEmailToken(token: string): Promise<{
     }
 
     const row = rows[0]
+    console.log('[emailVerificationService] Token found, userId:', row.userId);
 
     if (row.expiresAt && row.expiresAt < new Date()) {
         throw new AuthError(
@@ -149,9 +162,11 @@ export async function verifyEmailToken(token: string): Promise<{
             })
             .where(eq(users.id, row.userId))
 
+        /*
         await tx
             .delete(emailVerificationTokens)
             .where(eq(emailVerificationTokens.id, row.tokenId))
+        */
     })
 
     return {
@@ -220,11 +235,14 @@ export async function resendEmailVerificationToken(params: {
 
     // Send verification email after token creation
     // Failures are logged but don't prevent resend response
-    await sendVerificationEmail({
+    // Intentionally not awaiting this to avoid blocking the request
+    sendVerificationEmail({
         email,
         token: verificationToken,
         userId: user.userId,
-    })
+    }).catch(err => {
+        console.error('[resend] Background email send failed:', err);
+    });
 }
 
 export async function sendVerificationEmail(params: {

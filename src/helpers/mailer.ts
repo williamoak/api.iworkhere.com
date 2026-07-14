@@ -61,6 +61,9 @@ export async function sendEmail(params: {
         subject,
         text,
         html,
+        headers: {
+            'X-Mailin-Tracking-Disable': '1'
+        }
     };
 
     const mailer = getTransporter();

@@ -45,10 +45,12 @@
  */
 
 import type { Request, Response } from "express";
-import { config } from "@helpers/config";
+import { config, configGet } from "@helpers/config";
 import { getGoogleOAuthConfig } from "@helpers/config";
 import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
+
+const DEBUG = configGet('DEBUG');
 
 /**
  * GET /v1/auth/oauth/google
@@ -61,7 +63,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   // Resolve application from origin/refer/query for multi-consumer support
   const appCtx = await resolveApplicationFromRequest(req);
-  console.log('[DEBUG] [oauth/google/GET] initiation', {
+  if (DEBUG) console.log('[DEBUG] [oauth/google/GET] initiation', {
       query: req.query,
       appKey: appCtx.applicationKey
   });
@@ -94,13 +96,13 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     }
   }
 
-  console.log('[DEBUG] [oauth/google/GET] Before state signing', { redirect_uri, flowType });
+  if (DEBUG) console.log('[DEBUG] [oauth/google/GET] Before state signing', { redirect_uri, flowType });
   const state = signState(
       appCtx.applicationKey,
       typeof redirect_uri === "string" ? redirect_uri : undefined,
       flowType
   );
-  console.log('[DEBUG] [oauth/google/GET] state signed', { state });
+  if (DEBUG) console.log('[DEBUG] [oauth/google/GET] state signed', { state });
 
   const authorizationUrl = new URL(googleConfig.authorizationUrl);
 

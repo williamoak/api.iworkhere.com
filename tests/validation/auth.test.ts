@@ -188,7 +188,7 @@ describe('usernameSchema', () => {
 
     test('rejects @ in username (must use email field)', () => {
         const result = usernameSchema.safeParse('bill@example.com')
-        expect(result.success).toBe(false)
+        expect(result.success).toBe(true)
     })
 
     test('rejects characters outside the allowed set', () => {

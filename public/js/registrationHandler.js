@@ -4,7 +4,7 @@
 
 window.RegistrationManager = {
     savedRegData: null,
-    eulaAccepted: false,
+    eulaStatus: 'unknown', // 'unknown', 'accepted', 'declined'
     
     // UI Elements
     panel: null,
@@ -28,7 +28,10 @@ window.RegistrationManager = {
         const viewEulaBtn = document.getElementById('reg-view-eula-btn');
         const pendingAcceptBtn = document.getElementById('reg-pending-accept');
 
-        if (openBtn) openBtn.onclick = () => this.panel.classList.add('open');
+        if (openBtn) openBtn.onclick = () => {
+            this.panel.classList.add('open');
+            this.usernameInput.focus();
+        };
         
         if (cancelBtn) cancelBtn.onclick = () => this.close();
         
@@ -53,10 +56,13 @@ window.RegistrationManager = {
             input.addEventListener('input', () => this.validateForm());
         });
 
+        this.validateForm();
+
         window.addEventListener('eula-result', (event) => {
             this.panel.classList.add('open');
-            this.eulaAccepted = event.detail.accepted;
-            if (event.detail.accepted) {
+            this.usernameInput.focus();
+            this.eulaStatus = event.detail.accepted ? 'accepted' : 'declined';
+            if (this.eulaStatus === 'accepted') {
                 this.restoreData();
             } else {
                 this.clearData();
@@ -66,12 +72,58 @@ window.RegistrationManager = {
     },
 
     validateForm() {
-        const isUsernameValid = this.usernameInput.value.trim().length > 0;
-        const isEmailValid = this.emailInput.value.trim().length > 0;
-        const isPasswordValid = this.passwordInput.value.length > 0;
-        const isEulaValid = this.eulaAccepted;
+        const errors = [];
+        
+        // EULA Validation and UI feedback
+        const eulaBtn = document.getElementById('reg-view-eula-btn');
+        if (this.eulaStatus === 'unknown') {
+            if (eulaBtn) eulaBtn.style.backgroundColor = '#fff9c4'; // pastel yellow
+            this.submitBtn.style.backgroundColor = '#fff9c4'; // pastel yellow
+            errors.push("Must Accept EULA");
+        } else if (this.eulaStatus === 'declined') {
+            if (eulaBtn) eulaBtn.style.backgroundColor = '#ffcdd2'; // pastel red
+            this.submitBtn.style.backgroundColor = '#ffcdd2'; // pastel red
+            errors.push("Must Accept EULA");
+        } else {
+            if (eulaBtn) eulaBtn.style.backgroundColor = '#c8e6c9'; // pastel green
+            this.submitBtn.style.backgroundColor = '#c8e6c9'; // pastel green
+        }
+        
+        // Add EULA status to tooltip
+        if (this.eulaStatus === 'unknown') {
+             if (eulaBtn) eulaBtn.title = "Please view and accept the EULA";
+        } else if (this.eulaStatus === 'declined') {
+             if (eulaBtn) eulaBtn.title = "EULA was declined";
+        } else {
+             if (eulaBtn) eulaBtn.title = "EULA accepted";
+        }
+        
+        const username = this.usernameInput.value.trim();
+        const email = this.emailInput.value.trim();
+        const password = this.passwordInput.value;
 
-        this.submitBtn.disabled = !(isUsernameValid && isEmailValid && isPasswordValid && isEulaValid);
+        if (!username) errors.push("Username is required");
+        if (!email) errors.push("Email is required");
+
+        if (password.length > 0) {
+            if (password !== password.trim()) {
+                errors.push("Password must not start or end with whitespace");
+            } else if (password.length < 8) {
+                errors.push("Password must be at least 8 characters");
+            } else if (password.length > 72) {
+                errors.push("Password must not exceed 72 characters");
+            }
+        } else {
+            errors.push("Password is required");
+        }
+
+        if (errors.length > 0) {
+            this.submitBtn.disabled = true;
+            this.submitBtn.title = errors.join(';\n ');
+        } else {
+            this.submitBtn.disabled = false;
+            this.submitBtn.title = "Click to submit registration";
+        }
     },
 
     saveData() {
@@ -106,7 +158,6 @@ window.RegistrationManager = {
 
     async submit() {
         const payload = {
-            app_key: 'api.iworkhere.com', // Must match registered application key
             username: this.usernameInput.value,
             email: this.emailInput.value,
             password: this.passwordInput.value

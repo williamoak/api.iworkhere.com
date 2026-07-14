@@ -19,7 +19,8 @@
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
     "setup:hooks": "git config core.hooksPath .github/hooks && chmod +x .github/hooks/*",
-    "prepare": "npm run setup:hooks"
+    "prepare": "npm run setup:hooks",
+    "userclean": "npx tsx src/db/cleanup.ts"
   },
   "dependencies": {
     "@getbrevo/brevo": "^5.0.4",

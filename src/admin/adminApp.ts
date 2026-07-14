@@ -85,22 +85,28 @@ router.get('/', webAuthMiddleware, async (req: any, res) => {
 
 router.post('/login', async (req, res) => {
   try {
+    console.log('Login attempt received for:', req.body.identifier);
+
     if (!req.body.app_key) {
-        req.body.app_key = process.env.APP_URL;
+        req.body.app_key = process.env.APP_KEY || process.env.APP_URL;
     }
     const { app_key, identifier, password } = req.body;
 
     // 1. Resolve application context
     const appCtx = await resolveAuthContext({ app_key, identifier, password });
+    console.log('Application context resolved for:', identifier);
 
     // 2. Resolve user identity + app access
     const user = await resolveUserForApplication(identifier, appCtx.applicationId);
+    console.log('User identity resolved for:', identifier);
 
     // 3. Verify password
     await verifyPassword(user.userId, password);
+    console.log('Password verified for:', identifier);
 
     // 4. Issue tokens
     const tokens = await issueLoginTokens(user.userId, appCtx.applicationId);
+    console.log('Tokens issued for:', identifier);
 
     // 5. Set cookie and redirect
     res.cookie('auth_token', tokens.access.token, {
@@ -112,6 +118,7 @@ router.post('/login', async (req, res) => {
 
     res.redirect('/admin');
   } catch (err) {
+    console.error('Login attempt failed:', err);
     res.status(401).send('Login failed');
   }
 });

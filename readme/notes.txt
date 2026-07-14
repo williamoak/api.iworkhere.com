@@ -1,0 +1,14 @@
+quick user deletion process:
+
+
+
+next question:
+when I clicked the link a new browser window opens and says:
+Cannot GET /verification-error
+and when I try to log in at api.iworkhere.com I get:
+Login failed
+...
+also, the login attempt caused no text to appear in the server console.
+...
+can we verify that the email auth token is actually saved into the email_verification_tokens table?
+

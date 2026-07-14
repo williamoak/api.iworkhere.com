@@ -20,6 +20,9 @@ import { resolveAuthContext } from "@services/auth/authContext";
 import { issueLoginTokens } from "@services/auth/tokenService";
 import { db } from "@services/dbService";
 import { users, userAuthOauth } from "@db/schema";
+import { configGet } from "@helpers/config";
+
+const DEBUG = configGet('DEBUG');
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -42,7 +45,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   try {
     const statePayload = verifyState(state);
-    console.log('[DEBUG] [oauth/callback/GET] state payload', { statePayload });
+  if (DEBUG) console.log('[DEBUG] [oauth/callback/GET] state payload', { statePayload });
     const appCtx = await resolveAuthContext({ app_key: statePayload.app_key });
 
     const tokenResponse = await fetch(googleConfig.tokenUrl, {
@@ -120,7 +123,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     const isDeepLink = (statePayload.redirect_uri?.includes("://") || statePayload.redirect_uri?.includes("--/")) &&
                        !statePayload.redirect_uri?.startsWith("http");
 
-    console.log('[DEBUG] [oauth-callback] Checking switchboard:', {
+    if (DEBUG) console.log('[DEBUG] [oauth-callback] Checking switchboard:', {
         flow: statePayload.flow,
         isDeepLink,
         redirect_uri: statePayload.redirect_uri
@@ -128,7 +131,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
     // 2. Web Popup Flow (ONLY if not a deep link and flow is set to popup)
     if (statePayload.flow === "popup" && !isDeepLink) {
-        console.log('[DEBUG] [oauth-callback] Setting auth_token cookie for popup flow');
+        if (DEBUG) console.log('[DEBUG] [oauth-callback] Setting auth_token cookie for popup flow');
         res.cookie('auth_token', tokens.access.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -139,7 +142,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
             throw new Error("Missing redirect_uri for popup flow");
         }
         const targetOrigin = new URL(statePayload.redirect_uri).origin;
-        console.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
+        if (DEBUG) console.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
 
         res.status(200).send(`
             <!DOCTYPE html>
@@ -183,7 +186,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
         // If it's a web URL (http/https), set the auth cookie for web authentication
         if (redirectUrl.protocol === 'http:' || redirectUrl.protocol === 'https:') {
-          console.log('[DEBUG] [oauth-callback] Setting auth_token cookie');
+        if (DEBUG) console.log('[DEBUG] [oauth-callback] Setting auth_token cookie');
           res.cookie('auth_token', tokens.access.token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',

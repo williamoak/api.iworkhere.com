@@ -9,13 +9,21 @@ export const welcomePage = (isAuthenticated: boolean) => `
 <body class="pastel-blue-bg center-layout">
     <div class="card">
         <h1>Welcome to iWorkHere API</h1>
-        ${isAuthenticated 
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p>Logging in...</p>
+        </div>
+            ${isAuthenticated 
             ? '<p>You are logged in.</p><a href="/admin">Go to Admin Dashboard</a>' 
             : `
-                <form action="/admin/login" method="POST">
+                <form action="/admin/login" method="POST" autocomplete="off">
                     <div class="form-grid">
-                        <label>Username:</label> <input type="text" name="identifier" id="username" placeholder="e.g. user@domain.com" required>
-                        <label>Password:</label> <input type="password" name="password" id="password" placeholder="••••••••" required>
+                        <label>Username:</label> <input type="text" name="identifier" id="username" placeholder="e.g. user@domain.com" required autocomplete="off">
+                        <label>Password:</label> 
+                        <div class="password-container">
+                            <input type="password" name="password" id="password" placeholder="••••••••" required autocomplete="new-password">
+                            <button type="button" class="password-toggle-btn" id="togglePassword">🙈</button>
+                        </div>
                     </div>
                     <div class="button-group">
                         <button type="button" title="Register a new user account" id="open-register-btn">Register</button>
@@ -42,15 +50,17 @@ export const welcomePage = (isAuthenticated: boolean) => `
         </div>
         <div id="registration-panel" class="registration-panel">
             <h2>Register</h2>
-            <div class="form-grid">
-                <label>Username:</label> <input type="text" id="reg-username" placeholder="Username">
-                <label>Email:</label> <input type="email" id="reg-email" placeholder="user@domain.com">
-                <label>Password:</label> 
-                <div class="password-container">
-                    <input type="password" id="reg-password" placeholder="••••••••">
-                    <button type="button" class="password-toggle-btn" id="reg-password-toggle">👁️</button>
+            <form onsubmit="return false;">
+                <div class="form-grid">
+                    <label>Username:</label> <input type="text" id="reg-username" placeholder="Username" autocomplete="username">
+                    <label>Email:</label> <input type="email" id="reg-email" placeholder="user@domain.com" autocomplete="email">
+                    <label>Password:</label> 
+                    <div class="password-container">
+                        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password">
+                        <button type="button" class="password-toggle-btn" id="reg-password-toggle">👁️</button>
+                    </div>
                 </div>
-            </div>
+            </form>
             <div class="button-group">
                 <button type="button" id="reg-submit" disabled>Submit</button>
                 <button type="button" id="reg-view-eula-btn">View EULA</button>
@@ -118,6 +128,18 @@ export const welcomePage = (isAuthenticated: boolean) => `
                     const loginBtn = document.getElementById('login-btn');
                     const usernameInput = document.getElementById('username');
                     const passwordInput = document.getElementById('password');
+                    
+                    // Clear inputs on page load to prevent browser persistence
+                    usernameInput.value = '';
+                    passwordInput.value = '';
+                    usernameInput.setAttribute('autocomplete', 'off');
+                    passwordInput.setAttribute('autocomplete', 'new-password');
+                    
+                    // Extra protection: clear again after a small delay
+                    setTimeout(() => {
+                        if (usernameInput.value !== '') usernameInput.value = '';
+                        if (passwordInput.value !== '') passwordInput.value = '';
+                    }, 500);
 
                     function validateLoginForm() {
                         if (usernameInput.value.trim() !== '' && passwordInput.value.trim() !== '') {
@@ -130,6 +152,16 @@ export const welcomePage = (isAuthenticated: boolean) => `
                     usernameInput.addEventListener('input', validateLoginForm);
                     passwordInput.addEventListener('input', validateLoginForm);
 
+                    // Toggle Password visibility
+                    const togglePassword = document.getElementById('togglePassword');
+                    if (togglePassword) {
+                        togglePassword.onclick = () => {
+                            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                            passwordInput.setAttribute('type', type);
+                            togglePassword.textContent = type === 'password' ? '🙈' : '👁️';
+                        };
+                    }
+
                     window.addEventListener('eula-result', (event) => {
                         if (!event.detail.accepted) {
                             if (loginForm) loginForm.reset();
@@ -137,11 +169,36 @@ export const welcomePage = (isAuthenticated: boolean) => `
                         }
                     });
 
-                    loginForm.onsubmit = () => {
-                        setTimeout(() => {
-                            loginForm.reset();
-                            validateLoginForm();
-                        }, 100);
+                    loginForm.onsubmit = async (event) => {
+                        event.preventDefault();
+                        
+                        // Show loading overlay
+                        document.getElementById('loading-overlay').style.display = 'flex';
+
+                        const formData = new URLSearchParams(new FormData(loginForm));
+                        
+                        // Clear inputs immediately
+                        usernameInput.value = '';
+                        passwordInput.value = '';
+                        validateLoginForm();
+
+                        const response = await fetch('/admin/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded'
+                            },
+                            body: formData
+                        });
+                        
+                        if (response.redirected || response.status === 200) {
+                            window.location.href = '/admin';
+                        } else {
+                            const overlay = document.getElementById('loading-overlay');
+                            overlay.classList.add('collapsing');
+                            setTimeout(() => {
+                                window.location.reload(); // To show the failure
+                            }, 500);
+                        }
                     };
 
                     validateLoginForm();

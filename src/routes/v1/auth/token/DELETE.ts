@@ -32,8 +32,11 @@ import type { Request, Response } from 'express'
 
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
+import { configGet } from '@helpers/config';
 
 import { z } from 'zod';
+
+const DEBUG = configGet('DEBUG');
 
 export const schema = {
   body: z.object({}).optional(),
@@ -63,7 +66,7 @@ export default async function DELETE(
         await revokeToken(token)
 
         res.clearCookie('auth_token', { path: '/' });
-        console.log('[DEBUG] [DELETE] auth_token cookie set to expire, secure:', process.env.NODE_ENV === 'production');
+        if (DEBUG) console.log('[DEBUG] [DELETE] auth_token cookie set to expire, secure:', process.env.NODE_ENV === 'production');
         res.status(204).end()
     } catch (err) {
         if (err instanceof AuthError) {

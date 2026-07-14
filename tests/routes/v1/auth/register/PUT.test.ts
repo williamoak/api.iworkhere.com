@@ -66,7 +66,7 @@ vi.mock('@services/auth/passwordService', () => ({
 
 vi.mock('@services/auth/emailVerificationService', () => ({
     issueEmailVerificationToken: vi.fn(),
-    sendVerificationEmail: vi.fn(),
+    sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@services/dbService', () => ({
@@ -254,7 +254,8 @@ describe('PUT /v1/auth/register', () => {
           app_key: 'bill.iworkhere.com',
           username: 'bill',
           email: 'bill@example.com',
-        })
+        }),
+        expect.anything()
       )
     })
 

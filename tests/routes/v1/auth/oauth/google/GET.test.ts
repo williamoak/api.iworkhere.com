@@ -17,6 +17,7 @@ vi.mock("@helpers/config", () => ({
   config: {
     APP_URL: "https://bill.iworkhere.com",
   },
+  configGet: vi.fn().mockReturnValue(false),
   getGoogleOAuthConfig: vi.fn().mockReturnValue({
     authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     clientId: "client-id",

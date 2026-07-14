@@ -47,6 +47,7 @@
 import { db } from '@services/dbService'
 import { applications } from '@db/schema'
 import { eq } from 'drizzle-orm'
+import type { Request } from 'express'
 
 export class AuthError extends Error {
     public readonly code: string
@@ -65,14 +66,18 @@ export type AuthContext = {
 }
 
 export async function resolveAuthContext(
-    body: unknown
+    body: unknown,
+    req?: Request
 ): Promise<AuthContext> {
-    if (
-        !body ||
-        typeof body !== 'object' ||
-        !('app_key' in body) ||
-        typeof (body as any).app_key !== 'string'
-    ) {
+    let appKey = (typeof body === 'object' && body !== null && 'app_key' in body)
+        ? (body as any).app_key
+        : undefined;
+
+    if (!appKey && req) {
+        appKey = req.get('host');
+    }
+
+    if (!appKey || typeof appKey !== 'string') {
         throw new AuthError(
             'APP_KEY_REQUIRED',
             'Application key is required',
@@ -80,7 +85,7 @@ export async function resolveAuthContext(
         )
     }
 
-    const appKey = (body as any).app_key.trim()
+    appKey = appKey.trim();
 
     if (!appKey) {
         throw new AuthError(

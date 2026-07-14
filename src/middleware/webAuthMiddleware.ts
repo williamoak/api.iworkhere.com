@@ -17,7 +17,9 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
+import { configGet } from '@helpers/config';
 import crypto from 'crypto';
+const DEBUG = configGet('DEBUG');
 import { db } from '@services/dbService';
 import { authTokens } from '@db/schema';
 import { and, eq, gt, isNull } from 'drizzle-orm';
@@ -26,7 +28,7 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 export async function webAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
-  console.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
+  if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
   const token = req.cookies.auth_token;
 
   if (!token) {

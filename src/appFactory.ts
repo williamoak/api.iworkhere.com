@@ -8,7 +8,7 @@ import { welcomePage } from "@src/root/index";
 import { configGet } from "@helpers/config";
 
 const DEBUG = configGet("DEBUG") === "true";
-const AUTH_ME_DEBUG = configGet("AUTH_ME_DEBUG") === "1";
+const AUTH_ME_DEBUG = process.env.AUTH_ME_DEBUG === 'true' || process.env.AUTH_ME_DEBUG === '1';
 
 const allowedOriginRegex = /^https:\/\/([a-z0-9-]+)\.iworkhere\.com$/i;
 const explicitAllowedOrigins = new Set(
@@ -59,6 +59,9 @@ export async function createBaseApp() {
     app.use(cookieParser());
     app.use(express.static("public"));
 
+    if (DEBUG) {
+        console.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);
+    }
     if (AUTH_ME_DEBUG) {
         // Diagnostic logging for JSON requests (debug only).
         app.use((req, _res, next) => {
@@ -108,6 +111,28 @@ export async function createBaseApp() {
         console.log("Root route / hit!");
         res.set('Cache-Control', 'no-store');
         res.send(welcomePage(!!req.auth));
+    });
+
+    // Handle verification redirects
+    app.get('/verification-success', (_req, res) => {
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Success</title></head>
+            <body><h1>Verification Successful!</h1><p>You can now log in.</p><a href="/">Go to Login</a></body>
+            </html>
+        `);
+    });
+
+    app.get('/verification-error', (req, res) => {
+        const error = req.query.error || 'Unknown error';
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error</title></head>
+            <body><h1>Verification Failed</h1><p>Error: ${error}</p><a href="/">Go to Login</a></body>
+            </html>
+        `);
     });
     await loadRoutes(app);
     app.use('/admin', adminRoutes);

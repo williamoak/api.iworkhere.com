@@ -193,9 +193,10 @@ const USERNAME_SEPARATORS = '._-'
  * Username schema.
  *   - trims, lowercases
  *   - 1–64 chars
- *   - allowed chars: ASCII letters, digits, '.', '_', '-'
- *   - no '@' (usernames must not look like emails)
- *   - no leading/trailing/consecutive separators
+ *   - If it contains '@', it is validated as an email.
+ *   - Otherwise:
+ *     - allowed chars: ASCII letters, digits, '.', '_', '-'
+ *     - no leading/trailing/consecutive separators
  *   - reserved-words list rejected
  */
 export const usernameSchema = z
@@ -205,16 +206,30 @@ export const usernameSchema = z
   .max(USERNAME_MAX_LENGTH, {
     message: `Username must not exceed ${USERNAME_MAX_LENGTH} characters`,
   })
-  .regex(USERNAME_ALLOWED_CHARS, {
-    message:
-      'Username may only contain letters, digits, dots, underscores, and hyphens',
-  })
-  .refine((v) => !v.includes('@'), {
-    message: 'Username must not contain @ (use the email field instead)',
-  })
-  .refine((v) => !hasBadSeparatorRun(v, USERNAME_SEPARATORS), {
-    message:
-      'Username must not start or end with a separator, nor contain consecutive separators',
+  .superRefine((val, ctx) => {
+    if (val.includes('@')) {
+      const emailResult = emailSchema.safeParse(val)
+      if (!emailResult.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Invalid email address',
+        })
+      }
+    } else {
+      if (!USERNAME_ALLOWED_CHARS.test(val)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'Username may only contain letters, digits, dots, underscores, and hyphens',
+        })
+      } else if (hasBadSeparatorRun(val, USERNAME_SEPARATORS)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'Username must not start or end with a separator, nor contain consecutive separators',
+        })
+      }
+    }
   })
   .transform((v) => v.toLowerCase())
   .refine((v) => !RESERVED_USERNAMES.has(v), {
@@ -244,7 +259,7 @@ export const appKeySchema = z
  * elsewhere.
  */
 export const registrationBodySchema = z.object({
-  app_key: appKeySchema,
+  app_key: appKeySchema.nullable().optional(),
   username: usernameSchema,
   email: emailSchema,
   password: passwordSchema,

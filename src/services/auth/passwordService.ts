@@ -38,13 +38,17 @@
  */
 
 import bcrypt from 'bcryptjs'
+import { configGet } from '@helpers/config';
 import { db } from '@services/dbService'
 import {
     userAuthLocal,
     userPasswordHistory,
 } from '@db/schema'
+
+const DEBUG = configGet('DEBUG') === 'true';
 import { eq } from 'drizzle-orm'
 import { AuthError } from './authContext'
+import { DbExecutor } from './emailVerificationService'
 
 const BCRYPT_ROUNDS = 12
 
@@ -80,6 +84,7 @@ export async function verifyPassword(
         )
     }
 
+    if (DEBUG) console.log('[DEBUG] Comparing password hash. Plaintext:', plaintextPassword, 'Hash:', rows[0].passwordHash);
     const match = await bcrypt.compare(
         plaintextPassword,
         rows[0].passwordHash
@@ -120,7 +125,8 @@ export async function hashPassword(
 export async function enforcePasswordHistory(
     userId: string,
     newPlaintextPassword: string,
-    newPasswordHash: string
+    newPasswordHash: string,
+    tx: DbExecutor = db
 ): Promise<void> {
     if (!newPlaintextPassword) {
         throw new AuthError(
@@ -130,12 +136,12 @@ export async function enforcePasswordHistory(
         )
     }
 
-    const rows = await db
+    const rows = await tx
         .select({
             passwordHash: userPasswordHistory.passwordHash,
         })
         .from(userPasswordHistory)
-        .where(eq(userPasswordHistory.userId, userId))
+        .where(eq(userPasswordHistory.userId, userId));
 
     for (const row of rows) {
         const reused = await bcrypt.compare(
@@ -152,7 +158,7 @@ export async function enforcePasswordHistory(
         }
     }
 
-    await db.insert(userPasswordHistory).values({
+    await tx.insert(userPasswordHistory).values({
         userId,
         passwordHash: newPasswordHash,
     })
