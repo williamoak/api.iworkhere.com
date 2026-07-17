@@ -5,7 +5,7 @@
  * @module warframe.weapons
  * @tag warframe.weapons
  * @version 1.0.1
- * @author william.r.oak@gmail.com
+ * @author william.r.oak@gmail.com, tim
  * @path /v1/warframe/weapons
  * @summary Retrieve weapon list and optionally resolve a single weapon.
  *
