@@ -1,7 +1,9 @@
 import { vi } from 'vitest';
+import 'dotenv/config';
 
 process.env.API_VERSION = 'v1';
 process.env.MAX_CONCURRENT_REQUESTS = '10';
+process.env.REDIS_SERVER_PASSWORD = 'kjhFWE987DLKJlkjh';
 
 /**
  * Mock crypto to avoid real hashing and UUID generation

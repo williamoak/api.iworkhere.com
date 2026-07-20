@@ -1,80 +1,77 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { cacheStore } from "@cache/cacheStore";
 
 describe("cacheStore", () => {
+  beforeEach(async () => {
+    await cacheStore.clear();
+  });
 
-    beforeEach(() => {
-        cacheStore.clear();
-        vi.useFakeTimers();
-    });
+  it("set() and get() should store and retrieve a value", async () => {
+    await cacheStore.set("foo", "bar", 1000);
 
-    it("set() and get() should store and retrieve a value", () => {
-        cacheStore.set("foo", "bar", 1000);
+    const result = await cacheStore.get<string>("foo");
 
-        const result = cacheStore.get<string>("foo");
+    expect(result).toBe("bar");
+  });
 
-        expect(result).toBe("bar");
-    });
+  it("get() should return null for missing keys", async () => {
+    const result = await cacheStore.get("missing");
 
-    it("get() should return null for missing keys", () => {
-        const result = cacheStore.get("missing");
+    expect(result).toBeNull();
+  });
 
-        expect(result).toBeNull();
-    });
+  it("get() should expire values after TTL", async () => {
+    await cacheStore.set("temp", "value", 10);
 
-    it("get() should expire values after TTL", () => {
-        cacheStore.set("temp", "value", 10);
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // Advance time past TTL
-        vi.advanceTimersByTime(20);
+    const result = await cacheStore.get("temp");
 
-        const result = cacheStore.get("temp");
+    expect(result).toBeNull();
+  });
 
-        expect(result).toBeNull();
-    });
+  it("expired entries should be removed from the store", async () => {
+    await cacheStore.set("temp", "value", 10);
 
-    it("expired entries should be removed from the store", () => {
-        cacheStore.set("temp", "value", 10);
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-        vi.advanceTimersByTime(20);
+    // Access triggers cleanup
+    await cacheStore.get("temp");
 
-        // Access triggers cleanup
-        cacheStore.get("temp");
+    expect(await cacheStore.size()).toBe(0);
+  });
 
-        expect(cacheStore.size()).toBe(0);
-    });
+  it("del() should remove an entry", async () => {
+    await cacheStore.set("foo", "bar", 1000);
 
-    it("del() should remove an entry", () => {
-        cacheStore.set("foo", "bar", 1000);
+    await cacheStore.del("foo");
 
-        cacheStore.del("foo");
+    expect(await cacheStore.get("foo")).toBeNull();
+  });
 
-        expect(cacheStore.get("foo")).toBeNull();
-    });
+  it("has() should return true only for valid, non-expired entries", async () => {
+    await cacheStore.set("foo", "bar", 10);
 
-    it("has() should return true only for valid, non-expired entries", () => {
-        cacheStore.set("foo", "bar", 10);
+    expect(await cacheStore.has("foo")).toBe(true);
 
-        expect(cacheStore.has("foo")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-        vi.advanceTimersByTime(20);
+    expect(await cacheStore.has("foo")).toBe(false);
+  });
 
-        expect(cacheStore.has("foo")).toBe(false);
-    });
+  it("clear() should remove all entries", async () => {
+    await cacheStore.set("a", 1, 1000);
+    await cacheStore.set("b", 2, 1000);
 
-    it("clear() should remove all entries", () => {
-        cacheStore.set("a", 1, 1000);
-        cacheStore.set("b", 2, 1000);
+    await cacheStore.clear();
 
-        cacheStore.clear();
+    expect(await cacheStore.size()).toBe(0);
+  });
 
-        expect(cacheStore.size()).toBe(0);
-    });
+  it("size() should reflect number of active entries", async () => {
+    await cacheStore.set("a", 1, 1000);
+    await cacheStore.set("b", 2, 1000);
 
-    it("size() should reflect number of active entries", () => {
-        cacheStore.set("a", 1, 1000);
-        cacheStore.set("b", 2, 1000);
-
-        expect(cacheStore.size()).toBe(2);
-    });
+    expect(await cacheStore.size()).toBe(2);
+  });
 });

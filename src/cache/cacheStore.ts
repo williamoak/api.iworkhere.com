@@ -1,87 +1,73 @@
-/**
- * Centralized in-memory cache store.
- * Single-process, TTL-based, deterministic behavior.
- */
+import Redis from 'ioredis';
+
+const redis = new Redis({
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  password: process.env.REDIS_SERVER_PASSWORD,
+});
 
 export type CacheValue = unknown;
 
-type CacheEntry = {
-  value: CacheValue;
-  expiresAt: number;
-};
-
 class CacheStore {
-  private store = new Map<string, CacheEntry>();
-
   /**
    * Retrieve a cached value by key.
-   * Automatically evicts expired entries.
    */
-  get<T = CacheValue>(key: string): T | null {
-    const entry = this.store.get(key);
-    if (!entry) return null;
-
-    if (Date.now() > entry.expiresAt) {
-      this.store.delete(key);
-      return null;
-    }
-
-    return entry.value as T;
+  async get<T = CacheValue>(key: string): Promise<T | null> {
+    const value = await redis.get(key);
+    return value ? (JSON.parse(value) as T) : null;
   }
 
   /**
-   * Store a value with a TTL.
+   * Store a value with a TTL (in ms).
    */
-  set(key: string, value: CacheValue, ttlMs: number): void {
-    this.store.set(key, {
-      value,
-      expiresAt: Date.now() + ttlMs,
-    });
+  async set(key: string, value: CacheValue, ttlMs: number): Promise<void> {
+    await redis.set(key, JSON.stringify(value), 'PX', ttlMs);
   }
 
   /**
    * Delete a single cache entry by key.
    */
-  del(key: string): void {
-    this.store.delete(key);
+  async del(key: string): Promise<void> {
+    await redis.del(key);
   }
 
   /**
-   * Delete all cache entries matching a predicate.
-   * Used for DELETE-based invalidation of resource variants.
+   * Delete all cache entries matching a predicate (using SCAN).
    */
-  delWhere(predicate: (key: string) => boolean): void {
-    for (const key of this.store.keys()) {
-      if (predicate(key)) {
-        this.store.delete(key);
+  async delWhere(predicate: (key: string) => boolean): Promise<void> {
+    const stream = redis.scanStream({ match: '*' });
+    for await (const keys of stream) {
+      for (const key of keys) {
+        if (predicate(key)) {
+          await redis.del(key);
+        }
       }
     }
   }
 
   /**
-   * Check if a non-expired entry exists for the given key.
+   * Check if an entry exists for the given key.
    */
-  has(key: string): boolean {
-    return this.get(key) !== null;
+  async has(key: string): Promise<boolean> {
+    return (await redis.exists(key)) === 1;
   }
 
   /**
-   * Clear all cache entries.
+   * Clear all cache entries (WARNING: dangerous).
    */
-  clear(): void {
-    this.store.clear();
+  async clear(): Promise<void> {
+    await redis.flushdb();
   }
 
   /**
-   * Number of entries currently in the cache.
+   * Approximate number of entries in the current DB.
    */
-  size(): number {
-    return this.store.size;
+  async size(): Promise<number> {
+    return await redis.dbsize();
   }
 }
 
 /**
  * Singleton cache instance.
- * Do NOT create additional instances.
  */
 export const cacheStore = new CacheStore();
