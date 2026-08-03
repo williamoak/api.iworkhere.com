@@ -4,7 +4,8 @@ export function tenantMiddleware() {
   return async (req: Request, _res: Response, next: NextFunction) => {
     // Extract tenant from subdomain
     // Expected hostnames: tenant.iworkhere.com
-    const hostname = req.hostname;
+    const origin = req.headers.origin || req.headers.referer || '';
+    const hostname = origin ? new URL(origin).hostname : req.hostname;
     const parts = hostname.split('.');
         console.log(`[DEBUG] tenantMiddleware: hostname=${hostname}, parts=${JSON.stringify(parts)}`);
     
@@ -12,10 +13,7 @@ export function tenantMiddleware() {
     let tenant = 'public';
     if (parts.length > 2) {
       tenant = parts[0];
-    } else if (parts.length === 2 && parts[0] !== 'api') {
-      // Handle domain.com as tenant domain?
-      // Or if the base domain is different.
-      // For now, assume subdomain is the tenant
+    } else if (parts.length === 2 && parts[0] !== 'api' && parts[0] !== 'localhost') {
       tenant = parts[0];
     }
     

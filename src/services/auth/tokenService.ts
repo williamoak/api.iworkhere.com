@@ -41,6 +41,7 @@ import { authTokens } from '@db/schema'
 import { and, eq, isNull, gt } from 'drizzle-orm'
 import { AuthError } from "@services/auth/authContext"
 import { configGetNumber } from '@helpers/config'
+import { cacheStore } from '@cache/cacheStore'
 
 const ACCESS_TOKEN_TTL_SECONDS = configGetNumber(
     'ACCESS_TOKEN_TTL_SECONDS',
@@ -178,6 +179,8 @@ export async function refreshTokens(
                 revokedAt: new Date(),
             })
             .where(eq(authTokens.id, existing.id))
+        
+        await cacheStore.del(`auth:token:${existing.tokenHash}`)
 
         const inserted = await tx
             .insert(authTokens)
@@ -230,4 +233,6 @@ export async function revokeToken(
             revokedAt: new Date(),
         })
         .where(eq(authTokens.tokenHash, tokenHash))
+    
+    await cacheStore.del(`auth:token:${tokenHash}`)
 }
