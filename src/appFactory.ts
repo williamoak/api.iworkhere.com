@@ -54,7 +54,7 @@ export async function createBaseApp() {
         origin: corsOrigin,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
-        credentials: false
+        credentials: true
     }));
 
     // Body parsing
@@ -63,6 +63,7 @@ export async function createBaseApp() {
     app.use(cookieParser());
     app.use(tenantMiddleware());
     app.use(tenantTransaction());
+    app.use(webAuthMiddleware);
     app.use(visitLoggerMiddleware());
     app.use(express.static("public"));
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
