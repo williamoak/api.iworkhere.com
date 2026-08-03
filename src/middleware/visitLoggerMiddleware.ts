@@ -7,7 +7,7 @@ function formatToUUID(hex: string): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
-function getDefaultNote(path: string, method: string): string {
+function getDefaultNote(path: string): string {
     return path.includes('/login') ? 'login' :
            path.includes('/logout') ? 'logout' :
            path.includes('/create') ? 'create record' :
@@ -39,7 +39,7 @@ export function visitLoggerMiddleware() {
                 // 1. Explicitly set by route handler (res.locals.visitNote)
                 // 2. Default based on path + method
                 const note = (res.locals.visitNote as string) || 
-                             getDefaultNote(req.path, req.method);
+                             getDefaultNote(req.path);
 
                 await db.insert(visitInfo).values({
                     deviceId: deviceId,
