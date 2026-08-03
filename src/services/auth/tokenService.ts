@@ -39,7 +39,7 @@ import crypto from 'crypto'
 import { db } from '@services/dbService'
 import { authTokens } from '@db/schema'
 import { and, eq, isNull, gt } from 'drizzle-orm'
-import { AuthError } from './authContext'
+import { AuthError } from "@services/auth/authContext"
 import { configGetNumber } from '@helpers/config'
 
 const ACCESS_TOKEN_TTL_SECONDS = configGetNumber(

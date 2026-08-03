@@ -1,22 +1,23 @@
 // src/db/schema/index.ts
 
 // --- Auth / identity ---
-export * from "./user_statuses";
-export * from "./users";
-export * from "./applications";
-export * from "./application_origins";
-export * from "./user_applications";
-export * from "./auth_tokens";
-export * from "./password_reset_requests";
-export * from "./user_password_history";
-export * from "./user_auth_local";
-export * from "./user_auth_oauth";
-export * from './email_verification_tokens'
-export * from './email_audit_logs'
-export * from './password_reset_tokens'
-export * from './config'
+export * from "@db/schema/user_statuses";
+export * from "@db/schema/users";
+export * from "@db/schema/applications";
+export * from "@db/schema/application_origins";
+export * from "@db/schema/user_applications";
+export * from "@db/schema/auth_tokens";
+export * from "@db/schema/password_reset_requests";
+export * from "@db/schema/user_password_history";
+export * from "@db/schema/user_auth_local";
+export * from "@db/schema/user_auth_oauth";
+export * from "@db/schema/email_verification_tokens";
+export * from "@db/schema/email_audit_logs";
+export * from "@db/schema/password_reset_tokens";
+export * from "@db/schema/config";
 
 // --- Warframe Calculator tables ---
-export * from "./warframes";
-export * from "./modules";
-export * from "./weapons";
+export * from "@db/schema/warframes";
+export * from "@db/schema/modules";
+export * from "@db/schema/weapons";
+export * from "@db/schema/visit_info";

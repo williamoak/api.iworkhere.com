@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core'
-import { users } from './users'
+import { users } from "@db/schema/users"
 
 export const emailAuditLogs = pgTable(
   'email_audit_logs',

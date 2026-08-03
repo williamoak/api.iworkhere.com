@@ -1,5 +1,5 @@
 /* loading the main program here, so I can mock certain files easier */
-import { bootstrap } from "./server";
+import { bootstrap } from "@src/server";
 
 bootstrap().catch(err => {
     console.error("Fatal startup error:", err);

@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest';
-import { makeValidator } from '../../src/middleware/validate';
+import { makeValidator } from "@middleware/validate";
 import { z } from 'zod';
 import type { Request, Response, NextFunction } from 'express';
 

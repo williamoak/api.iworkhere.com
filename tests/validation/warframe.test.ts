@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { warframeClassEnum, warframeInsertSchema, warframeUpdateSchema, warframeUpdateByNameSchema } from '../../src/validation/warframe';
+import { warframeClassEnum, warframeInsertSchema, warframeUpdateSchema, warframeUpdateByNameSchema } from "@validation/warframe";
 
 describe('warframe validation', () => {
   describe('warframeClassEnum', () => {

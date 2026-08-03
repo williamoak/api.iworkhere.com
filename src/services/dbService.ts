@@ -66,9 +66,24 @@ export const pool = new Pool({
   ssl,
 });
 
-// === Drizzle ORM ===
-// Added <typeof schema> to fix the missing schema generic error
-export const db = drizzle<typeof schema>(pool, { schema });
+// === Base Drizzle ORM Instance ===
+const baseDb = drizzle<typeof schema>(pool, { schema });
+
+import { AsyncLocalStorage } from 'async_hooks';
+
+// === Scoped DB Access ===
+export const dbStorage = new AsyncLocalStorage<typeof baseDb>();
+
+export function getDb() {
+  return dbStorage.getStore() || baseDb;
+}
+
+// === Scoped DB Access Proxy ===
+export const db = new Proxy({} as typeof baseDb, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getDb(), prop, receiver);
+  },
+});
 
 // === Legacy raw SQL (still available) ===
 export async function query(sql: string, params?: unknown[]) {

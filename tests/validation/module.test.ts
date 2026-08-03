@@ -4,7 +4,7 @@ import {
   moduleInsertSchema, 
   moduleUpdateSchema, 
   moduleUpdateByNameSchema 
-} from '../../src/validation/module';
+} from "@validation/module";
 
 describe('module validation schemas', () => {
   describe('moduleSlotTypeEnum', () => {

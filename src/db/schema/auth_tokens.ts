@@ -6,8 +6,8 @@ import {
     index,
     AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { users } from './users';
-import { applications } from './applications';
+import { users } from "@db/schema/users";
+import { applications } from "@db/schema/applications";
 
 export const authTokens = pgTable(
     'auth_tokens',

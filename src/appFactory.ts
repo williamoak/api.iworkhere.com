@@ -4,6 +4,9 @@ import cookieParser from "cookie-parser";
 import cors, { type CorsOptions } from "cors";
 import { loadRoutes } from "@loaders/routeLoader";
 import adminRoutes from "@src/admin/adminApp";
+import { tenantMiddleware } from "@middleware/tenantMiddleware";
+import { tenantTransaction } from "@middleware/tenantTransaction";
+import { visitLoggerMiddleware } from "@middleware/visitLoggerMiddleware";
 import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
 import { welcomePage } from "@src/admin/client/welcomePage";
 import { configGet } from "@helpers/config";
@@ -58,6 +61,9 @@ export async function createBaseApp() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
+    app.use(tenantMiddleware());
+    app.use(tenantTransaction());
+    app.use(visitLoggerMiddleware());
     app.use(express.static("public"));
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
 

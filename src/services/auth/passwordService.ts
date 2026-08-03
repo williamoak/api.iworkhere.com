@@ -47,8 +47,8 @@ import {
 
 const DEBUG = configGet('DEBUG') === 'true';
 import { eq } from 'drizzle-orm'
-import { AuthError } from './authContext'
-import { DbExecutor } from './emailVerificationService'
+import { AuthError } from "@services/auth/authContext"
+import { DbExecutor } from "@services/auth/emailVerificationService"
 
 const BCRYPT_ROUNDS = 12
 

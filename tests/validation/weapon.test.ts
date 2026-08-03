@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { weaponInsertSchema, weaponUpdateSchema, weaponUpdateByNameSchema } from '../../src/validation/weapon';
+import { weaponInsertSchema, weaponUpdateSchema, weaponUpdateByNameSchema } from "@validation/weapon";
 
 describe('weapon validation', () => {
   describe('weaponInsertSchema', () => {

@@ -26,7 +26,7 @@ export const moduleSlotType = pgEnum("module_slot_type", [
  * Legacy domain table.
  * Schema mirrors existing DB exactly.
  */
-export const modules = pgTable("modules", {
+export const modules = pgTable("warframe_modules", {
     modId: uuid("mod_id").primaryKey(),
     name: text("name").notNull(),
     grade: text("grade"),

@@ -46,7 +46,7 @@ Mocking conventions
 
 ```ts
 vi.mock('@services/auth/authUserResolver', () => ({ __esModule: true, resolveUserForApplication: vi.fn() }));
-import { app } from '../../app'; // import after mocking
+import { app } from "@src/app"; // import after mocking
 ```
 
 - When a test needs the real implementation of a module that is globally mocked, use `vi.importActual()` inside the test to acquire the real implementation.

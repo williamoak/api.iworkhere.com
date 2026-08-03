@@ -49,7 +49,7 @@
 import { db } from '@services/dbService'
 import { users, userApplications } from '@db/schema'
 import { and, eq, or } from 'drizzle-orm'
-import { AuthError } from './authContext'
+import { AuthError } from "@services/auth/authContext"
 
 export type ResolvedUser = {
     userId: string

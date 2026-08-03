@@ -6,7 +6,7 @@ import {
     timestamp,
     uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { applications } from './applications';
+import { applications } from "@db/schema/applications";
 
 export const applicationOrigins = pgTable(
     'application_origins',

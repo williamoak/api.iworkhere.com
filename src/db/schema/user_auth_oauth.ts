@@ -7,7 +7,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
-import { users } from "./users";
+import { users } from "@db/schema/users";
 
 /**
  * OAuth authentication identities.

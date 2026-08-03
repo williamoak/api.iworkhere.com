@@ -45,7 +45,7 @@ import { eq } from 'drizzle-orm';
 
 import { applications, applicationOrigins } from '@db/schema';
 import { db } from '@services/dbService';
-import { AuthError, type AuthContext, resolveAuthContext } from './authContext';
+import { AuthError, type AuthContext, resolveAuthContext } from "@services/auth/authContext";
 import { config } from '@helpers/config';
 
 type AppKeySource = {
