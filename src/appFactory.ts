@@ -54,7 +54,7 @@ export async function createBaseApp() {
         origin: corsOrigin,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
-        credentials: false
+        credentials: true
     }));
 
     // Body parsing

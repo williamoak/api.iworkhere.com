@@ -50,11 +50,11 @@ describe("cacheStore", () => {
   });
 
   it("has() should return true only for valid, non-expired entries", async () => {
-    await cacheStore.set("foo", "bar", 10);
+    await cacheStore.set("foo", "bar", 100);
 
     expect(await cacheStore.has("foo")).toBe(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     expect(await cacheStore.has("foo")).toBe(false);
   });
