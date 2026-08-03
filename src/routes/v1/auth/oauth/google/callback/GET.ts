@@ -137,6 +137,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
           secure: process.env.NODE_ENV === 'production',
           maxAge: tokens.access.expiresAt.getTime() - Date.now(),
           path: '/',
+          domain: '.iworkhere.com',
         });
         if (!statePayload.redirect_uri) {
             throw new Error("Missing redirect_uri for popup flow");
@@ -192,6 +193,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
             secure: process.env.NODE_ENV === 'production',
             maxAge: tokens.access.expiresAt.getTime() - Date.now(),
             path: '/',
+            domain: '.iworkhere.com',
           });
         }
 

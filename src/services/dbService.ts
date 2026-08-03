@@ -67,7 +67,7 @@ export const pool = new Pool({
 });
 
 // === Base Drizzle ORM Instance ===
-const baseDb = drizzle<typeof schema>(pool, { schema });
+export const baseDb = drizzle<typeof schema>(pool, { schema });
 
 import { AsyncLocalStorage } from 'async_hooks';
 

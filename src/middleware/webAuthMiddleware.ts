@@ -29,7 +29,14 @@ function hashToken(token: string): string {
 }
 export async function webAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
   if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
-  const token = req.cookies.auth_token;
+  if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] authorization header:', req.headers.authorization);
+  let token = req.cookies.auth_token;
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
 
   if (!token) {
     req.auth = undefined;
@@ -54,8 +61,10 @@ export async function webAuthMiddleware(req: Request, _res: Response, next: Next
       .limit(1);
 
     if (rows.length > 0) {
+      if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] auth successful for user:', rows[0].userId);
       req.auth = { userId: rows[0].userId };
     } else {
+      if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] auth failed - token not found or invalid');
       req.auth = undefined;
     }
   } catch (err) {

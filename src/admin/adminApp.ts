@@ -114,6 +114,7 @@ router.post('/login', async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       maxAge: tokens.access.expiresAt.getTime() - Date.now(),
       path: '/',
+      domain: '.iworkhere.com',
     });
 
     res.redirect('/admin');

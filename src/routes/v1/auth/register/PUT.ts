@@ -77,29 +77,24 @@ export const schema = {
 };
 
 export default async function PUT(req: Request, res: Response): Promise<void> {
-  try {
-    const body =
+  const body =
       (req.validated?.body as RegistrationBody) ??
       (req.body as RegistrationBody);
 
+  try {
     const { username, email, password } = body;
-    console.log('[registration] Starting registration for:', { username, email });
+    res.locals = res.locals || {};
+    res.locals.visitNote = `registration: starting for ${username}`;
 
     // Resolve application context
-    console.log('[registration] Resolving auth context...');
     const { applicationId } = await resolveAuthContext(body, req);
-    console.log('[registration] Auth context resolved:', { applicationId });
 
-    console.log('[registration] Hashing password...');
     const passwordHash = await hashPassword(password);
     const userId = uuidv7();
-    console.log('[registration] Password hashed, userId generated:', { userId });
 
     // Create user + auth + app access + email verification atomically
     let verificationToken = '';
-    console.log('[registration] Entering DB transaction...');
     await db.transaction(async (tx) => {
-      console.log('[registration] Inserting user...');
       await tx.insert(users).values({
         id: userId,
         username,
@@ -107,17 +102,14 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         statusCode: 'pending',
       });
 
-      console.log('[registration] Inserting auth credentials...');
       await tx.insert(userAuthLocal).values({
         userId,
         passwordHash,
         isEnabled: true,
       });
 
-      console.log('[registration] Enforcing password history...');
       await enforcePasswordHistory(userId, password, passwordHash, tx);
 
-      console.log('[registration] Inserting app association...');
       await tx.insert(userApplications).values({
         userId,
         applicationId,
@@ -125,7 +117,6 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         isEnabled: true,
       });
 
-      console.log('[registration] Issuing email verification token...');
       const tokenResult = await issueEmailVerificationToken({
         userId,
         applicationId,
@@ -133,14 +124,11 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         tx,
       });
       verificationToken = tokenResult.token;
-      console.log('[registration] Token issued.');
     });
-    console.log('[registration] DB transaction committed.');
 
     // Send verification email after successful registration
     // Failures are logged but don't prevent registration
     // Intentionally not awaiting this to avoid blocking the request
-    console.log('[registration] Triggering background email...');
     sendVerificationEmail({
       email,
       token: verificationToken,
@@ -157,9 +145,11 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         status: 'pending',
       },
     });
-    console.log('[registration] Registration successful, response sent.');
+    res.locals.visitNote = `registration: successful for ${username}`;
   } catch (err: any) {
     console.error('Registration failed:', err);
+    res.locals = res.locals || {};
+    res.locals.visitNote = `registration: failed for ${body?.username || 'unknown'}`;
     if (err instanceof AuthError) {
       res.status(err.httpStatus).json({
         error: err.code,

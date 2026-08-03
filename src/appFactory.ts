@@ -6,7 +6,7 @@ import { loadRoutes } from "@loaders/routeLoader";
 import adminRoutes from "@src/admin/adminApp";
 import { tenantMiddleware } from "@middleware/tenantMiddleware";
 import { tenantTransaction } from "@middleware/tenantTransaction";
-import { visitLoggerMiddleware } from "@middleware/visitLoggerMiddleware";
+import { loggingMiddleware } from "@middleware/loggingMiddleware";
 import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
 import { welcomePage } from "@src/admin/client/welcomePage";
 import { configGet } from "@helpers/config";
@@ -64,7 +64,7 @@ export async function createBaseApp() {
     app.use(tenantMiddleware());
     app.use(tenantTransaction());
     app.use(webAuthMiddleware);
-    app.use(visitLoggerMiddleware());
+    app.use(loggingMiddleware());
     app.use(express.static("public"));
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
 
