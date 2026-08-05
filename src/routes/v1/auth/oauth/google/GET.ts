@@ -47,11 +47,10 @@ import { logger } from '@helpers/logger';
  */
 
 import type { Request, Response } from "express";
-import { config, configGet } from "@helpers/config";
+import { config } from "@helpers/config";
 import { getGoogleOAuthConfig } from "@helpers/config";
 import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
-
 
 
 /**
