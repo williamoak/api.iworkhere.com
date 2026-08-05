@@ -52,7 +52,7 @@ import { getGoogleOAuthConfig } from "@helpers/config";
 import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
 
-const DEBUG = configGet('DEBUG');
+
 
 /**
  * GET /v1/auth/oauth/google

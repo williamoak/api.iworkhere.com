@@ -39,14 +39,11 @@ import { logger } from '@helpers/logger';
  */
 
 import bcrypt from 'bcryptjs'
-import { configGet } from '@helpers/config';
 import { db } from '@services/dbService'
 import {
     userAuthLocal,
     userPasswordHistory,
 } from '@db/schema'
-
-const DEBUG = configGet('DEBUG') === 'true';
 import { eq } from 'drizzle-orm'
 import { AuthError } from "@services/auth/authContext"
 import { DbExecutor } from "@services/auth/emailVerificationService"

@@ -22,9 +22,6 @@ import { resolveAuthContext } from "@services/auth/authContext";
 import { issueLoginTokens } from "@services/auth/tokenService";
 import { db } from "@services/dbService";
 import { users, userAuthOauth } from "@db/schema";
-import { configGet } from "@helpers/config";
-
-const DEBUG = configGet('DEBUG');
 
 type GoogleTokenResponse = {
   access_token?: string;

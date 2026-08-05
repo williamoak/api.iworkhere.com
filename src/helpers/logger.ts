@@ -1,4 +1,3 @@
-import { logger } from '@helpers/logger';
 /**
  * @myDocBlock
  * @file logger.ts
