@@ -3,8 +3,8 @@
  * @file backoffMiddleware.ts
  * @internal
  * @module Middleware
- * @tag api
- * @version 1.0.0
+ * @tag api, backoff
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path src/middleware/backoffMiddleware.ts
  * @summary Concurrency-limited admission middleware with exponential backoff and bounded wait.
@@ -29,39 +29,33 @@
  *
  *   The concurrency counters are process-local and reset on process restart.
  *   This middleware does not provide cross-process or distributed coordination.
- *
- * @query
- *   {}
- *
- * @requestExample
- *   {
- *     "method": "GET",
- *     "path": "/v1/reports/summary",
+ * @query {}
+ * @requestExample {
+ *   "method": "GET",
+ *   "path": "/v1/reports/summary",
+ *   "headers": {
+ *     "accept": "application/json"
+ *   }
+ * }
+ * @response {
+ *   "success": {
+ *     "status": 200,
+ *     "description": "Request admitted after immediate or delayed concurrency availability"
+ *   },
+ *   "failure": {
+ *     "status": 429,
  *     "headers": {
- *       "accept": "application/json"
- *     }
- *   }
- *
- * @response
- *   {
- *     "success": {
- *       "status": 200,
- *       "description": "Request admitted after immediate or delayed concurrency availability"
+ *       "Retry-After": "1"
  *     },
- *     "failure": {
- *       "status": 429,
- *       "headers": {
- *         "Retry-After": "1"
- *       },
- *       "body": {
- *         "error": "TOO_MANY_REQUESTS",
- *         "message": "Server is busy, please retry shortly"
- *       }
+ *     "body": {
+ *       "error": "TOO_MANY_REQUESTS",
+ *       "message": "Server is busy, please retry shortly"
  *     }
  *   }
- *
- * @requires
- *   - express
+ * }
+ * @requires {
+ *   "dependencies": ["express"]
+ * }
  */
 
 import type { Request, Response, NextFunction } from 'express';

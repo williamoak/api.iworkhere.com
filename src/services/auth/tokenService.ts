@@ -41,7 +41,8 @@ import { authTokens } from '@db/schema'
 import { and, eq, isNull, gt } from 'drizzle-orm'
 import { AuthError } from "@services/auth/authContext"
 import { configGetNumber } from '@helpers/config'
-import { cacheStore } from '@cache/cacheStore'
+import { cacheStore } from '@cache/cacheStore';
+import { clearTenantCache } from '@middleware/tenantResolver';
 
 const ACCESS_TOKEN_TTL_SECONDS = configGetNumber(
     'ACCESS_TOKEN_TTL_SECONDS',
@@ -235,4 +236,5 @@ export async function revokeToken(
         .where(eq(authTokens.tokenHash, tokenHash))
     
     await cacheStore.del(`auth:token:${tokenHash}`)
+    clearTenantCache();
 }

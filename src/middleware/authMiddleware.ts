@@ -4,22 +4,27 @@
  * @internal
  * @module Middleware
  * @tag api, auth, debug
- * @version 1.0.3
+ * @version 1.0.4
+ * @author william.r.oak@gmail.com
  * @path src/middleware/authMiddleware.ts
  * @summary Access token authentication middleware (instrumented).
- *
  * @description
- * Checks Authorization: Bearer <token>
- * - tokenHash = sha256(token)
- * - SELECT ... FROM auth_tokens WHERE
- *      tokenHash match, tokenType='access', revokedAt IS NULL, expiresAt > now
- * - Attaches req.auth.userId on success
+ *   Checks Authorization: Bearer <token>
+ *   - tokenHash = sha256(token)
+ *   - SELECT ... FROM auth_tokens WHERE
+ *        tokenHash match, tokenType='access', revokedAt IS NULL, expiresAt > now
+ *   - Attaches req.auth.userId on success
  *
- * DEBUG NOTES
- * - Enable with AUTH_MW_DEBUG=1
- * - In debug mode, this middleware returns 401 debug metadata (reqId/reason)
- *   and emits debug response headers.
- * - Raw token values are never logged or returned.
+ *   DEBUG NOTES
+ *   - Enable with AUTH_MW_DEBUG=1
+ *   - In debug mode, this middleware returns 401 debug metadata (reqId/reason)
+ *     and emits debug response headers.
+ *   - Raw token values are never logged or returned.
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "database": "authTokens table"
+ * }
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -71,6 +76,8 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+import { executeTenantSpecific } from '@middleware/tenantResolver';
+
 export function authMiddleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
@@ -116,76 +123,73 @@ export function authMiddleware() {
       });
 
       if (!token) {
-        return reject401('MISSING_OR_INVALID_BEARER', {
-          hasAuthorization: Boolean(authorizationRaw),
-          bearerPrefixExpected: BEARER_PREFIX,
+        return reject401('MISSING_TOKEN', {
+            hasAuthorization: Boolean(authorizationRaw),
         });
-      }
+      } else {
+        const tokenHash = hashToken(token);
+        const cacheKey = `auth:token:${tokenHash}`;
+        const now = new Date();
 
-      const tokenHash = hashToken(token);
-      const cacheKey = `auth:token:${tokenHash}`;
-      const now = new Date();
-
-      // Check cache first
-      const cachedUserId = await cacheStore.get<string>(cacheKey);
-      if (cachedUserId) {
-        dbg(reqId, 'cache_hit', {
-          tokenHash,
-          cachedUserId,
-        });
-        req.auth = { userId: cachedUserId };
-        return next();
-      }
-
-      dbg(reqId, 'cache_miss', {
-        tokenHash,
-        now: now.toISOString(),
-      });
-
-      const rows = await db
-        .select({ userId: authTokens.userId, expiresAt: authTokens.expiresAt })
-        .from(authTokens)
-        .where(
-          and(
-            eq(authTokens.tokenHash, tokenHash),
-            eq(authTokens.tokenType, 'access'),
-            isNull(authTokens.revokedAt),
-            gt(authTokens.expiresAt, now),
-          ),
-        )
-        .limit(1);
-
-      dbg(reqId, 'db.result', {
-        rowsLength: rows.length,
-      });
-
-      if (rows.length === 0) {
-        return reject401(
-          'TOKEN_NOT_FOUND_OR_EXPIRED_OR_REVOKED_OR_WRONG_TYPE',
-          {
+        // Check cache first
+        const cachedUserId = await cacheStore.get<string>(cacheKey);
+        if (cachedUserId) {
+          dbg(reqId, 'cache_hit', {
             tokenHash,
-            query: {
-              tokenType: 'access',
-              revokedAt: 'IS NULL',
-              expiresAt: `> ${now.toISOString()}`,
-            },
-          },
-        );
+            cachedUserId,
+          });
+          req.auth = { userId: cachedUserId };
+        } else {
+          dbg(reqId, 'cache_miss', {
+            tokenHash,
+            now: now.toISOString(),
+          });
+
+          const rows = await db
+            .select({ userId: authTokens.userId, expiresAt: authTokens.expiresAt })
+            .from(authTokens)
+            .where(
+              and(
+                eq(authTokens.tokenHash, tokenHash),
+                eq(authTokens.tokenType, 'access'),
+                isNull(authTokens.revokedAt),
+                gt(authTokens.expiresAt, now),
+              ),
+            )
+            .limit(1);
+
+          dbg(reqId, 'db.result', {
+            rowsLength: rows.length,
+          });
+
+          if (rows.length > 0) {
+            const userId = rows[0].userId;
+            const expiresAt = rows[0].expiresAt;
+
+            // Set cache if we have an expiration
+            if (expiresAt) {
+              const ttl = Math.max(0, expiresAt.getTime() - now.getTime());
+              await cacheStore.set(cacheKey, userId, ttl);
+            }
+
+            req.auth = { userId };
+            res.locals.visitUserId = userId; // Capture for logging
+          }
+        }
       }
 
-      const userId = rows[0].userId;
-      const expiresAt = rows[0].expiresAt;
+      // 2. Execute tenant-specific additive middleware
+      const tenant = (req as any).tenant;
+      await executeTenantSpecific(tenant, 'authMiddleware', req, res, () => {});
 
-      // Set cache if we have an expiration
-      if (expiresAt) {
-        const ttl = Math.max(0, expiresAt.getTime() - now.getTime());
-        await cacheStore.set(cacheKey, userId, ttl);
+      if (!req.auth) {
+        return reject401('TOKEN_NOT_FOUND_OR_EXPIRED_OR_REVOKED_OR_WRONG_TYPE', {
+          tokenPresent: Boolean(token),
+        });
       }
-
-      req.auth = { userId };
 
       dbg(reqId, 'success', {
-        attachedAuth: (req as Request & { auth: { userId: string } }).auth,
+        attachedAuth: req.auth,
         durationMs: Date.now() - start,
       });
 

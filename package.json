@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/start.ts",
+    "dev": "lsof -t -i:4300 | xargs -r kill -9 && tsx src/start.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/start.js",
     "swagger:gen": "tsx src/helpers/swaggerGen.ts",

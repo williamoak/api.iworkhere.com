@@ -1,4 +1,26 @@
+/**
+ * @myDocBlock
+ * @file markdownToHtml.ts
+ * @internal
+ * @module Helpers
+ * @tag api, markdown, html, helper
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path src/helpers/markdownToHtml.ts
+ * @summary Converts Markdown formatted text into HTML for display purposes.
+ * @description
+ *   Parses basic Markdown syntax (headers, links, images, bold, code)
+ *   and converts it into corresponding HTML tags. Designed for EULA
+ *   and README rendering.
+ * @query none
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": []
+ * }
+ */
 export function markdownToHtml(markdown: string): string {
+
     // Enhanced markdown to HTML converter for EULA and README
     let html = markdown;
 

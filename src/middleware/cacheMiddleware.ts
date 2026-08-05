@@ -3,12 +3,11 @@
  * @file cacheMiddleware.ts
  * @internal
  * @module Middleware
- * @tag api
- * @version 1.2.0
+ * @tag api, cache
+ * @version 1.2.1
  * @author william.r.oak@gmail.com
  * @path src/middleware/cacheMiddleware.ts
  * @summary Centralized HTTP method-aware, tenant-scoped cache middleware with correct DELETE invalidation semantics.
- *
  * @description
  *   This middleware provides centralized, tenant-scoped response caching behavior
  *   based on HTTP method semantics and a deterministic cache key derived from
@@ -35,10 +34,11 @@
  *     - API version (req.baseUrl)
  *     - Route path (req.path)
  *     - Query string (if present)
- *
- * @requires
- *   - express
- *   - @cache/cacheStore (must support delWhere)
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": ["express", "@cache/cacheStore"]
+ * }
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -72,12 +72,16 @@ function buildCachePrefix(req: Request): string {
   return `${tenant}:${version}:${path}:`;
 }
 
+import { executeTenantSpecific } from '@middleware/tenantResolver';
+
 /* ------------------------------------------------------------------ */
 /* Middleware                                                         */
 /* ------------------------------------------------------------------ */
 
 export function cacheMiddleware(ttlMs = DEFAULT_TTL_MS) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    const tenant = (req as any).tenant;
+
     const method = req.method.toUpperCase();
 
     /* ----------------------------------------------------------
@@ -99,8 +103,6 @@ export function cacheMiddleware(ttlMs = DEFAULT_TTL_MS) {
         res.setHeader('X-Cache', 'MISS');
         return originalJson(body);
       };
-
-      return next();
     }
 
     /* ----------------------------------------------------------
@@ -115,8 +117,6 @@ export function cacheMiddleware(ttlMs = DEFAULT_TTL_MS) {
         cacheStore.set(cacheKey, body, ttlMs);
         return originalJson(body);
       };
-
-      return next();
     }
 
     /* ----------------------------------------------------------
@@ -125,11 +125,11 @@ export function cacheMiddleware(ttlMs = DEFAULT_TTL_MS) {
 
     if (method === 'DELETE') {
       const prefix = buildCachePrefix(req);
-
       await cacheStore.delWhere((key) => key.startsWith(prefix));
-
-      return next();
     }
+
+    // Additive tenant-specific execution
+    await executeTenantSpecific(tenant, 'cacheMiddleware', req, res, next);
 
     return next();
   };

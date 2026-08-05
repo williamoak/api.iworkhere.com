@@ -3,8 +3,8 @@
  * @file throttleMiddleware.ts
  * @internal
  * @module Middleware
- * @tag api
- * @version 1.0.0
+ * @tag api, throttle
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path src/middleware/throttleMiddleware.ts
  * @summary Fail-fast concurrency throttle enforcing a maximum number of in-flight requests per route.
@@ -23,39 +23,33 @@
  *   Concurrency counters are tracked in process-local memory and are decremented
  *   automatically when the response finishes or the client connection closes.
  *   This middleware does not provide distributed or cross-process coordination.
- *
- * @query
- *   {}
- *
- * @requestExample
- *   {
- *     "method": "POST",
- *     "path": "/v1/orders",
+ * @query {}
+ * @requestExample {
+ *   "method": "POST",
+ *   "path": "/v1/orders",
+ *   "headers": {
+ *     "content-type": "application/json"
+ *   }
+ * }
+ * @response {
+ *   "success": {
+ *     "status": 200,
+ *     "description": "Request admitted under concurrency limit"
+ *   },
+ *   "failure": {
+ *     "status": 429,
  *     "headers": {
- *       "content-type": "application/json"
- *     }
- *   }
- *
- * @response
- *   {
- *     "success": {
- *       "status": 200,
- *       "description": "Request admitted under concurrency limit"
+ *       "Retry-After": "1"
  *     },
- *     "failure": {
- *       "status": 429,
- *       "headers": {
- *         "Retry-After": "1"
- *       },
- *       "body": {
- *         "error": "TOO_MANY_REQUESTS",
- *         "message": "Too many concurrent requests"
- *       }
+ *     "body": {
+ *       "error": "TOO_MANY_REQUESTS",
+ *       "message": "Too many concurrent requests"
  *     }
  *   }
- *
- * @requires
- *   - express
+ * }
+ * @requires {
+ *   "dependencies": ["express"]
+ * }
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -70,8 +64,14 @@ function keyFor(req: Request): string {
   return `${req.method}:${req.route?.path ?? req.path}`;
 }
 
+import { resolveTenantMiddleware } from '@middleware/tenantResolver';
+
 export function throttleMiddleware(maxConcurrent = 10) {
   return async (req: Request, res: Response, next: NextFunction) => {
+    const tenant = (req as any).tenant;
+    const handled = await resolveTenantMiddleware(tenant, 'throttleMiddleware', req, res, next);
+    if (handled) return;
+
     const key = keyFor(req);
 
     let counter = counters.get(key);

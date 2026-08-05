@@ -2,8 +2,12 @@ import { db } from '@services/dbService';
 import { sql } from 'drizzle-orm';
 
 async function verify() {
-  const result = await db.execute(sql`SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema IN ('michael', 'public')`);
-  console.log(result.rows);
+  try {
+      await db.execute(sql`INSERT INTO joinaunion.visit_info (device_id, request_method, touch_time, note) VALUES ('4bf53ac4-0db4-3d1a-4221-e4f97340f3c3', 'GET', NOW(), 'test insert')`);
+      console.log('Insert successful');
+  } catch (e) {
+      console.error(e);
+  }
 }
 
 verify().catch(console.error);

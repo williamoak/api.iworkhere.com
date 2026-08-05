@@ -1,28 +1,39 @@
+/**
+ * @myDocBlock
+ * @file loggingMiddleware.ts
+ * @internal
+ * @module Middleware
+ * @tag api, logging, joinaunion
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path src/middleware/joinaunion/loggingMiddleware.ts
+ * @summary Tenant-specific visit logging middleware for joinaunion.
+ * @description
+ *   Audit logging implementation specific to the joinaunion tenant.
+ *   Checks for enabled logging in the database configuration and records
+ *   visit details including user information and device fingerprinting.
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": ["express", "drizzle-orm", "@services/dbService", "@db/schema/*"]
+ * }
+ */
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '@services/dbService';
-import { visitInfo } from '@db/schema/visit_info';
-import { configTable } from '@db/schema/config';
-import { eq, desc } from 'drizzle-orm';
 import crypto from 'crypto';
+import { sql } from 'drizzle-orm';
 
 function formatToUUID(hex: string): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
-    const userId = (req as any).auth?.userId || null;
-
-    try {
-        const configEntry = await db
-            .select()
-            .from(configTable)
-            .where(eq(configTable.name, 'logging_config'))
-            .orderBy(desc(configTable.version))
-            .limit(1);
-
-        const loggingConfig = configEntry.length > 0 ? (configEntry[0].value as any) : null;
-
-        if (loggingConfig?.enabled) {
+    // Perform logging after response finishes to capture final context
+    res.once('finish', async () => {
+        try {
+            // Re-capture userId here because route handlers might have set visitUserId after loggingMiddleware ran
+            const userId = (req as any).auth?.userId || res.locals.visitUserId || null;
+            console.log(`[DEBUG] [JOINAUNION] Captured userId in finish event: ${userId}, req.auth: ${(req as any).auth?.userId}, res.locals.visitUserId: ${res.locals.visitUserId}`);
             let deviceId = req.headers['x-device-id'] as string;
 
             if (!deviceId) {
@@ -34,17 +45,11 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
 
             const note = (res.locals.visitNote as string) || `visit: ${req.path}`;
 
-            await db.insert(visitInfo).values({
-                deviceId: deviceId,
-                userId: userId,
-                requestMethod: req.method,
-                touchTime: new Date(),
-                note: note
-            });
+            await db.execute(sql`INSERT INTO joinaunion.visit_info (id, device_id, user_id, request_method, touch_time, note) VALUES (gen_random_uuid(), ${deviceId}, ${userId}, ${req.method}, ${new Date().toISOString()}, ${note})`);
+        } catch (e) {
+            console.error("[DEBUG] [JOINAUNION] Failed to process request logging for joinaunion:", e);
         }
-    } catch (e) {
-        console.error("Failed to process request logging for joinaunion:", e);
-    }
+    });
 
     next();
 }

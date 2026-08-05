@@ -1,14 +1,13 @@
 /**
- * @myDocBlock v3.1
+ * @myDocBlock
  * @file validate.ts
  * @internal
- * @module middleware/validate
+ * @module Middleware
  * @tag api, validation, middleware
- * @version 3.1.0
- * @author placeholder@example.com
+ * @version 3.1.1
+ * @author william.r.oak@gmail.com
  * @path src/middleware/validate.ts
  * @summary Global request hardening + per-route Zod validation.
- *
  * @description
  *   Provides a centralized validation layer for the RouteLoader middleware chain.
  *
@@ -20,10 +19,16 @@
  *     - Framework-owned request properties (req.query, req.body, req.params)
  *       are NEVER mutated.
  *     - All validated data is attached to req.validated.
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": ["express", "zod"]
+ * }
  */
 
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { executeTenantSpecific } from '@middleware/tenantResolver';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -113,84 +118,84 @@ function sendInvalidRequest(
 export function makeValidator(schemas: ValidationSchemas = {}): Validator {
   return {
     request(req: Request, res: Response, next: NextFunction) {
-      /* ------------------------------------------------------
-       * Global checks (schema-agnostic)
-       * ------------------------------------------------------ */
+      const runner = async (req: Request, res: Response, next: NextFunction) => {
+        if (wantsJsonBody(req)) {
+          const hasSomeBody =
+            req.body !== undefined &&
+            req.body !== null &&
+            !(typeof req.body === 'string' && req.body.trim() === '');
 
-      if (wantsJsonBody(req)) {
-        const hasSomeBody =
-          req.body !== undefined &&
-          req.body !== null &&
-          !(typeof req.body === 'string' && req.body.trim() === '');
-
-        if (hasSomeBody && !contentTypeLooksJson(req)) {
-          return res.status(415).json({
-            error: 'UNSUPPORTED_MEDIA_TYPE',
-            message: 'Content-Type must be application/json',
-          });
+          if (hasSomeBody && !contentTypeLooksJson(req)) {
+            return res.status(415).json({
+              error: 'UNSUPPORTED_MEDIA_TYPE',
+              message: 'Content-Type must be application/json',
+            });
+          }
         }
-      }
 
-      if (req.body !== undefined && req.body !== null) {
-        if (!isPlainObject(req.body)) {
+        if (req.body !== undefined && req.body !== null) {
+          if (!isPlainObject(req.body)) {
+            return sendInvalidRequest(res, {
+              message: 'Request body must be a JSON object',
+            });
+          }
+
+          if (hasPrototypePollutionKeys(req.body)) {
+            return sendInvalidRequest(res, {
+              message: 'Request body contains forbidden keys',
+            });
+          }
+        }
+
+        if (req.query && hasPrototypePollutionKeys(req.query)) {
           return sendInvalidRequest(res, {
-            message: 'Request body must be a JSON object',
+            message: 'Query string contains forbidden keys',
           });
         }
 
-        if (hasPrototypePollutionKeys(req.body)) {
-          return sendInvalidRequest(res, {
-            message: 'Request body contains forbidden keys',
-          });
+        req.validated = req.validated ?? {};
+
+        if (schemas.params) {
+          const parsed = schemas.params.safeParse(req.params);
+          if (!parsed.success) {
+            return sendInvalidRequest(res, {
+              message: 'Invalid path parameters',
+              details: parsed.error.issues,
+            });
+          }
+          req.validated.params = parsed.data;
         }
-      }
 
-      if (req.query && hasPrototypePollutionKeys(req.query)) {
-        return sendInvalidRequest(res, {
-          message: 'Query string contains forbidden keys',
-        });
-      }
-
-      /* ------------------------------------------------------
-       * Per-route schema validation
-       * ------------------------------------------------------ */
-
-      req.validated = req.validated ?? {};
-
-      if (schemas.params) {
-        const parsed = schemas.params.safeParse(req.params);
-        if (!parsed.success) {
-          return sendInvalidRequest(res, {
-            message: 'Invalid path parameters',
-            details: parsed.error.issues,
-          });
+        if (schemas.query) {
+          const parsed = schemas.query.safeParse(req.query);
+          if (!parsed.success) {
+            return sendInvalidRequest(res, {
+              message: 'Invalid query parameters',
+              details: parsed.error.issues,
+            });
+          }
+          req.validated.query = parsed.data;
         }
-        req.validated.params = parsed.data;
-      }
 
-      if (schemas.query) {
-        const parsed = schemas.query.safeParse(req.query);
-        if (!parsed.success) {
-          return sendInvalidRequest(res, {
-            message: 'Invalid query parameters',
-            details: parsed.error.issues,
-          });
+        if (schemas.body) {
+          const parsed = schemas.body.safeParse(req.body ?? {});
+          if (!parsed.success) {
+            return sendInvalidRequest(res, {
+              message: 'Invalid request body',
+              details: parsed.error.issues,
+            });
+          }
+          req.validated.body = parsed.data;
         }
-        req.validated.query = parsed.data;
-      }
 
-      if (schemas.body) {
-        const parsed = schemas.body.safeParse(req.body ?? {});
-        if (!parsed.success) {
-          return sendInvalidRequest(res, {
-            message: 'Invalid request body',
-            details: parsed.error.issues,
-          });
-        }
-        req.validated.body = parsed.data;
-      }
+        // Additive tenant-specific execution
+        const tenant = (req as any).tenant;
+        await executeTenantSpecific(tenant, 'validate', req, res, () => {});
 
-      return next();
+        return next();
+      };
+      
+      runner(req, res, next).catch(next);
     },
 
     response<T>(data: T): T {

@@ -1,14 +1,17 @@
 /**
- * @myDocBlock v2.3
- * @file src/middleware/webAuthMiddleware.ts
+ * @myDocBlock
+ * @file webAuthMiddleware.ts
  * @internal
  * @module auth
  * @tag middleware
- * @version 1.0.2
+ * @version 1.0.3
  * @author william.r.oak@gmail.com
- * @path @middleware/webAuthMiddleware.ts
- * @summary Middleware to authenticate web requests using 'auth_token' cookie.
- * @description Validates the token against the database and attaches the user ID to the request object if valid.
+ * @path src/middleware/webAuthMiddleware.ts
+ * @summary Middleware to authenticate web requests using 'auth_token' cookie or Bearer header.
+ * @description
+ *   Validates the token against the database and attaches the user ID
+ *   to the request object if valid. Supports multiple authentication
+ *   sources for cross-subdomain compatibility.
  * @requestExample none
  * @response none
  * @requires {
@@ -27,15 +30,25 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
-export async function webAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
+import { resolveTenantMiddleware } from '@middleware/tenantResolver';
+
+export async function webAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  const tenant = (req as any).tenant;
+  const handled = await resolveTenantMiddleware(tenant, 'webAuthMiddleware', req, res, next);
+  if (handled) return;
+
   if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
   if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] authorization header:', req.headers.authorization);
+  if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] All headers:', JSON.stringify(req.headers, null, 2));
   let token = req.cookies.auth_token;
   if (!token) {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
     }
+  }
+  if (!token) {
+    token = req.query.auth_token as string;
   }
 
   if (!token) {

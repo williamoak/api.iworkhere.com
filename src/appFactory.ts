@@ -4,10 +4,7 @@ import cookieParser from "cookie-parser";
 import cors, { type CorsOptions } from "cors";
 import { loadRoutes } from "@loaders/routeLoader";
 import adminRoutes from "@src/admin/adminApp";
-import { tenantMiddleware } from "@middleware/tenantMiddleware";
-import { tenantTransaction } from "@middleware/tenantTransaction";
-import { loggingMiddleware } from "@middleware/loggingMiddleware";
-import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
+import { applyGlobalMiddleware } from "@middleware/index";
 import { welcomePage } from "@src/admin/client/welcomePage";
 import { configGet } from "@helpers/config";
 
@@ -61,10 +58,7 @@ export async function createBaseApp() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
-    app.use(tenantMiddleware());
-    app.use(tenantTransaction());
-    app.use(webAuthMiddleware);
-    app.use(loggingMiddleware());
+    applyGlobalMiddleware(app);
     app.use(express.static("public"));
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
 
@@ -116,7 +110,7 @@ export async function createBaseApp() {
     }
 
     // Routes
-    app.get('/', webAuthMiddleware, (req, res) => {
+    app.get('/', (req, res) => {
         console.log("Root route / hit!");
         res.set('Cache-Control', 'no-store');
         res.send(welcomePage(!!req.auth));

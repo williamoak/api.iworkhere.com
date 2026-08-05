@@ -49,7 +49,7 @@ describe('rateLimitMiddleware', () => {
         vi.clearAllMocks()
     })
 
-    test('allows requests under the limit', () => {
+    test('allows requests under the limit', async () => {
         const middleware = rateLimitMiddleware({
             key: req => req.ip ?? '',
             max: 2,
@@ -60,14 +60,14 @@ describe('rateLimitMiddleware', () => {
         const res = createRes()
         const next = createNext()
 
-        middleware(req, res, next)
-        middleware(req, res, next)
+        await middleware(req, res, next)
+        await middleware(req, res, next)
 
         expect(next).toHaveBeenCalledTimes(2)
         expect(res.status).not.toHaveBeenCalled()
     })
 
-    test('blocks requests over the limit and sets Retry-After', () => {
+    test('blocks requests over the limit and sets Retry-After', async () => {
         const middleware = rateLimitMiddleware({
             key: req => req.ip ?? '',
             max: 1,
@@ -78,8 +78,8 @@ describe('rateLimitMiddleware', () => {
         const res = createRes()
         const next = createNext()
 
-        middleware(req, res, next) // allowed
-        middleware(req, res, next) // blocked
+        await middleware(req, res, next) // allowed
+        await middleware(req, res, next) // blocked
 
         expect(next).toHaveBeenCalledTimes(1)
 
@@ -95,7 +95,7 @@ describe('rateLimitMiddleware', () => {
         })
     })
 
-    test('resets count after window expiry', () => {
+    test('resets count after window expiry', async () => {
         const middleware = rateLimitMiddleware({
             key: req => req.ip ?? '',
             max: 1,
@@ -106,18 +106,18 @@ describe('rateLimitMiddleware', () => {
         const res = createRes()
         const next = createNext()
 
-        middleware(req, res, next) // allowed
-        middleware(req, res, next) // blocked
+        await middleware(req, res, next) // allowed
+        await middleware(req, res, next) // blocked
 
         vi.advanceTimersByTime(1001)
 
-        middleware(req, res, next) // allowed again
+        await middleware(req, res, next) // allowed again
 
         expect(next).toHaveBeenCalledTimes(2)
         expect(res.status).toHaveBeenCalledTimes(1)
     })
 
-    test('fails open when no rate-limit key is derived', () => {
+    test('fails open when no rate-limit key is derived', async () => {
         const middleware = rateLimitMiddleware({
             key: () => '',
             max: 1,
@@ -128,15 +128,15 @@ describe('rateLimitMiddleware', () => {
         const res = createRes()
         const next = createNext()
 
-        middleware(req, res, next)
-        middleware(req, res, next)
-        middleware(req, res, next)
+        await middleware(req, res, next)
+        await middleware(req, res, next)
+        await middleware(req, res, next)
 
         expect(next).toHaveBeenCalledTimes(3)
         expect(res.status).not.toHaveBeenCalled()
     })
 
-    test('respects custom error configuration', () => {
+    test('respects custom error configuration', async () => {
         const middleware = rateLimitMiddleware({
             key: req => req.ip ?? '',
             max: 0,
@@ -152,7 +152,7 @@ describe('rateLimitMiddleware', () => {
         const res = createRes()
         const next = createNext()
 
-        middleware(req, res, next)
+        await middleware(req, res, next)
 
         expect(next).not.toHaveBeenCalled()
         expect(res.status).toHaveBeenCalledWith(418)

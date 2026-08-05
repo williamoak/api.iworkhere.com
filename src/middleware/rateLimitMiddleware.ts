@@ -1,10 +1,10 @@
 /**
- * @myDocBlock v2.3
+ * @myDocBlock
  * @file rateLimitMiddleware.ts
  * @internal
  * @module Middleware
  * @tag api, rate-limit
- * @version 1.0.0
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path src/middleware/rateLimitMiddleware.ts
  * @summary Time-window based rate limiting middleware.
@@ -19,12 +19,15 @@
  *
  *   This middleware is stateless across processes and should be backed
  *   by a distributed store (e.g. Redis) if horizontal scaling is required.
- *
- * @query
- *   {}
- *
- * @requires
- *   - express
+ * @query {}
+ * @requestExample none
+ * @response {
+ *   "error": "TOO_MANY_REQUESTS",
+ *   "message": "Too many requests, please retry later"
+ * }
+ * @requires {
+ *   "dependencies": ["express"]
+ * }
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -66,6 +69,8 @@ type RateLimitOptions = {
  */
 const store = new Map<string, RateLimitEntry>();
 
+import { resolveTenantMiddleware } from '@middleware/tenantResolver';
+
 export function rateLimitMiddleware(options: RateLimitOptions) {
   const { key, max, windowMs, error = {} } = options;
 
@@ -73,7 +78,11 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
   const code = error.code ?? 'TOO_MANY_REQUESTS';
   const message = error.message ?? 'Too many requests, please retry later';
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const tenant = (req as any).tenant;
+    const handled = await resolveTenantMiddleware(tenant, 'rateLimitMiddleware', req, res, next);
+    if (handled) return;
+
     const now = Date.now();
     const limitKey = key(req);
 

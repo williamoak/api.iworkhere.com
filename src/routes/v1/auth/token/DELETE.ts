@@ -29,7 +29,10 @@
  */
 
 import type { Request, Response } from 'express'
-
+import crypto from 'crypto'
+import { db } from '@services/dbService'
+import { authTokens } from '@db/schema'
+import { eq } from 'drizzle-orm'
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
 import { configGet } from '@helpers/config';
@@ -50,7 +53,20 @@ export default async function DELETE(
     res: Response
 ): Promise<void> {
     try {
-        const token = req.cookies.auth_token;
+        console.log(`[DEBUG] [DELETE] Starting logout for tenant: ${(req as any).tenant}, auth.userId: ${(req as any).auth?.userId}`);
+        const token = req.cookies.auth_token || req.body.token;
+        if ((req as any).auth?.userId) {
+            res.locals.visitUserId = (req as any).auth.userId;
+        } else if (token) {
+            // Pre-emptive identification if middleware failed to pick up token
+            try {
+                const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+                const [row] = await db.select({ userId: authTokens.userId }).from(authTokens).where(eq(authTokens.tokenHash, tokenHash)).limit(1);
+                if (row) res.locals.visitUserId = row.userId;
+            } catch (e) {
+                console.error('[DEBUG] [DELETE] Failed to pre-emptively identify user:', e);
+            }
+        }
         if (!token) {
             // If no token, nothing to revoke.
             res.cookie("auth_token", "", {
