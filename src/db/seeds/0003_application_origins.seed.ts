@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 import { db } from '@services/dbService';
 
 /**
@@ -100,4 +102,4 @@ for (const consumer of CONSUMERS) {
     `);
 }
 
-console.log('🌱 Application origins seeded for Bill and Michael');
+logger.log('🌱 Application origins seeded for Bill and Michael')

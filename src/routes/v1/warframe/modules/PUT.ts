@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file PUT.ts
@@ -191,8 +193,9 @@ export default async function PUT(req: Request, res: Response) {
                 empty_fields,
             });
         }
+;
 
-        console.error("PUT /modules error:", err);
+        logger.error("PUT /modules error:", err);
         return res.status(500).json({
             success: false,
             error: "Internal server error",

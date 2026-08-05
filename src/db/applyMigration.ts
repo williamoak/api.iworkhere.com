@@ -1,5 +1,28 @@
+import { logger } from '@helpers/logger';
+
+/**
+ * @myDocBlock
+ * @file applyMigration.ts
+ * @internal
+ * @module Database
+ * @tag db, migration
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path src/db/applyMigration.ts
+ * @summary Manual SQL migration script for multi-tenant schema setup.
+ * @description
+ *   Executes necessary SQL to setup tenant schemas (bill, joinaunion, michael),
+ *   moves tables, and adds audit logging infrastructure.
+ * @query {}
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "database": "CockroachDB/PostgreSQL"
+ * }
+ */
 import "tsconfig-paths/register";
 import { pool } from "@services/dbService";
+;
 
 async function applyMigration() {
   try {
@@ -44,10 +67,10 @@ async function applyMigration() {
         CREATE INDEX IF NOT EXISTS visit_info_user_id_request_method_idx ON joinaunion.visit_info (user_id, request_method);
     `);
 
-    console.log("Migration applied successfully!");
+    logger.log("Migration applied successfully!");
   } catch (error) {
-    console.error("Error applying migration:", error);
+    logger.error("Error applying migration:", error);
   }
 }
 
-applyMigration().catch(console.error);
+applyMigration().catch(logger.error);

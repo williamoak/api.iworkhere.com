@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 ﻿/**
  * @file authMe
  * @external
@@ -75,8 +77,7 @@ const AUTH_ME_DEBUG = process.env.AUTH_ME_DEBUG === '1'
 
 function dbg(reqId: string, phase: string, fields: Record<string, unknown> = {}): void {
     if (!AUTH_ME_DEBUG) return
-    // eslint-disable-next-line no-console
-    console.log(
+    logger.log(
         JSON.stringify({
             tag: 'auth.me',
             reqId,

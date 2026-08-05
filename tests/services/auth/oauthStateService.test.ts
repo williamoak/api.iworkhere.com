@@ -4,6 +4,13 @@ vi.mock('@helpers/config', () => ({
   getGoogleOAuthConfig: vi.fn(() => ({
     stateSecret: 'test-secret-12345678901234567890123456789012',
   })),
+  configGet: vi.fn((key: string) => {
+    if (key === 'DEBUG') return 'true';
+    return undefined;
+  }),
+  config: {
+    DEBUG: 'true'
+  }
 }));
 
 import { signState, verifyState } from '@services/auth/oauthStateService';

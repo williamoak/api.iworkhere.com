@@ -1,4 +1,7 @@
+import { logger } from '@helpers/logger';
+
 import bcrypt from "bcryptjs";
+;
 import { db } from "@services/dbService";
 
 /**
@@ -199,4 +202,4 @@ await db.execute(`
     )
 `);
 
-console.log("🌱 Default user + app + auth seeded for 'bill'");
+logger.log("🌱 Default user + app + auth seeded for 'bill'");

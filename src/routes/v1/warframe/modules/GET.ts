@@ -1,3 +1,4 @@
+import { logger } from '@helpers/logger';
 /**
  * @myDocBlock v2.3
  * @file GET.ts
@@ -129,7 +130,7 @@ export default async function GET(req: Request, res: Response) {
             },
         });
     } catch (err) {
-        console.error("GET /modules error:", err);
+        logger.error("GET /modules error:", err);
 
         return res.status(500).json({
             success: false,

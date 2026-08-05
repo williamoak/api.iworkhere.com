@@ -1,11 +1,39 @@
+import { logger } from '@helpers/logger';
+
+/**
+ * @myDocBlock
+ * @file appFactory.ts
+ * @internal
+ * @module App
+ * @tag api, factory, bootstrap
+ * @version 1.0.1
+ * @author william.r.oak@gmail.com
+ * @path src/appFactory.ts
+ * @summary Builds the Express application instance.
+ * @description
+ *   Centralized factory to construct the core Express application.
+ *   - Configures CORS for subdomain support.
+ *   - Orchestrates global middleware registration.
+ *   - Loads routes and static assets.
+ *   - Handles environment-specific debug logging.
+ * @query {}
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": ["express", "cors", "cookie-parser"],
+ *   "environment": ["CORS_ALLOWED_ORIGINS", "DEBUG"]
+ * }
+ */
 import express from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
 import cors, { type CorsOptions } from "cors";
 import { loadRoutes } from "@loaders/routeLoader";
 import adminRoutes from "@src/admin/adminApp";
+;
 import { applyGlobalMiddleware } from "@middleware/index";
 import { welcomePage } from "@src/admin/client/welcomePage";
+;
 import { configGet } from "@helpers/config";
 
 const DEBUG = configGet("DEBUG") === "true";
@@ -63,7 +91,7 @@ export async function createBaseApp() {
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
 
     if (DEBUG) {
-        console.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);
+        logger.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);
     }
     if (AUTH_ME_DEBUG) {
         // Diagnostic logging for JSON requests (debug only).
@@ -82,28 +110,28 @@ export async function createBaseApp() {
                     }
                 }
 
-                console.log("----------------------------------------");
-                console.log("--- JSON REQUEST ---");
-                console.log(`${req.method} ${req.originalUrl}`);
-                console.log(`host=${req.hostname}`);
-                console.log(`ip=${req.ip}`);
+                logger.log("----------------------------------------");
+                logger.log("--- JSON REQUEST ---");
+                logger.log(`${req.method} ${req.originalUrl}`);
+                logger.log(`host=${req.hostname}`);
+                logger.log(`ip=${req.ip}`);
                 if (forwardedFor) {
-                    console.log(`x-forwarded-for=${forwardedFor}`);
+                    logger.log(`x-forwarded-for=${forwardedFor}`);
                 }
                 if (realIp) {
-                    console.log(`x-real-ip=${realIp}`);
+                    logger.log(`x-real-ip=${realIp}`);
                 }
                 if (requestId) {
-                    console.log(`x-request-id=${requestId}`);
+                    logger.log(`x-request-id=${requestId}`);
                 }
                 if (cfRay) {
-                    console.log(`cf-ray=${cfRay}`);
+                    logger.log(`cf-ray=${cfRay}`);
                 }
-                console.log(`user-agent=${req.get("user-agent") ?? ""}`);
-                console.log(`origin=${req.get("origin") ?? ""}`);
-                console.log(`referer=${req.get("referer") ?? ""}`);
-                console.log(`body=${bodyText}`);
-                console.log("----------------------------------------");
+                logger.log(`user-agent=${req.get("user-agent") ?? ""}`);
+                logger.log(`origin=${req.get("origin") ?? ""}`);
+                logger.log(`referer=${req.get("referer") ?? ""}`);
+                logger.log(`body=${bodyText}`);
+                logger.log("----------------------------------------");
             }
             next();
         });
@@ -111,7 +139,7 @@ export async function createBaseApp() {
 
     // Routes
     app.get('/', (req, res) => {
-        console.log("Root route / hit!");
+        logger.log("Root route / hit!");
         res.set('Cache-Control', 'no-store');
         res.send(welcomePage(!!req.auth));
     });
@@ -141,7 +169,7 @@ export async function createBaseApp() {
     app.use('/admin', adminRoutes);
 
     if (DEBUG) {
-        console.dir(app.locals.routeTree["/v1/health"], { depth: 10 });
+        logger.dir(app.locals.routeTree["/v1/health"], { depth: 10 });
     }
 
     return app;

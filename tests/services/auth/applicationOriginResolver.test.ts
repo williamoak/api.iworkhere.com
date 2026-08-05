@@ -18,8 +18,13 @@ vi.mock('@services/dbService', () => ({
 }))
 
 vi.mock('@helpers/config', () => ({
+    configGet: vi.fn((key: string) => {
+        if (key === 'DEBUG') return 'true';
+        if (key === 'EMAIL_VERIFY_TOKEN_TTL_SECONDS') return '3600';
+        return undefined;
+    }),
     config: {
-        APP_URL: undefined
+        DEBUG: 'true'
     }
 }))
 

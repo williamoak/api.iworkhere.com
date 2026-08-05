@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file routeLoader.ts
@@ -58,7 +60,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { promises as fsp } from 'fs';
 import type { Application, NextFunction, Request, Response } from 'express';
-
+;
 import { configGet } from '@helpers/config';
 import type { ValidationSchemas } from '@middleware/validate';
 import { makeValidator } from '@middleware/validate';
@@ -101,7 +103,7 @@ const ROUTE_LOADER_DEBUG = process.env.ROUTE_LOADER_DEBUG === '1';
 function dbg(fields: Record<string, unknown>): void {
   if (!ROUTE_LOADER_DEBUG) return;
 
-  console.log(
+  logger.log(
     JSON.stringify({
       tag: 'routeLoader',
       t: new Date().toISOString(),
@@ -210,7 +212,7 @@ export async function loadRoutes(app: Application): Promise<void> {
   });
 
   const endpointCount = countBoundEndpoints(routeTree);
-  console.log(
+  logger.log(
     `RouteLoader: Registered ${endpointCount} endpoint(s) across ${Object.keys(routeTree).length} route node(s)`,
   );
 }

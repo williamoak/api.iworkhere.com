@@ -11,9 +11,13 @@ vi.mock('@helpers/config', () => ({
             SMTP_USER: 'test@smtp.com',
             SMTP_PASS: 'password',
             SMTP_FROM_EMAIL: 'noreply@test.com',
+            DEBUG: 'true'
         }
         return config[key] || ''
     }),
+    config: {
+        DEBUG: 'true'
+    }
 }))
 
 vi.mock('@services/auth/emailAuditService', () => ({

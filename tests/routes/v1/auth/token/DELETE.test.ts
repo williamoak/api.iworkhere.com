@@ -32,6 +32,14 @@ vi.mock('@services/auth/tokenService', () => ({
     revokeToken: vi.fn(),
 }))
 
+vi.mock('@services/dbService', () => ({
+    db: {
+        select: vi.fn(),
+        delete: vi.fn(),
+        transaction: vi.fn(),
+    },
+}))
+
 vi.mock('@services/auth/authContext', () => ({
     AuthError: class AuthError extends Error {
         constructor(
@@ -53,6 +61,7 @@ vi.mock('@services/auth/authContext', () => ({
 import DELETE, { schema } from '@routes/v1/auth/token/DELETE'
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
+import { db } from '@services/dbService'
 
 /**
  * ------------------------------------------------------------
@@ -63,6 +72,7 @@ import { AuthError } from '@services/auth/authContext'
 function createReq(cookies: any): Request {
     return {
         cookies,
+        tenant: 'public',
     } as unknown as Request
 }
 
@@ -128,12 +138,29 @@ describe('DELETE /v1/auth/token', () => {
     })
 
     test('returns 204 on successful revoke', async () => {
-        ;(revokeToken as any).mockResolvedValue(undefined)
+        ;(revokeToken as any).mockResolvedValue(undefined);
+        ;(db.select as any).mockReturnValue({
+            from: () => ({
+                where: () => ({
+                    limit: () => Promise.resolve([{ userId: 'user-id' }]),
+                }),
+            }),
+        });
+        ;(db.delete as any).mockReturnValue({
+            where: () => Promise.resolve(),
+        });
+        ;(db.transaction as any).mockImplementation(async (cb: any) => await cb(db));
+        
+        // Mock get/clearCookie/status/json/end methods on response
+        (revokeToken as any).mockResolvedValue(undefined);
 
-        const req = createReq({ auth_token: 'some-token' })
-        const res = createRes()
+        const req = createReq({ auth_token: 'some-token' });
+        (req as any).auth = { userId: 'user-id' };
+        const res = createRes();
+        // Mock res.locals explicitly for the test
+        (res as any).locals = {};
 
-        await DELETE(req, res)
+        await DELETE(req, res);
 
         expect(res.statusCode).toBe(204)
         expect(revokeToken).toHaveBeenCalledWith('some-token')
@@ -142,12 +169,26 @@ describe('DELETE /v1/auth/token', () => {
     test('translates AuthError to HTTP response', async () => {
         ;(revokeToken as any).mockRejectedValue(
             new AuthError('INVALID_TOKEN', 'Token is invalid', 401)
-        )
+        );
+        ;(db.select as any).mockReturnValue({
+            from: () => ({
+                where: () => ({
+                    limit: () => Promise.resolve([{ userId: 'user-id' }]),
+                }),
+            }),
+        });
+        ;(db.delete as any).mockReturnValue({
+            where: () => Promise.resolve(),
+        });
+        ;(db.transaction as any).mockImplementation(async (cb: any) => await cb(db));
 
-        const req = createReq({ auth_token: 'bad-token' })
-        const res = createRes()
+        const req = createReq({ auth_token: 'bad-token' });
+        (req as any).auth = { userId: 'user-id' };
+        const res = createRes();
+        // Mock res.locals explicitly for the test
+        (res as any).locals = {};
 
-        await DELETE(req, res)
+        await DELETE(req, res);
 
         expect(res.statusCode).toBe(401)
         expect(res.body).toEqual({

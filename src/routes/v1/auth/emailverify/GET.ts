@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file GET.ts
@@ -21,6 +23,7 @@ import { AuthError } from '@services/auth/authContext'
 import { verifyEmailToken } from '@services/auth/emailVerificationService'
 import { configGet } from '@helpers/config'
 
+
 export const schema = {
     query: z.object({
         token: z.string().trim().min(1),
@@ -32,7 +35,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
     try {
         const query = (req.validated?.query as z.infer<typeof schema.query>) ?? req.query
-        console.log('[emailverify] Received GET request with query:', query);
+        logger.log('[emailverify] Received GET request with query:', query);
         const { token } = query
 
         // Perform the same verification logic as the PUT route

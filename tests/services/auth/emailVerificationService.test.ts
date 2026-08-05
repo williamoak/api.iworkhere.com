@@ -50,8 +50,12 @@ vi.mock('@helpers/config', () => ({
   configGet: vi.fn((key: string) => {
     if (key === 'EMAIL_VERIFY_TOKEN_TTL_SECONDS') return '3600';
     if (key === 'APP_URL') return 'http://localhost:3000';
+    if (key === 'DEBUG') return 'true';
     return undefined;
   }),
+  config: {
+    DEBUG: 'true'
+  }
 }))
 
 vi.mock('@helpers/mailer', () => ({

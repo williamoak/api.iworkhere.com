@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @file mailer.ts
  * @module helpers/mailer
@@ -12,9 +14,11 @@
 import nodemailer from 'nodemailer';
 import { configGet } from '@helpers/config';
 import { logEmailAudit } from '@services/auth/emailAuditService';
+;
 
 // Create a reusable transporter using SMTP settings from the environment
 let transporter: nodemailer.Transporter | null = null;
+
 
 export function resetTransporter() {
     transporter = null;
@@ -70,11 +74,11 @@ export async function sendEmail(params: {
 
     try {
         const info = await mailer.sendMail(mailOptions);
-        console.log(`[mailer] Email sent to ${to} (messageId: ${info.messageId})`);
+        logger.log(`[mailer] Email sent to ${to} (messageId: ${info.messageId})`);
 
         // If using Ethereal email for testing, this prints a URL to view the email
         if (configGet('SMTP_HOST').includes('ethereal')) {
-            console.log(`[mailer] Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+            logger.log(`[mailer] Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
         }
 
         // Log successful send
@@ -88,7 +92,7 @@ export async function sendEmail(params: {
         }
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(
+        logger.error(
             `[mailer] Failed to send email to ${to}: ${errorMessage}`,
         );
 

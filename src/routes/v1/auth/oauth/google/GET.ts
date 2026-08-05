@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @file GET.ts
  * @external Google OAuth 2.0
@@ -63,7 +65,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   // Resolve application from origin/refer/query for multi-consumer support
   const appCtx = await resolveApplicationFromRequest(req);
-  if (DEBUG) console.log('[DEBUG] [oauth/google/GET] initiation', {
+  logger.log('[DEBUG] [oauth/google/GET] initiation', {
       query: req.query,
       appKey: appCtx.applicationKey
   });
@@ -77,7 +79,8 @@ export default async function GET(req: Request, res: Response): Promise<void> {
               redirect_uri = config['APP_URL'] as string;
           }
       } catch (err) {
-          console.warn('[GET] Failed to resolve origin for redirect_uri, falling back to APP_URL', err);
+
+        logger.warn('[GET] Failed to resolve origin for redirect_uri, falling back to APP_URL', err);
           if (config['APP_URL']) {
             redirect_uri = config['APP_URL'] as string;
           }
@@ -96,13 +99,13 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     }
   }
 
-  if (DEBUG) console.log('[DEBUG] [oauth/google/GET] Before state signing', { redirect_uri, flowType });
+  logger.log('[DEBUG] [oauth/google/GET] Before state signing', { redirect_uri, flowType });
   const state = signState(
       appCtx.applicationKey,
       typeof redirect_uri === "string" ? redirect_uri : undefined,
       flowType
   );
-  if (DEBUG) console.log('[DEBUG] [oauth/google/GET] state signed', { state });
+  logger.log('[DEBUG] [oauth/google/GET] state signed', { state });
 
   const authorizationUrl = new URL(googleConfig.authorizationUrl);
 

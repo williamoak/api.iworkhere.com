@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file upsertWeapon
@@ -117,6 +119,7 @@ import { z } from "zod"
 import { eq } from "drizzle-orm"
 
 import { db } from "@services/dbService"
+
 import { weapons } from "@db/schema"
 
 import {
@@ -297,7 +300,7 @@ export default async function PUT(req: Request, res: Response) {
             })
         }
 
-        console.error("PUT /weapons error:", err)
+        logger.error("PUT /weapons error:", err)
         return res.status(500).json({
             success: false,
             error: "Internal server error",

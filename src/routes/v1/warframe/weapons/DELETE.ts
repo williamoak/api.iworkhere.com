@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file deleteWeapon
@@ -104,7 +106,8 @@ export default async function DELETE(req: Request, res: Response) {
             data: result,
         })
     } catch (err) {
-        console.error("DELETE /weapons error:", err)
+
+        logger.error("DELETE /weapons error:", err)
 
         return res.status(500).json({
             success: false,

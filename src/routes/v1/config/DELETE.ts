@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file DELETE.ts
@@ -245,7 +247,8 @@ export default async function DELETE(req: Request, res: Response) {
             message: "uuid or name is required",
         })
     } catch (err) {
-        console.error("DELETE /config error:", err)
+
+        logger.error("DELETE /config error:", err)
 
         return res.status(500).json({
             error: "INTERNAL_ERROR",

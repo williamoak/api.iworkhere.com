@@ -31,7 +31,13 @@ vi.mock('@services/dbService', () => ({
 }))
 
 vi.mock('@helpers/config', () => ({
-    configGet: vi.fn(() => '3600'),
+    configGet: vi.fn((key: string) => {
+        if (key === 'DEBUG') return 'true';
+        return '3600';
+    }),
+    config: {
+        DEBUG: 'true'
+    }
 }))
 
 vi.mock('@services/auth/passwordService', () => ({

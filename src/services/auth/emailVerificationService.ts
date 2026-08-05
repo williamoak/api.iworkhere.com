@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file emailVerificationService.ts
@@ -18,6 +20,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { PgTransaction } from 'drizzle-orm/pg-core'
 
 import { db } from '@services/dbService'
+
 import { configGet } from '@helpers/config'
 import { AuthError } from '@services/auth/authContext'
 import { sendEmail } from '@helpers/mailer'
@@ -77,7 +80,7 @@ export async function issueEmailVerificationToken(params: {
     )
 
     try {
-        console.log('[emailVerificationService] Inserting token into DB...', { userId, applicationId, tokenHash });
+        logger.log('[emailVerificationService] Inserting token into DB...', { userId, applicationId, tokenHash });
         await tx.insert(emailVerificationTokens).values({
             id: uuidv7(),
             userId,
@@ -85,9 +88,9 @@ export async function issueEmailVerificationToken(params: {
             tokenHash,
             expiresAt,
         });
-        console.log('[emailVerificationService] Token inserted successfully.');
+        logger.log('[emailVerificationService] Token inserted successfully.');
     } catch (err) {
-        console.error('[emailVerificationService] Token insertion failed:', err);
+        logger.error('[emailVerificationService] Token insertion failed:', err);
         throw err;
     }
 
@@ -114,7 +117,7 @@ export async function verifyEmailToken(token: string): Promise<{
         .update(token)
         .digest('hex')
 
-    console.log('[emailVerificationService] Verifying tokenHash:', tokenHash);
+    logger.log('[emailVerificationService] Verifying tokenHash:', tokenHash);
 
     const rows = await db
         .select({
@@ -131,10 +134,10 @@ export async function verifyEmailToken(token: string): Promise<{
         .where(eq(emailVerificationTokens.tokenHash, tokenHash))
         .limit(1)
 
-    console.log('[emailVerificationService] Query result length:', rows.length);
+    logger.log('[emailVerificationService] Query result length:', rows.length);
 
     if (rows.length === 0) {
-        console.log('[emailVerificationService] Token not found in DB');
+        logger.log('[emailVerificationService] Token not found in DB');
         throw new AuthError(
             'INVALID_TOKEN',
             'Verification token is invalid',
@@ -143,7 +146,7 @@ export async function verifyEmailToken(token: string): Promise<{
     }
 
     const row = rows[0]
-    console.log('[emailVerificationService] Token found, userId:', row.userId);
+    logger.log('[emailVerificationService] Token found, userId:', row.userId);
 
     if (row.expiresAt && row.expiresAt < new Date()) {
         throw new AuthError(
@@ -241,7 +244,7 @@ export async function resendEmailVerificationToken(params: {
         token: verificationToken,
         userId: user.userId,
     }).catch(err => {
-        console.error('[resend] Background email send failed:', err);
+        logger.error('[resend] Background email send failed:', err);
     });
 }
 

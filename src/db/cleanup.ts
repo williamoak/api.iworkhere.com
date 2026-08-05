@@ -1,3 +1,26 @@
+import { logger } from '@helpers/logger';
+
+/**
+ * @myDocBlock
+ * @file cleanup.ts
+ * @internal
+ * @module Database
+ * @tag db, maintenance
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path src/db/cleanup.ts
+ * @summary Utility to wipe database tables.
+ * @description
+ *   Performs a cascading cleanup of all user-related data tables in the public schema.
+ *   Intended for test environment resets and local development maintenance.
+ * @query {}
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "database": "Access to public schema"
+ * }
+ */
+;
 import { db } from "@services/dbService";
 import { emailVerificationTokens } from "@db/schema/email_verification_tokens";
 import { emailAuditLogs } from '@db/schema/email_audit_logs';
@@ -9,26 +32,26 @@ import { authTokens } from '@db/schema/auth_tokens';
 
 async function cleanup() {
     try {
-        console.log("🧹 Starting database cleanup...");
+        logger.log("🧹 Starting database cleanup...");
         await db.transaction(async (tx) => {
-            console.log("✅ Clearing email verification tokens...");
+            logger.log("✅ Clearing email verification tokens...");
             await tx.delete(emailVerificationTokens);
-            console.log("✅ Clearing email audit logs...");
+            logger.log("✅ Clearing email audit logs...");
             await tx.delete(emailAuditLogs);
-            console.log("✅ Clearing local auth data...");
+            logger.log("✅ Clearing local auth data...");
             await tx.delete(userAuthLocal);
-            console.log("✅ Clearing password history...");
+            logger.log("✅ Clearing password history...");
             await tx.delete(userPasswordHistory);
-            console.log("✅ Clearing user applications...");
+            logger.log("✅ Clearing user applications...");
             await tx.delete(userApplications);
-            console.log("✅ Clearing auth tokens...");
+            logger.log("✅ Clearing auth tokens...");
             await tx.delete(authTokens);
-            console.log("✅ Clearing users...");
+            logger.log("✅ Clearing users...");
             await tx.delete(users);
         });
-        console.log("✅ Cleanup successful.");
+        logger.log("✅ Cleanup successful.");
     } catch (err) {
-        console.error("❌ Cleanup failed:", err);
+        logger.error("❌ Cleanup failed:", err);
     } finally {
         process.exit(0);
     }

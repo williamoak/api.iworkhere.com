@@ -11,6 +11,16 @@ vi.mock('@services/dbService', () => ({
     },
 }))
 
+vi.mock('@helpers/config', () => ({
+    configGet: vi.fn((key: string) => {
+        if (key === 'DEBUG') return 'true';
+        return undefined;
+    }),
+    config: {
+        DEBUG: 'true'
+    }
+}))
+
 /**
  * Test suite
  */

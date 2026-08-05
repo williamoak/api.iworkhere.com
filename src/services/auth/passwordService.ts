@@ -1,3 +1,4 @@
+import { logger } from '@helpers/logger';
 /**
  * @myDocBlock
  * @file passwordService.ts
@@ -84,7 +85,7 @@ export async function verifyPassword(
         )
     }
 
-    if (DEBUG) console.log('[DEBUG] Comparing password hash. Plaintext:', plaintextPassword, 'Hash:', rows[0].passwordHash);
+    logger.log('[DEBUG] Comparing password hash. Plaintext:', plaintextPassword, 'Hash:', rows[0].passwordHash);
     const match = await bcrypt.compare(
         plaintextPassword,
         rows[0].passwordHash

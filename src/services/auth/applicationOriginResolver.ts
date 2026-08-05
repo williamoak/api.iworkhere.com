@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock
  * @file applicationOriginResolver.ts
@@ -165,7 +167,8 @@ export async function resolveApplicationFromRequest(
     try {
       origin = normalizeOrigin(config['APP_URL']);
     } catch (err) {
-      console.warn('Invalid APP_URL in config:', config['APP_URL'], err);
+
+    logger.warn('Invalid APP_URL in config:', config['APP_URL'], err)
     }
   }
 

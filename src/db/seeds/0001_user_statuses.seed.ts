@@ -1,4 +1,7 @@
+import { logger } from '@helpers/logger';
+
 import { db } from "@services/dbService";
+;
 
 /**
  * Seed default user statuses
@@ -12,4 +15,4 @@ await db.execute(`
         ('pending',  'User account pending verification')
 `);
 
-console.log("🌱 user_statuses seed executed");
+logger.log("🌱 user_statuses seed executed");

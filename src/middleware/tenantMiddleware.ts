@@ -1,10 +1,12 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock
  * @file tenantMiddleware.ts
  * @internal
  * @module Middleware
  * @tag api, multi-tenant
- * @version 1.0.0
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path src/middleware/tenantMiddleware.ts
  * @summary Middleware to identify the tenant based on request context.
@@ -12,6 +14,13 @@
  *   Parses the request hostname, referer, or app_key to identify the
  *   tenant identifier. This identifier is attached to req.tenant
  *   for downstream use by tenantTransaction and other middleware.
+ * @query {
+ *   "app_key": {
+ *     "type": "string",
+ *     "required": false,
+ *     "description": "Optional application key used to derive tenant if hostname resolution fails"
+ *   }
+ * }
  * @requestExample none
  * @response none
  * @requires {
@@ -19,6 +28,7 @@
  * }
  */
 import type { Request, Response, NextFunction } from 'express';
+;
 
 export function tenantMiddleware() {
   return async (req: Request, _res: Response, next: NextFunction) => {
@@ -27,7 +37,7 @@ export function tenantMiddleware() {
     const hostname = origin ? new URL(origin).hostname : req.hostname;
     const parts = hostname.split('.');
     
-    console.log(`[DEBUG] tenantMiddleware: hostname=${hostname}, parts=${JSON.stringify(parts)}`);
+    logger.log(`[DEBUG] tenantMiddleware: hostname=${hostname}, parts=${JSON.stringify(parts)}`);
     
     let tenant = 'public';
     if (parts.length > 2) {
@@ -47,7 +57,7 @@ export function tenantMiddleware() {
     // Safety check: ignore 'accounts' or common third-party domains
     if (tenant === 'accounts' || tenant === 'google') tenant = 'public';
 
-    console.log(`[DEBUG] tenantMiddleware: determined tenant=${tenant}`);
+    logger.log(`[DEBUG] tenantMiddleware: determined tenant=${tenant}`);
     (req as any).tenant = tenant;
     
     next();

@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file POST.ts
@@ -56,9 +58,7 @@
  */
 
 import type { Request, Response } from 'express'
-import { configGet } from '@helpers/config';
-const DEBUG = configGet('DEBUG') === 'true';
-
+;
 import { resolveAuthContext, AuthError } from '@services/auth/authContext'
 import { z } from 'zod'
 import { resolveUserForApplication } from '@services/auth/authUserResolver'
@@ -77,14 +77,14 @@ export const schema = {
  * POST /v1/auth/login
  */
 export default async function POST(req: Request, res: Response): Promise<void> {
-    if (DEBUG) console.log('[DEBUG] POST /v1/auth/login reached');
+    logger.log('[DEBUG] POST /v1/auth/login reached');
     try {
         const body =
             (req.validated?.body as z.infer<typeof schema.body>) ??
             req.body
 
         // 1. Resolve application context
-        if (DEBUG) console.log('[DEBUG] Login route accessed. Body:', JSON.stringify(body, (key, value) => key === 'password' ? '***' : value));
+        logger.log('[DEBUG] Login route accessed. Body:', JSON.stringify(body, (key, value) => key === 'password' ? '***' : value));
         const appCtx = await resolveAuthContext(body)
 
         // 2. Resolve user identity + app access

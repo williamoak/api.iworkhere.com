@@ -1,3 +1,23 @@
+/**
+ * @myDocBlock
+ * @file warframeWrite.ts
+ * @internal
+ * @module Database
+ * @tag db, mapper
+ * @version 1.0.0
+ * @author william.r.oak@gmail.com
+ * @path src/db/mappers/warframeWrite.ts
+ * @summary Map warframe API input to database write shape.
+ * @description
+ *   Transforms validated Warframe API input (snake_case)
+ *   to DB write shape (camelCase).
+ * @query {}
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": ["@src/validation/warframe"]
+ * }
+ */
 import { z } from "zod";
 import {
     warframeInsertSchema,

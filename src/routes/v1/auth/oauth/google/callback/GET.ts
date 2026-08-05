@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @file GET.ts
  * @external Google OAuth 2.0
@@ -45,7 +47,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   try {
     const statePayload = verifyState(state);
-  if (DEBUG) console.log('[DEBUG] [oauth/callback/GET] state payload', { statePayload });
+  logger.log('[DEBUG] [oauth/callback/GET] state payload', { statePayload });
     const appCtx = await resolveAuthContext({ app_key: statePayload.app_key });
 
     const tokenResponse = await fetch(googleConfig.tokenUrl, {
@@ -123,7 +125,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     const isDeepLink = (statePayload.redirect_uri?.includes("://") || statePayload.redirect_uri?.includes("--/")) &&
                        !statePayload.redirect_uri?.startsWith("http");
 
-    if (DEBUG) console.log('[DEBUG] [oauth-callback] Checking switchboard:', {
+    logger.log('[DEBUG] [oauth-callback] Checking switchboard:', {
         flow: statePayload.flow,
         isDeepLink,
         redirect_uri: statePayload.redirect_uri
@@ -131,7 +133,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
     // 2. Web Popup Flow (ONLY if not a deep link and flow is set to popup)
     if (statePayload.flow === "popup" && !isDeepLink) {
-        if (DEBUG) console.log('[DEBUG] [oauth-callback] Setting auth_token cookie for popup flow');
+        logger.log('[DEBUG] [oauth-callback] Setting auth_token cookie for popup flow');
         res.cookie('auth_token', tokens.access.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -143,7 +145,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
             throw new Error("Missing redirect_uri for popup flow");
         }
         const targetOrigin = new URL(statePayload.redirect_uri).origin;
-        if (DEBUG) console.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
+        logger.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
 
         res.status(200).send(`
             <!DOCTYPE html>
@@ -160,7 +162,8 @@ export default async function GET(req: Request, res: Response): Promise<void> {
                         window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, "${targetOrigin}");
                         setTimeout(() => window.close(), 1000);
                     } catch (error) {
-                        console.error("[oauth-popup] error:", error);
+
+                        logger.error("[oauth-popup] error:", error);
                         // Last resort: redirect to app with tokens in URL
                         window.location.href = "${statePayload.redirect_uri}?oauth_token=" + encodeURIComponent(JSON.stringify(data));
                     }
@@ -187,7 +190,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
         // If it's a web URL (http/https), set the auth cookie for web authentication
         if (redirectUrl.protocol === 'http:' || redirectUrl.protocol === 'https:') {
-        if (DEBUG) console.log('[DEBUG] [oauth-callback] Setting auth_token cookie');
+        logger.log('[DEBUG] [oauth-callback] Setting auth_token cookie');
           res.cookie('auth_token', tokens.access.token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -222,7 +225,8 @@ export default async function GET(req: Request, res: Response): Promise<void> {
       },
     });
   } catch (err) {
-    console.error("[oauth-callback] error:", err);
+
+    logger.error("[oauth-callback] error:", err);
     res.status(500).send("Authentication Error");
   }
 }

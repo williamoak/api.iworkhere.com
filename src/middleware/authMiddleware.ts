@@ -1,10 +1,12 @@
+import { logger } from '@helpers/logger';
+
 ﻿/**
  * @myDocBlock
  * @file authMiddleware.ts
  * @internal
  * @module Middleware
  * @tag api, auth, debug
- * @version 1.0.4
+ * @version 1.0.5
  * @author william.r.oak@gmail.com
  * @path src/middleware/authMiddleware.ts
  * @summary Access token authentication middleware (instrumented).
@@ -20,6 +22,7 @@
  *   - In debug mode, this middleware returns 401 debug metadata (reqId/reason)
  *     and emits debug response headers.
  *   - Raw token values are never logged or returned.
+ * @query {}
  * @requestExample none
  * @response none
  * @requires {
@@ -40,7 +43,7 @@ const BEARER_PREFIX = 'bearer ';
 function isDebug(): boolean {
   return process.env.AUTH_MW_DEBUG === '1';
 }
-
+;
 function dbg(
   reqId: string,
   phase: string,
@@ -48,7 +51,7 @@ function dbg(
 ): void {
   if (!isDebug()) return;
 
-  console.log(
+  logger.log(
     JSON.stringify({
       tag: 'auth.middleware',
       reqId,

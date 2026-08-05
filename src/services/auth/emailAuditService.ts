@@ -1,3 +1,4 @@
+import { logger } from '@helpers/logger';
 /**
  * @file emailAuditService.ts
  * @internal
@@ -9,6 +10,7 @@
  *   Logs email sends (successful and failed) for auditing and debugging purposes.
  *   Helps track email delivery issues and user verification status.
  */
+
 
 import { db } from '@services/dbService'
 import { emailAuditLogs } from '@db/schema'
@@ -39,6 +41,6 @@ export async function logEmailAudit(params: {
         })
     } catch (error) {
         // Log audit errors but don't fail the email flow
-        console.error('[emailAuditService] Failed to log email audit:', error)
+        logger.error('[emailAuditService] Failed to log email audit:', error)
     }
 }

@@ -4,7 +4,7 @@
  * @internal
  * @module Middleware
  * @tag api, validation, middleware
- * @version 3.1.1
+ * @version 3.1.2
  * @author william.r.oak@gmail.com
  * @path src/middleware/validate.ts
  * @summary Global request hardening + per-route Zod validation.
@@ -19,6 +19,7 @@
  *     - Framework-owned request properties (req.query, req.body, req.params)
  *       are NEVER mutated.
  *     - All validated data is attached to req.validated.
+ * @query {}
  * @requestExample none
  * @response none
  * @requires {

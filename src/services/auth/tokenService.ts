@@ -1,10 +1,10 @@
 /**
  * @myDocBlock
  * @file tokenService.ts
- * @external false
+ * @internal
  * @module services/auth
  * @tag auth, token, session, security
- * @version 1.0.0
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path src/services/auth/tokenService.ts
  * @summary Issues, rotates, and revokes application-scoped authentication tokens.
@@ -18,21 +18,12 @@
  *
  * This module throws typed AuthError instances and does not perform any HTTP
  * response handling.
- *
- * @requires
- * {
- *   "tables": [
- *     "auth_tokens"
- *   ],
- *   "services": [
- *     "@services/dbService"
- *   ],
- *   "libraries": [
- *     "crypto"
- *   ]
+ * @query {}
+ * @requestExample none
+ * @response none
+ * @requires {
+ *   "dependencies": ["crypto", "drizzle-orm", "@services/dbService", "@db/schema", "@services/auth/authContext", "@helpers/config", "@cache/cacheStore", "@middleware/tenantResolver"]
  * }
- *
- * @internal
  */
 
 import crypto from 'crypto'

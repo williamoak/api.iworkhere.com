@@ -20,11 +20,20 @@ vi.mock('crypto', () => ({
 }))
 
 vi.mock('@helpers/config', () => ({
-    configGetNumber: vi.fn((key: string) => {
-        if (key === 'ACCESS_TOKEN_TTL_SECONDS') return 900
-        if (key === 'REFRESH_TOKEN_TTL_SECONDS') return 3600
-        throw new Error('Unexpected key')
+    configGet: vi.fn((key: string) => {
+        if (key === 'DEBUG') return 'true';
+        if (key === 'ACCESS_TOKEN_TTL_SECONDS') return '900';
+        if (key === 'REFRESH_TOKEN_TTL_SECONDS') return '3600';
+        return undefined;
     }),
+    configGetNumber: vi.fn((key: string) => {
+        if (key === 'ACCESS_TOKEN_TTL_SECONDS') return 900;
+        if (key === 'REFRESH_TOKEN_TTL_SECONDS') return 3600;
+        throw new Error('Unexpected key');
+    }),
+    config: {
+        DEBUG: 'true'
+    }
 }))
 
 vi.mock('@services/dbService', () => ({

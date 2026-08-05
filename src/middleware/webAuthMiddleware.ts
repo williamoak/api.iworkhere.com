@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock
  * @file webAuthMiddleware.ts
@@ -20,9 +22,8 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { configGet } from '@helpers/config';
+;
 import crypto from 'crypto';
-const DEBUG = configGet('DEBUG');
 import { db } from '@services/dbService';
 import { authTokens } from '@db/schema';
 import { and, eq, gt, isNull } from 'drizzle-orm';
@@ -37,9 +38,9 @@ export async function webAuthMiddleware(req: Request, res: Response, next: NextF
   const handled = await resolveTenantMiddleware(tenant, 'webAuthMiddleware', req, res, next);
   if (handled) return;
 
-  if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
-  if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] authorization header:', req.headers.authorization);
-  if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] All headers:', JSON.stringify(req.headers, null, 2));
+  logger.log('[DEBUG] [webAuthMiddleware] cookies:', req.cookies);
+  logger.log('[DEBUG] [webAuthMiddleware] authorization header:', req.headers.authorization);
+  logger.log('[DEBUG] [webAuthMiddleware] All headers:', JSON.stringify(req.headers, null, 2));
   let token = req.cookies.auth_token;
   if (!token) {
     const authHeader = req.headers.authorization;
@@ -74,14 +75,14 @@ export async function webAuthMiddleware(req: Request, res: Response, next: NextF
       .limit(1);
 
     if (rows.length > 0) {
-      if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] auth successful for user:', rows[0].userId);
+      logger.log('[DEBUG] [webAuthMiddleware] auth successful for user:', rows[0].userId);
       req.auth = { userId: rows[0].userId };
     } else {
-      if (DEBUG) console.log('[DEBUG] [webAuthMiddleware] auth failed - token not found or invalid');
+      logger.log('[DEBUG] [webAuthMiddleware] auth failed - token not found or invalid');
       req.auth = undefined;
     }
   } catch (err) {
-    console.error('Web Auth Error:', err);
+    logger.error('Web Auth Error:', err);
     req.auth = undefined;
   }
   

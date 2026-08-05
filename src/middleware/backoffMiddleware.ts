@@ -4,37 +4,26 @@
  * @internal
  * @module Middleware
  * @tag api, backoff
- * @version 1.0.1
+ * @version 1.0.2
  * @author william.r.oak@gmail.com
  * @path src/middleware/backoffMiddleware.ts
  * @summary Concurrency-limited admission middleware with exponential backoff and bounded wait.
  * @description
- *   This middleware enforces a per-route, per-method maximum number of concurrent
- *   in-flight requests while allowing excess requests to wait using an exponential
- *   backoff strategy with jitter.
+ *   This middleware enforces a strict upper bound on the number of concurrent
+ *   in-flight requests per route key (HTTP method + Express route path).
  *
- *   When the number of active requests for a given route key
- *   (HTTP method + Express route path) reaches the configured maximum, additional
- *   requests are delayed and retried internally until either:
+ *   When the number of active requests reaches the configured maximum, additional
+ *   requests are delayed and retried internally until either a slot becomes
+ *   available or the total wait time exceeds the configured maximum wait window.
  *
- *     - a concurrency slot becomes available, or
- *     - the total accumulated wait time exceeds the configured maximum wait window
- *
- *   If the maximum wait time is exceeded, the request is rejected with HTTP 429
- *   and a Retry-After response header.
- *
- *   This middleware is intended for protecting expensive internal routes
- *   (e.g. database-heavy or CPU-bound endpoints) by smoothing burst traffic
- *   without immediately failing clients.
- *
- *   The concurrency counters are process-local and reset on process restart.
- *   This middleware does not provide cross-process or distributed coordination.
+ *   This middleware is intended for smoothing bursts on heavy internal routes.
+ *   Counters are process-local and do not support distributed coordination.
  * @query {}
  * @requestExample {
  *   "method": "GET",
  *   "path": "/v1/reports/summary",
  *   "headers": {
- *     "accept": "application/json"
+ *     "accept": "application\/json"
  *   }
  * }
  * @response {

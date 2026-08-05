@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file PUT.ts
@@ -134,7 +136,7 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
       token: verificationToken,
       userId,
     }).catch(err => {
-      console.error('[registration] Background email send failed:', err);
+      logger.error('[registration] Background email send failed:', err);
     });
 
     res.status(201).json({
@@ -147,7 +149,8 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
     });
     res.locals.visitNote = `registration: successful for ${username}`;
   } catch (err: any) {
-    console.error('Registration failed:', err);
+
+    logger.error('Registration failed:', err)
     res.locals = res.locals || {};
     res.locals.visitNote = `registration: failed for ${body?.username || 'unknown'}`;
     if (err instanceof AuthError) {

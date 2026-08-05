@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file swaggerGen.ts
@@ -228,7 +230,8 @@ function buildQueryParameters(queryRaw: string | null) {
       },
     }));
   } catch (err) {
-    console.warn('⚠️  Invalid @query JSON, skipping:', err);
+
+    logger.warn('⚠️  Invalid @query JSON, skipping:', err)
     return [];
   }
 }
@@ -290,7 +293,8 @@ function convertToSwagger(docblocks: DocBlockData[]) {
 // ---------------------------------------------------------------------------
 
 function run() {
-  console.log('🔍 Scanning routes for @myDocBlock files...');
+
+  logger.log('🔍 Scanning routes for @myDocBlock files...')
 
   const files = getAllTSFiles(ROUTES_ROOT);
   const parsed: DocBlockData[] = [];
@@ -313,24 +317,27 @@ function run() {
     });
   }
 
-  console.log(`📦 Parsed ${parsed.length} @myDocBlock(s).`);
+  logger.log(`📦 Parsed ${parsed.length} @myDocBlock(s).`)
 
   const swagger = convertToSwagger(parsed);
 
-  console.log('\n🌐 Public API endpoints exposed:');
+  logger.log('\n🌐 Public API endpoints exposed:')
   let routes = 0;
   for (const [route, methods] of Object.entries(swagger.paths)) {
     if (typeof methods === 'object' && methods !== null) {
       for (const m of Object.keys(methods)) {
-        console.log(`  ${m.toUpperCase()} ${route}`);
+
+        logger.log(`  ${m.toUpperCase()} ${route}`)
         routes++;
       }
     }
   }
 
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(swagger, null, 2));
-  console.log(`\n✅ ${routes} external endpoint(s) generated.`);
-  console.log(`✅ Swagger file written to: ${OUTPUT_FILE}`);
+
+  logger.log(`\n✅ ${routes} external endpoint(s) generated.`)
+
+  logger.log(`✅ Swagger file written to: ${OUTPUT_FILE}`)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

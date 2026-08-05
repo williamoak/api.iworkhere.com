@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file DELETE.ts
@@ -81,7 +83,9 @@ export default async function DELETE(req: Request, res: Response) {
             data: result,
         });
     } catch (err) {
-        console.error("DELETE /modules error:", err);
+;
+
+        logger.error("DELETE /modules error:", err);
 
         return res.status(500).json({
             success: false,

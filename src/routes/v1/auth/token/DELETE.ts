@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock v2.3
  * @file DELETE.ts
@@ -35,11 +37,7 @@ import { authTokens } from '@db/schema'
 import { eq } from 'drizzle-orm'
 import { revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
-import { configGet } from '@helpers/config';
-
 import { z } from 'zod';
-
-const DEBUG = configGet('DEBUG');
 
 export const schema = {
   body: z.object({}).optional(),
@@ -53,20 +51,21 @@ export default async function DELETE(
     res: Response
 ): Promise<void> {
     try {
-        console.log(`[DEBUG] [DELETE] Starting logout for tenant: ${(req as any).tenant}, auth.userId: ${(req as any).auth?.userId}`);
+        logger.log(`[DEBUG] [DELETE] Starting logout for tenant: ${(req as any).tenant}, auth.userId: ${(req as any).auth?.userId}, res.locals.visitUserId: ${res.locals.visitUserId}`);
         const token = req.cookies.auth_token || req.body.token;
-        if ((req as any).auth?.userId) {
+        if (!res.locals.visitUserId && (req as any).auth?.userId) {
             res.locals.visitUserId = (req as any).auth.userId;
-        } else if (token) {
-            // Pre-emptive identification if middleware failed to pick up token
-            try {
+        } else if (!res.locals.visitUserId && token) {
+             try {
                 const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
                 const [row] = await db.select({ userId: authTokens.userId }).from(authTokens).where(eq(authTokens.tokenHash, tokenHash)).limit(1);
                 if (row) res.locals.visitUserId = row.userId;
             } catch (e) {
-                console.error('[DEBUG] [DELETE] Failed to pre-emptively identify user:', e);
+                logger.error('[DEBUG] [DELETE] Failed to pre-emptively identify user:', e);
             }
         }
+        
+        logger.log(`[DEBUG] [DELETE] Logout attribution check: res.locals.visitUserId=${res.locals.visitUserId}`);
         if (!token) {
             // If no token, nothing to revoke.
             res.cookie("auth_token", "", {
@@ -82,7 +81,7 @@ export default async function DELETE(
         await revokeToken(token)
 
         res.clearCookie('auth_token', { path: '/' });
-        if (DEBUG) console.log('[DEBUG] [DELETE] auth_token cookie set to expire, secure:', process.env.NODE_ENV === 'production');
+        logger.log('[DEBUG] [DELETE] auth_token cookie set to expire, secure:', process.env.NODE_ENV === 'production');
         res.status(204).end()
     } catch (err) {
         if (err instanceof AuthError) {

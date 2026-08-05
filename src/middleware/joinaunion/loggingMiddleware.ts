@@ -1,3 +1,5 @@
+import { logger } from '@helpers/logger';
+
 /**
  * @myDocBlock
  * @file loggingMiddleware.ts
@@ -22,6 +24,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { db } from '@services/dbService';
 import crypto from 'crypto';
 import { sql } from 'drizzle-orm';
+;
 
 function formatToUUID(hex: string): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
@@ -33,7 +36,7 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
         try {
             // Re-capture userId here because route handlers might have set visitUserId after loggingMiddleware ran
             const userId = (req as any).auth?.userId || res.locals.visitUserId || null;
-            console.log(`[DEBUG] [JOINAUNION] Captured userId in finish event: ${userId}, req.auth: ${(req as any).auth?.userId}, res.locals.visitUserId: ${res.locals.visitUserId}`);
+            logger.log(`[DEBUG] [JOINAUNION] Captured userId in finish event: ${userId}, req.auth: ${(req as any).auth?.userId}, res.locals.visitUserId: ${res.locals.visitUserId}`);
             let deviceId = req.headers['x-device-id'] as string;
 
             if (!deviceId) {
@@ -47,7 +50,7 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
 
             await db.execute(sql`INSERT INTO joinaunion.visit_info (id, device_id, user_id, request_method, touch_time, note) VALUES (gen_random_uuid(), ${deviceId}, ${userId}, ${req.method}, ${new Date().toISOString()}, ${note})`);
         } catch (e) {
-            console.error("[DEBUG] [JOINAUNION] Failed to process request logging for joinaunion:", e);
+            logger.error("[DEBUG] [JOINAUNION] Failed to process request logging for joinaunion:", e);
         }
     });
 

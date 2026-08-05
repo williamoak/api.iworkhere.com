@@ -1,10 +1,13 @@
+import { logger } from '@helpers/logger';
+
 import type { Request, Response } from 'express'
 import fs from 'fs/promises'
 import { markdownToHtml } from '@helpers/markdownToHtml'
 import path from 'path'
 
 export default async function GET(_req: Request, res: Response) {
-    console.log("fetching readme")
+;
+logger.log("fetching readme")
     try {
         const readmePath = path.resolve(process.cwd(), 'README.md')
         const readmeContent = await fs.readFile(readmePath, 'utf8')
