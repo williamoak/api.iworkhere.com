@@ -10,6 +10,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { logger } from '@helpers/logger'
 
 /**
  * ------------------------------------------------------------
@@ -208,6 +209,8 @@ describe('issueEmailVerificationToken', () => {
         values: () => Promise.reject(new Error('DB_ERROR')),
     })
 
+    const consoleSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+
     await expect(
       issueEmailVerificationToken({
         userId: 'user-id',
@@ -215,6 +218,9 @@ describe('issueEmailVerificationToken', () => {
         email: 'bill@example.com',
       })
     ).rejects.toThrow('DB_ERROR')
+
+    expect(consoleSpy).toHaveBeenCalled()
+    consoleSpy.mockRestore()
   })
 
   test('throws if inputs are missing', async () => {

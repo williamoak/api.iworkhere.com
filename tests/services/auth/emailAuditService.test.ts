@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { logEmailAudit } from '@services/auth/emailAuditService'
 import { db } from '@services/dbService'
+import { logger } from '@helpers/logger'
 
 /**
  * Test suite
@@ -82,6 +83,8 @@ describe('emailAuditService', () => {
             ;(db.insert as any).mockImplementation(() => {
                 throw new Error('Database connection failed')
             })
+            
+            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
             // Should not throw - errors logged
             await expect(
@@ -92,6 +95,8 @@ describe('emailAuditService', () => {
                     status: 'sent',
                 })
             ).resolves.not.toThrow()
+            
+            loggerSpy.mockRestore()
         })
 
         test('supports password_reset email type', async () => {

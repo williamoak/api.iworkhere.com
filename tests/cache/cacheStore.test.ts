@@ -1,4 +1,77 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const { storage } = vi.hoisted(() => {
+  return { storage: new Map<string, { val: string; expiry: number }>() };
+});
+
+vi.mock("ioredis", () => {
+  return {
+    default: vi.fn().mockImplementation(function (this: any) {
+      this.get = vi.fn().mockImplementation((key: string) => {
+        const entry = storage.get(key);
+        if (!entry) return Promise.resolve(null);
+        if (entry.expiry && entry.expiry > 0 && entry.expiry < Date.now()) {
+          storage.delete(key);
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(entry.val);
+      });
+      this.set = vi.fn().mockImplementation((key: string, val: string, mode?: string, ttl?: number) => {
+        const expiry = mode === "PX" && ttl ? Date.now() + ttl : 0;
+        storage.set(key, { val, expiry });
+        return Promise.resolve("OK");
+      });
+      this.del = vi.fn().mockImplementation((key: string) => {
+        storage.delete(key);
+        return Promise.resolve(1);
+      });
+      this.exists = vi.fn().mockImplementation((key: string) => {
+        const entry = storage.get(key);
+        if (!entry) return Promise.resolve(0);
+        if (entry.expiry && entry.expiry > 0 && entry.expiry < Date.now()) {
+          storage.delete(key);
+          return Promise.resolve(0);
+        }
+        return Promise.resolve(1);
+      });
+      this.flushdb = vi.fn().mockImplementation(() => {
+        storage.clear();
+        return Promise.resolve("OK");
+      });
+      this.dbsize = vi.fn().mockImplementation(() => {
+        const now = Date.now();
+        for (const [key, entry] of storage.entries()) {
+          if (entry.expiry && entry.expiry > 0 && entry.expiry < now) {
+            storage.delete(key);
+          }
+        }
+        return Promise.resolve(storage.size);
+      });
+      this.scanStream = vi.fn().mockImplementation(() => {
+        const now = Date.now();
+        const activeKeys = Array.from(storage.entries())
+          .filter(([_, entry]) => !entry.expiry || entry.expiry === 0 || entry.expiry >= now)
+          .map(([key]) => key);
+        let yielded = false;
+        return {
+          [Symbol.asyncIterator]() {
+            return {
+              async next() {
+                if (!yielded) {
+                  yielded = true;
+                  return { value: activeKeys, done: false };
+                }
+                return { value: undefined, done: true };
+              }
+            };
+          }
+        };
+      });
+      return this;
+    }),
+  };
+});
+
 import { cacheStore } from "@cache/cacheStore";
 
 describe("cacheStore", () => {
@@ -73,5 +146,15 @@ describe("cacheStore", () => {
     await cacheStore.set("b", 2, 1000);
 
     expect(await cacheStore.size()).toBe(2);
+  });
+
+  it("delWhere() should remove matching keys", async () => {
+    await cacheStore.set("key1", "val1", 1000);
+    await cacheStore.set("key2", "val2", 1000);
+
+    await cacheStore.delWhere((key) => key === "key1");
+
+    expect(await cacheStore.has("key1")).toBe(false);
+    expect(await cacheStore.has("key2")).toBe(true);
   });
 });

@@ -30,10 +30,10 @@ import cookieParser from "cookie-parser";
 import cors, { type CorsOptions } from "cors";
 import { loadRoutes } from "@loaders/routeLoader";
 import adminRoutes from "@src/admin/adminApp";
-;
+
 import { applyGlobalMiddleware } from "@middleware/index";
 import { welcomePage } from "@src/admin/client/welcomePage";
-;
+
 import { configGet } from "@helpers/config";
 
 const DEBUG = configGet("DEBUG") === "true";
@@ -169,7 +169,7 @@ export async function createBaseApp() {
     app.use('/admin', adminRoutes);
 
     if (DEBUG) {
-        logger.dir(app.locals.routeTree["/v1/health"], { depth: 10 });
+        logger.dir(app.locals.routeTree?.["/v1/health"], { depth: 10 });
     }
 
     return app;

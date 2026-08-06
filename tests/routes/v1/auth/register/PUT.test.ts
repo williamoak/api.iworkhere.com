@@ -39,6 +39,7 @@
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import type { Request, Response } from 'express'
+import { logger } from '@helpers/logger'
 
 /**
  * ------------------------------------------------------------
@@ -264,6 +265,8 @@ describe('PUT /v1/auth/register', () => {
       applicationId: 'app-id',
     })
     ;(hashPassword as any).mockResolvedValue('hashed-password')
+    
+    const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
     // Simulate DB throwing a unique constraint violation for email
     const dbError = new Error('duplicate key value violates unique constraint "users_email_unique"');
@@ -288,6 +291,8 @@ describe('PUT /v1/auth/register', () => {
       error: 'EMAIL_TAKEN',
       message: 'An account with this email already exists',
     })
+    
+    loggerSpy.mockRestore()
   })
 
   test('returns 409 USERNAME_TAKEN when database throws username unique constraint violation', async () => {
@@ -295,6 +300,8 @@ describe('PUT /v1/auth/register', () => {
       applicationId: 'app-id',
     })
     ;(hashPassword as any).mockResolvedValue('hashed-password')
+
+    const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
     // Simulate DB throwing a unique constraint violation for username
     const dbError = new Error('duplicate key value violates unique constraint "users_username_unique"');
@@ -319,5 +326,7 @@ describe('PUT /v1/auth/register', () => {
       error: 'USERNAME_TAKEN',
       message: 'This username is already taken',
     })
+    
+    loggerSpy.mockRestore()
   })
 })

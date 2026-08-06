@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import { cleanupExpiredTokens, startCleanupJob } from '@jobs/cleanupExpiredTokens'
 import { db } from '@services/dbService'
+import { logger } from '@helpers/logger'
 
 /**
  * Mock dependencies
@@ -63,17 +64,17 @@ describe('cleanupExpiredTokens', () => {
                 throw new Error('Database error')
             })
 
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation()
+            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
             const result = await cleanupExpiredTokens()
 
             expect(result).toBe(0)
-            expect(consoleSpy).toHaveBeenCalledWith(
+            expect(loggerSpy).toHaveBeenCalledWith(
                 expect.stringContaining('cleanupExpiredTokens'),
                 expect.any(Error)
             )
 
-            consoleSpy.mockRestore()
+            loggerSpy.mockRestore()
         })
 
         test('logs successful cleanup', async () => {
@@ -175,21 +176,21 @@ describe('cleanupExpiredTokens', () => {
                 throw new Error('Database error')
             })
 
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation()
+            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
             const intervalId = startCleanupJob(5000)
 
             // Clear initial startup calls
-            consoleSpy.mockClear()
+            loggerSpy.mockClear()
 
             // Advance time to trigger interval
             vi.advanceTimersByTime(5000)
 
             // Error should be logged
-            expect(consoleSpy).toHaveBeenCalled()
+            expect(loggerSpy).toHaveBeenCalled()
 
             clearInterval(intervalId)
-            consoleSpy.mockRestore()
+            loggerSpy.mockRestore()
         })
 
         test('returns a valid interval ID for cleanup', () => {

@@ -25,7 +25,6 @@ import { resolveAuthContext } from '@services/auth/authContext';
 import { resolveUserForApplication } from '@services/auth/authUserResolver';
 import { verifyPassword } from '@services/auth/passwordService';
 import { issueLoginTokens } from '@services/auth/tokenService';
-;
 
 import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
 import { db } from "@services/dbService";
