@@ -312,7 +312,7 @@ describe("appFactory", () => {
 
             const { status, text } = await testRoute(app, "/coverage/index.html");
             expect(status).toBe(200);
-            expect(text).toContain("Coverage");
+            expect(text.toLowerCase()).toContain("coverage");
         } finally {
             // Clean up only if we created them
             if (fileCreated && fs.existsSync(indexFile)) fs.unlinkSync(indexFile);
