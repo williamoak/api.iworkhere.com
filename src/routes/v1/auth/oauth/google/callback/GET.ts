@@ -115,6 +115,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     }
 
     const tokens = await issueLoginTokens(userRow.userId, appCtx.applicationId);
+    res.locals.visitUserId = userRow.userId; // Set for logging middleware
 
     // --- ENHANCED SWITCHBOARD LOGIC ---
 

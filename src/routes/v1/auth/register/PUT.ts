@@ -147,6 +147,7 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         status: 'pending',
       },
     });
+    res.locals.visitUserId = userId; // Set for logging middleware
     res.locals.visitNote = `registration: successful for ${username}`;
   } catch (err: any) {
 

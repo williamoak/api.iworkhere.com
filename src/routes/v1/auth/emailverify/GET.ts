@@ -39,7 +39,8 @@ export default async function GET(req: Request, res: Response): Promise<void> {
         const { token } = query
 
         // Perform the same verification logic as the PUT route
-        await verifyEmailToken(token)
+        const user = await verifyEmailToken(token)
+        res.locals.visitUserId = user.id;
 
         /**
          * SUCCESS REDIRECT

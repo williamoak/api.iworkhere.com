@@ -68,6 +68,7 @@ function createRes(): ResMock {
   return {
     statusCode: 0,
     body: undefined,
+    locals: {},
     status(code: number) {
       this.statusCode = code;
       return this;

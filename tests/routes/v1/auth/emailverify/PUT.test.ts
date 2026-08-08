@@ -82,6 +82,7 @@ function createRes(): ResMock {
     const res = {
         statusCode: 0,
         body: undefined,
+        locals: {} as Record<string, any>,
         headers: {} as Record<string, string>,
 
         status(code: number) {

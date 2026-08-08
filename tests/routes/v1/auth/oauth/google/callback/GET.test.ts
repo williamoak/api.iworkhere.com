@@ -58,6 +58,7 @@ function createRes(): ResMock {
     body: undefined,
     redirectUrl: "",
     sentHtml: "",
+    locals: {},
     status(code: number) { this.statusCode = code; return this; },
     json(payload: unknown) { this.body = payload; return this; },
     redirect(code: number, url: string) { this.statusCode = code; this.redirectUrl = url; return this; },

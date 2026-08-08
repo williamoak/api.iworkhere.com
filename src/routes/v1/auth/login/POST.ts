@@ -101,6 +101,7 @@ export default async function POST(req: Request, res: Response): Promise<void> {
             user.userId,
             appCtx.applicationId
         )
+        res.locals.visitUserId = user.userId; // Set for logging middleware
 
         // 5. Respond
         res.status(200).json({

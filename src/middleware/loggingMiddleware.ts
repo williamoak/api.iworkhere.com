@@ -29,12 +29,15 @@ export function loggingMiddleware() {
     return async (req: Request, res: Response, next: NextFunction) => {
         const tenant = (req as any).tenant;
 
-        // 1. Base Implementation (Generic Logging)
-        const userId = res.locals.visitUserId || (req as any).auth?.userId || null;
-        logger.log(`[Generic Logging] ${req.method} ${req.path} for tenant: ${tenant}, userId: ${userId}`);
+        // Use 'finish' to log AFTER the request is completed, 
+        // ensuring user identity (like OAuth login) is established during the request.
+        res.once('finish', async () => {
+            const userId = res.locals.visitUserId || (req as any).auth?.userId || null;
+            logger.log(`[Generic Logging] ${req.method} ${req.path} for tenant: ${tenant}, userId: ${userId} - Status: ${res.statusCode}`);
 
-        // 2. Execute tenant-specific additive middleware
-        await executeTenantSpecific(tenant, 'loggingMiddleware', req, res, next);
+            // 2. Execute tenant-specific additive middleware
+            await executeTenantSpecific(tenant, 'loggingMiddleware', req, res, () => {});
+        });
 
         next();
     };

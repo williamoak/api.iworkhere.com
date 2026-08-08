@@ -55,6 +55,7 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         const token = body.token
 
         const user = await verifyEmailToken(token)
+        res.locals.visitUserId = user.id; // Set for logging middleware
 
         res.status(200).json({
             user: {
