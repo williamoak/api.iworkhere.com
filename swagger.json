@@ -42,6 +42,9 @@
       "name": "monitor"
     },
     {
+      "name": "monitor, visit"
+    },
+    {
       "name": "warframe.modules"
     },
     {
@@ -663,6 +666,30 @@
         "description": "Provides a minimal network monitoring endpoint that confirms the API\n  server is responsive.\n\n  Supports dual-mode execution:\n\n    1) External HTTP invocation\n       → Responds via res.json({ ok: true }).\n\n    2) Internal invocation (future monitoring aggregator)\n       → Returns the payload object directly.\n\n  Dual-mode support allows this endpoint to be incorporated into a\n  high-speed monitoring or aggregation system without HTTP loopback.",
         "tags": [
           "monitor"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/monitor/visit": {
+      "post": {
+        "summary": "Explicit visit reporting endpoint.",
+        "description": "Allows clients (like the mobile app) to explicitly report page views\n  or other significant user interactions that do not naturally trigger\n  a backend request.\n\n  The request is captured by the global logging middleware and recorded\n  in the visit_info table.",
+        "tags": [
+          "monitor, visit"
         ],
         "parameters": [],
         "responses": {
