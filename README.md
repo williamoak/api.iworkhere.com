@@ -12,8 +12,9 @@ A robust TypeScript + Express REST API backend server with database connectivity
 - **Database Integration**: PostgreSQL with Drizzle ORM, including migrations, seeds, and mappers.
 - **Middleware Stack**: CORS, rate limiting, throttling, caching, validation (Zod schemas), and debug logging.
 - **Dynamic Routing**: Automatic route discovery from filesystem structure with enforced middleware order.
-- **API Documentation**: Swagger UI for interactive docs.
-- **Testing**: Comprehensive Vitest suite with mocks and coverage reporting. (browse to /coverage)
+- **API Documentation**: Swagger UI for interactive docs at `/docs`.
+- **Testing**: Comprehensive Vitest suite with mocks and coverage reporting at `/coverage`.
+- **Admin Interface**: Administrative dashboard at `/admin`.
 - **Security**: bcryptjs for password hashing, environment-based configs, and debug flags for diagnostics.
 
 ## Tech Stack
@@ -88,6 +89,15 @@ Starts the server with hot reload. Swagger UI available at `http://<HOST_IP>:<PO
 npm run build
 npm start
 ```
+
+### Web Interfaces
+
+When the application is running, the following web interfaces are available:
+
+- **Welcome Page**: `http://<HOST_IP>:<PORT>/` — Root landing page and login entry point.
+- **Admin Dashboard**: `http://<HOST_IP>:<PORT>/admin` — Secure administrative interface.
+- **API Documentation**: `http://<HOST_IP>:<PORT>/docs` — Interactive Swagger UI.
+- **Test Coverage**: `http://<HOST_IP>:<PORT>/coverage` — Browseable test coverage reports.
 
 ### Testing
 ```bash
@@ -176,6 +186,7 @@ Run migrations with `npm run drizzle migrate`.
 - `npm run build`: Build for production
 - `npm run start`: Production server
 - `npm run test`: Run tests
+- `npm run test:coverage`: Run tests and generate coverage report
 - `npm run test:watch`: Watch mode tests
 - `npm run test:ui`: UI mode tests
 - `npm run swagger:gen`: Generate Swagger docs
@@ -193,7 +204,7 @@ Run migrations with `npm run drizzle migrate`.
 
 ## Contributing
 
-Please read `CONTRIBUTING.md` for the preferred development workflow, mocking conventions used in tests, and pre-push hook instructions. In short:
+Please follow the project's coding standards and testing patterns when contributing:
 
 1. Follow the project's coding standards (ESLint, Prettier).
 2. Add tests for new features and keep coverage healthy.
@@ -206,4 +217,4 @@ This project is licensed under the MIT License — see `LICENSE` for details.
 
 ## Version
 
-0.1.0 (Pre-release)
+0.2.0 (Audit Updated)

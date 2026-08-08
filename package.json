@@ -1,7 +1,7 @@
 {
   "name": "api.iworkhere.com",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "lsof -t -i:4300 | xargs -r kill -9 && tsx src/start.ts",
