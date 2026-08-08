@@ -13,7 +13,7 @@ A robust TypeScript + Express REST API backend server with database connectivity
 - **Middleware Stack**: CORS, rate limiting, throttling, caching, validation (Zod schemas), and debug logging.
 - **Dynamic Routing**: Automatic route discovery from filesystem structure with enforced middleware order.
 - **API Documentation**: Swagger UI for interactive docs.
-- **Testing**: Comprehensive Vitest suite with mocks and coverage reporting.
+- **Testing**: Comprehensive Vitest suite with mocks and coverage reporting. (browse to /coverage)
 - **Security**: bcryptjs for password hashing, environment-based configs, and debug flags for diagnostics.
 
 ## Tech Stack
