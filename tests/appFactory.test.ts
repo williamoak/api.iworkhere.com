@@ -290,4 +290,33 @@ describe("appFactory", () => {
         expect(res2.status).toBe(200);
         expect(res2.text).toContain("Unknown error");
     });
+
+    it("serves coverage report route", async () => {
+        const fs = await vi.importActual<typeof import("fs")>("fs");
+        const path = await import("path");
+        const coverageDir = path.resolve("coverage");
+        const indexFile = path.join(coverageDir, "index.html");
+        
+        // Ensure coverage directory and a dummy index.html exist for the test
+        const dirCreated = !fs.existsSync(coverageDir);
+        if (dirCreated) fs.mkdirSync(coverageDir, { recursive: true });
+        const fileCreated = !fs.existsSync(indexFile);
+        if (fileCreated) fs.writeFileSync(indexFile, "<html><body>Coverage</body></html>");
+
+        try {
+            vi.resetModules();
+            delete process.env.DEBUG;
+            delete process.env.AUTH_ME_DEBUG;
+            const { createBaseApp } = await import("@src/appFactory");
+            const app = await createBaseApp();
+
+            const { status, text } = await testRoute(app, "/coverage/index.html");
+            expect(status).toBe(200);
+            expect(text).toContain("Coverage");
+        } finally {
+            // Clean up only if we created them
+            if (fileCreated && fs.existsSync(indexFile)) fs.unlinkSync(indexFile);
+            if (dirCreated && fs.existsSync(coverageDir)) fs.rmdirSync(coverageDir);
+        }
+    });
 });

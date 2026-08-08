@@ -89,6 +89,7 @@ export async function createBaseApp() {
     applyGlobalMiddleware(app);
     app.use(express.static("public"));
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
+    app.use('/coverage', express.static(path.resolve('coverage')));
 
     if (DEBUG) {
         logger.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);
