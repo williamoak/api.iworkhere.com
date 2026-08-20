@@ -13,12 +13,10 @@ vi.mock('bcryptjs', () => ({
     },
 }))
 
-vi.mock('@services/dbService', () => ({
-    db: {
-        select: vi.fn(),
-        insert: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@db/schema', () => ({
     userAuthLocal: {

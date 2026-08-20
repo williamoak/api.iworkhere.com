@@ -20,26 +20,62 @@
  * }
  */
 import type { Request, Response, NextFunction } from 'express';
-import { dbStorage, baseDb } from '@services/dbService';
-import { sql } from 'drizzle-orm';
+import { dbStorage, pool, schema } from '@services/dbService';
+import { drizzle } from 'drizzle-orm/node-postgres';
 
 export function tenantTransaction() {
-  return async (req: Request, _res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const tenant = (req as any).tenant || 'public';
     
-    // Run the entire request pipeline within the database context
-    await dbStorage.run(baseDb as any, async () => {
-        // We use a transaction to scope the search_path
-        await baseDb.transaction(async (tx) => {
-            // noinspection SqlDialectInspection
-            const query = sql`SET LOCAL search_path TO ${sql.raw(tenant)}, public`;
-            await tx.execute(query);
+    // Scoping database interactions to a specific tenant using search_path.
+    // We acquire a dedicated client from the pool for the duration of the request.
+    try {
+        const client = await pool.connect();
+        
+        let released = false;
+        const release = async () => {
+            if (released) return;
+            released = true;
             
-            // Re-bind the context to this transaction specifically
-            await dbStorage.run(tx as any, async () => {
-                next();
-            });
+            // Wait for logging to finish if it's running
+            console.log(`[DEBUG] [TENANT_TRANSACTION] Waiting for loggingPromise: ${!!(res.locals as any).loggingPromise}`);
+            if ((res.locals as any).loggingPromise) {
+                await (res.locals as any).loggingPromise;
+            }
+            
+            try {
+                console.log(`[DEBUG] [TENANT_TRANSACTION] Resetting search_path`);
+                await client.query('RESET search_path');
+            } catch (e) {
+                // Ignore errors during reset
+            }
+            client.release();
+        };
+
+        // Ensure client is returned to pool when request finishes
+        res.once('finish', release);
+        res.once('close', release);
+
+        // Set the search_path for this client
+        console.log(`[DEBUG] [TENANT_TRANSACTION] Setting search_path to ${tenant}, public for tenant ${tenant}`);
+        await client.query(`SET search_path TO ${tenant}, public`);
+        
+        // Verify search_path
+        const check = await client.query('SHOW search_path');
+        console.log(`[DEBUG] [TENANT_TRANSACTION] search_path set to: ${JSON.stringify(check.rows)}`);
+        
+        // Create a scoped Drizzle instance wrapping this client
+        const scopedDb = drizzle(client, { schema: schema as any });
+        
+        // Store in locals for downstream use
+        (res.locals as any).db = scopedDb;
+
+        // Bind the scoped instance to AsyncLocalStorage
+        await dbStorage.run(scopedDb as any, async () => {
+            next();
         });
-    });
+    } catch (e) {
+        next(e);
+    }
   };
 }

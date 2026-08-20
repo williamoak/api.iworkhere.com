@@ -41,9 +41,9 @@ async function applyMigration() {
     // 4. Move renamed table
     await pool.query(`ALTER TABLE IF EXISTS public.warframe_modules SET SCHEMA michael;`);
 
-    // 5. Create/Update joinaunion.visit_info table
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS joinaunion.visit_info (
+    // 5. Create/Update visit_info table in joinaunion and public (as fallback)
+    const createTableQuery = (schema: string) => `
+        CREATE TABLE IF NOT EXISTS ${schema}.visit_info (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             device_id UUID NOT NULL,
             user_id UUID,
@@ -53,19 +53,22 @@ async function applyMigration() {
         );
 
         -- Add columns if they don't exist (for existing tables)
-        ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS user_id UUID;
-        ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS request_method TEXT NOT NULL DEFAULT 'GET';
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS user_id UUID;
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS request_method TEXT NOT NULL DEFAULT 'GET';
 
         -- Create indexes
-        CREATE INDEX IF NOT EXISTS visit_info_id_idx ON joinaunion.visit_info (id);
-        CREATE INDEX IF NOT EXISTS visit_info_device_id_idx ON joinaunion.visit_info (device_id);
-        CREATE INDEX IF NOT EXISTS visit_info_touch_time_idx ON joinaunion.visit_info (touch_time);
-        CREATE INDEX IF NOT EXISTS visit_info_note_idx ON joinaunion.visit_info (note);
-        CREATE INDEX IF NOT EXISTS visit_info_device_id_note_idx ON joinaunion.visit_info (device_id, note);
-        CREATE INDEX IF NOT EXISTS visit_info_device_id_touch_time_idx ON joinaunion.visit_info (device_id, touch_time);
-        CREATE INDEX IF NOT EXISTS visit_info_user_id_idx ON joinaunion.visit_info (user_id);
-        CREATE INDEX IF NOT EXISTS visit_info_user_id_request_method_idx ON joinaunion.visit_info (user_id, request_method);
-    `);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_id_idx ON ${schema}.visit_info (id);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_device_id_idx ON ${schema}.visit_info (device_id);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_touch_time_idx ON ${schema}.visit_info (touch_time);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_note_idx ON ${schema}.visit_info (note);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_device_id_note_idx ON ${schema}.visit_info (device_id, note);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_device_id_touch_time_idx ON ${schema}.visit_info (device_id, touch_time);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_user_id_idx ON ${schema}.visit_info (user_id);
+        CREATE INDEX IF NOT EXISTS visit_info_${schema}_user_id_request_method_idx ON ${schema}.visit_info (user_id, request_method);
+    `;
+
+    await pool.query(createTableQuery('joinaunion'));
+    await pool.query(createTableQuery('public'));
 
     logger.log("Migration applied successfully!");
   } catch (error) {

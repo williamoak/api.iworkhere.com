@@ -50,14 +50,10 @@ vi.mock('@db/schema', () => ({
     },
 }))
 
-vi.mock('@services/dbService', () => ({
-    __esModule: true,
-    db: {
-        select: vi.fn(),
-        insert: vi.fn(),
-        update: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@src/validation/module', () => ({
     __esModule: true,

@@ -70,11 +70,10 @@ vi.mock('@services/auth/emailVerificationService', () => ({
     sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@services/dbService', () => ({
-    db: {
-        transaction: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@db/schema', () => ({
     users: { id: 'id' },

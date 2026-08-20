@@ -20,15 +20,10 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
  * ------------------------------------------------------------
  */
 
-vi.mock('@services/dbService', () => ({
-    db: {
-        select: vi.fn(),
-        insert: vi.fn(),
-        update: vi.fn(),
-        delete: vi.fn(),
-        transaction: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@helpers/config', () => ({
     configGet: vi.fn((key: string) => {

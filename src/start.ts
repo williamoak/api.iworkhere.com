@@ -21,7 +21,6 @@ import { logger } from '@helpers/logger';
  */
 /* loading the main program here, so I can mock certain files easier */
 import { bootstrap } from "@src/server";
-;
 
 bootstrap().catch(err => {
     logger.error("Fatal startup error:", err);

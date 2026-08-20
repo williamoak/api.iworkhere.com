@@ -1,12 +1,3 @@
-import { logger } from '@helpers/logger';
-
-const getCache = () => {
-    if (!(global as any).__tenantMiddlewareCache) {
-        (global as any).__tenantMiddlewareCache = new Map<string, string | null>();
-    }
-    return (global as any).__tenantMiddlewareCache as Map<string, string | null>;
-};
-
 /**
  * @myDocBlock
  * @file tenantResolver.ts
@@ -32,8 +23,16 @@ import type { Request, Response, NextFunction } from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from '@helpers/logger';
+
+const getCache = () => {
+    if (!(global as any).__tenantMiddlewareCache) {
+        (global as any).__tenantMiddlewareCache = new Map<string, string | null>();
+    }
+    return (global as any).__tenantMiddlewareCache as Map<string, string | null>;
+};
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-;
 
 export async function resolveTenantMiddleware(
     tenant: string, 
@@ -50,6 +49,7 @@ export async function resolveTenantMiddleware(
     if (modulePath === undefined) {
         // Check if file exists
         const fullPath = path.resolve(__dirname, tenant, `${middlewareName}.ts`);
+        logger.log(`[DEBUG] Looking for middleware ${middlewareName} for tenant ${tenant} at ${fullPath}`);
         try {
             await fs.access(fullPath);
             modulePath = fullPath;

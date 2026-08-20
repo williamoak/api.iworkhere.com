@@ -36,11 +36,12 @@ vi.mock('@services/auth/passwordService', () => ({
   enforcePasswordHistory: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@services/dbService', () => ({
-  db: {
+vi.mock('@services/dbService', async () => {
+  const { createDbServiceMock } = await import('../../../../helpers/dbMock');
+  return createDbServiceMock({
     transaction: vi.fn((cb) => cb(mockTx)),
-  },
-}));
+  });
+});
 
 vi.mock('@db/schema', () => ({
   users: { id: 'users' },

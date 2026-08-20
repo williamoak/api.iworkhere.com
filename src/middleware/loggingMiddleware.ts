@@ -23,21 +23,45 @@ import { logger } from '@helpers/logger';
  */
 import type { Request, Response, NextFunction } from 'express';
 import { executeTenantSpecific } from '@middleware/tenantResolver';
+import { dbStorage, baseDb } from '@services/dbService';
 ;
 
 export function loggingMiddleware() {
     return async (req: Request, res: Response, next: NextFunction) => {
+        console.log(`[DEBUG] [GENERIC] loggingMiddleware triggered for ${req.path}`);
         const tenant = (req as any).tenant;
 
-        // Use 'finish' to log AFTER the request is completed, 
-        // ensuring user identity (like OAuth login) is established during the request.
         res.once('finish', async () => {
-            const userId = res.locals.visitUserId || (req as any).auth?.userId || null;
-            logger.log(`[Generic Logging] ${req.method} ${req.path} for tenant: ${tenant}, userId: ${userId} - Status: ${res.statusCode}`);
+            const loggingWork = (async () => {
+                const scopedDb = (res.locals as any).db || baseDb;
+                await dbStorage.run(scopedDb as any, async () => {
+                    console.log(`[DEBUG] [GENERIC] finish event for ${req.path}, visitLogged: ${res.locals.visitLogged}`);
+                    if (res.locals.visitLogged) return;
 
-            // 2. Execute tenant-specific additive middleware
-            await executeTenantSpecific(tenant, 'loggingMiddleware', req, res, () => {});
+                    const userId = res.locals.visitUserId || (req as any).auth?.userId || null;
+                    logger.log(`[Generic Logging] ${req.method} ${req.path} for tenant: ${tenant}, userId: ${userId} - Status: ${res.statusCode}`);
+
+                    // 2. Execute tenant-specific additive middleware
+                    console.log(`[DEBUG] [GENERIC] About to call executeTenantSpecific for tenant: ${tenant}, path: ${req.path}`);
+                    await executeTenantSpecific(tenant, 'loggingMiddleware', req, res, () => {});
+                });
+            })();
+            
+            // Resolve the deferred promise so tenantTransaction knows we are done
+            if ((res.locals as any).resolveLogging) {
+                (res.locals as any).resolveLogging();
+            }
+            
+            await loggingWork;
         });
+
+        // Create a deferred promise for tenantTransaction to wait on
+        let resolveLogging: () => void;
+        const loggingPromise = new Promise<void>((resolve) => {
+            resolveLogging = resolve;
+        });
+        (res.locals as any).loggingPromise = loggingPromise;
+        (res.locals as any).resolveLogging = resolveLogging;
 
         next();
     };

@@ -19,13 +19,14 @@ const { mockSelect, mockInsert, mockUpdate } = vi.hoisted(() => ({
     mockUpdate: vi.fn(),
 }))
 
-vi.mock('@services/dbService', () => ({
-    db: {
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../../helpers/dbMock');
+    return createDbServiceMock({
         select: mockSelect,
         insert: mockInsert,
         update: mockUpdate,
-    },
-}))
+    });
+})
 
 vi.mock('uuidv7', () => ({
     uuidv7: () => 'fixed-uuid',

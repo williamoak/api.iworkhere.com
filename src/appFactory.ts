@@ -40,6 +40,11 @@ const DEBUG = configGet("DEBUG") === "true";
 const AUTH_ME_DEBUG = process.env.AUTH_ME_DEBUG === 'true' || process.env.AUTH_ME_DEBUG === '1';
 
 const allowedOriginRegex = /^https:\/\/([a-z0-9-]+)\.iworkhere\.com$/i;
+const isLocalhost = (origin: string) =>
+    origin === "http://localhost:19006" || // Expo web default
+    origin === "http://localhost:8081" ||  // Metro default
+    /^http:\/\/localhost:\d+$/.test(origin);
+
 const explicitAllowedOrigins = new Set(
     (process.env.CORS_ALLOWED_ORIGINS ?? "")
         .split(",")
@@ -58,7 +63,7 @@ const corsOrigin: NonNullable<CorsOptions["origin"]> = (origin, callback) => {
         return;
     }
 
-    if (allowedOriginRegex.test(origin)) {
+    if (allowedOriginRegex.test(origin) || (DEBUG && isLocalhost(origin))) {
         callback(null, true);
         return;
     }
@@ -78,7 +83,7 @@ export async function createBaseApp() {
     app.use(cors({
         origin: corsOrigin,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Tenant", "X-Device-Id"],
         credentials: true
     }));
 

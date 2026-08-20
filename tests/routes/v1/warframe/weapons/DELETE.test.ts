@@ -14,12 +14,10 @@ vi.mock("@db/schema", () => ({
     },
 }))
 
-vi.mock("@services/dbService", () => ({
-    __esModule: true,
-    db: {
-        delete: vi.fn(),
-    },
-}))
+vi.mock("@services/dbService", async () => {
+    const { createDbServiceMock } = await import('../../../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 /**
  * ------------------------------------------------------------

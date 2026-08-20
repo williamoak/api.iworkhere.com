@@ -1,5 +1,3 @@
-import { logger } from '@helpers/logger';
-
 /**
  * @myDocBlock
  * @file loggingMiddleware.ts
@@ -20,10 +18,12 @@ import { logger } from '@helpers/logger';
  *   "dependencies": ["express", "drizzle-orm", "@services/dbService", "@db/schema/*"]
  * }
  */
+import { logger } from '@helpers/logger';
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '@services/dbService';
-import crypto from 'crypto';
+import { visitInfo } from '@db/schema/visit_info';
 import { sql } from 'drizzle-orm';
+import crypto from 'crypto';
 
 /**
  * Formats a hex string into a UUIDv7-style deterministic string.
@@ -36,11 +36,38 @@ function formatToUUID7(hex: string): string {
 }
 
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
-    console.log('[DEBUG] loggingMiddleware hit');
-    // Perform logging after response finishes to capture final context
-    res.once('finish', async () => {
-        console.log('[DEBUG] loggingMiddleware finish hit');
+    logger.warn(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
+    const doLogging = async () => {
+        logger.warn(`[DEBUG] [JOINAUNION] Starting doLogging for ${req.path}`);
+        if (res.locals.visitLogged) {
+            logger.log(`[DEBUG] [JOINAUNION] Already logged, skipping.`);
+            return;
+        }
+        
         try {
+            logger.warn(`[DEBUG] [JOINAUNION] Attempting DB insert for ${req.path}`);
+            
+            // Use the scoped DB from res.locals.db which was set by tenantTransaction, or fallback to the proxy
+            const dbInstance = (res.locals as any).db || db;
+            const tenant = (req as any).tenant || 'joinaunion';
+            
+            // Explicit instrumentation of insert details
+            try {
+                await dbInstance.execute(sql`SET search_path TO ${tenant}, public`);
+                const schemaRes = await dbInstance.execute(sql`SELECT current_schema()`);
+                const pathRes = await dbInstance.execute(sql`SHOW search_path`);
+                const userRes = await dbInstance.execute(sql`SELECT current_user`);
+                
+                logger.warn(`[DEBUG] [JOINAUNION] INSERT_DIAGNOSTICS for ${req.path}:`);
+                logger.warn(`  Table: visit_info`);
+                logger.warn(`  Schema: ${JSON.stringify(schemaRes.rows)}`);
+                logger.warn(`  Search Path: ${JSON.stringify(pathRes.rows)}`);
+                logger.warn(`  User: ${JSON.stringify(userRes.rows)}`);
+                logger.warn(`  Database Instance Source: ${ (res.locals as any).db ? 'res.locals.db (scoped)' : 'db proxy (global)' }`);
+            } catch (e) {
+                logger.error(`[DEBUG] [JOINAUNION] Error gathering INSERT_DIAGNOSTICS:`, e);
+            }
+            
             let userId = (req as any).auth?.userId || res.locals.visitUserId || null;
 
             // If user is not known, calculate deterministic UUID7 for "guest"
@@ -49,7 +76,6 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 userId = formatToUUID7(guestHash);
             }
 
-            logger.log(`[DEBUG] [JOINAUNION] Captured userId in finish event: ${userId}, req.auth: ${(req as any).auth?.userId}, res.locals.visitUserId: ${res.locals.visitUserId}`);
             let deviceId = res.locals.visitDeviceId || req.headers['x-device-id'] as string;
 
             if (!deviceId) {
@@ -62,11 +88,31 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
             const note = (res.locals.visitNote as string) || `visit: ${req.path}`;
             const method = res.locals.visitRequestMethod || req.method || 'GET';
 
-            await db.execute(sql`INSERT INTO joinaunion.visit_info (id, device_id, user_id, request_method, touch_time, note) VALUES (gen_random_uuid(), ${deviceId}, ${userId}, ${method}, ${new Date().toISOString()}, ${note})`);
+            logger.warn(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, note=${note}`);
+            const values = {
+                deviceId: deviceId as string,
+                userId: userId,
+                requestMethod: method as string,
+                touchTime: new Date(),
+                note: note as string
+            };
+            logger.warn(`[DEBUG] [JOINAUNION] Values:`, JSON.stringify(values));
+
+            await dbInstance.insert(visitInfo).values(values);
+            logger.warn(`[DEBUG] [JOINAUNION] Successfully inserted visit for ${req.path}`);
+            res.locals.visitLogged = true;
         } catch (e) {
             logger.error("[DEBUG] [JOINAUNION] Failed to process request logging for joinaunion:", e);
         }
-    });
+    };
+
+    // If the response is already finished (e.g. called from another 'finish' listener),
+    // execute immediately. Otherwise, wait for 'finish'.
+    if (res.writableEnded || (res as any).finished) {
+        doLogging();
+    } else {
+        res.once('finish', doLogging);
+    }
 
     next();
 }

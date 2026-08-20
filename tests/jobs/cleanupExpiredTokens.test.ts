@@ -6,11 +6,10 @@ import { logger } from '@helpers/logger'
 /**
  * Mock dependencies
  */
-vi.mock('@services/dbService', () => ({
-    db: {
-        delete: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@helpers/config', () => ({
     configGet: vi.fn((key: string) => {

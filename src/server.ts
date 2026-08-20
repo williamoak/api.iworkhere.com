@@ -26,9 +26,8 @@ import { logger } from '@helpers/logger';
 
 import "tsconfig-paths/register";
 import "@helpers/config";
-
 import http from "http";
-;
+
 import { configGet } from "@helpers/config";
 import { createBaseApp } from "@src/appFactory";
 import { verifyConnection } from "@services/dbService";
@@ -75,5 +74,5 @@ async function bootstrap() {
         }
     });
 }
-
+console.log("server bootup complete");
 export { bootstrap };

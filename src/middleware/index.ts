@@ -27,12 +27,12 @@ export function applyGlobalMiddleware(app: Application) {
     // 1. Tenant Resolution
     app.use(tenantMiddleware());
     
-    // 2. Database Transaction/Context
+    // 2. Audit/Request Logging
+    app.use(loggingMiddleware());
+    
+    // 3. Database Transaction/Context
     app.use(tenantTransaction());
     
-    // 3. Authentication
+    // 4. Authentication
     app.use(webAuthMiddleware);
-    
-    // 4. Audit/Request Logging
-    app.use(loggingMiddleware());
 }

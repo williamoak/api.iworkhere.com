@@ -23,15 +23,16 @@ vi.mock("@db/schema", () => ({
   },
   users: { name: "users" },
 }));
-vi.mock("@services/dbService", () => ({
-  db: {
+vi.mock("@services/dbService", async () => {
+  const { createDbServiceMock } = await import('../../../../../../helpers/dbMock');
+  return createDbServiceMock({
     query: {
       userAuthOauth: { findFirst: vi.fn() },
       users: { findFirst: vi.fn() },
     },
     insert: vi.fn().mockReturnValue(insertBuilderMock),
-  },
-}));
+  });
+});
 
 import GET from "@routes/v1/auth/oauth/google/callback/GET";
 import { getGoogleOAuthConfig } from "@helpers/config";

@@ -26,10 +26,10 @@ import type { Request, Response } from "express"
 /* Mocks                                                              */
 /* ------------------------------------------------------------------ */
 
-vi.mock("@services/dbService", () => ({
-    __esModule: true,
-    db: {},
-}))
+vi.mock("@services/dbService", async () => {
+    const { createDbServiceMock } = await import('../../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock("@db/schema/config", () => ({
     __esModule: true,

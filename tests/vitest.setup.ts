@@ -76,6 +76,8 @@ vi.mock('drizzle-orm', () => ({
   lt: vi.fn(),
   isNull: vi.fn(),
   inArray: vi.fn(),
+  sql: vi.fn().mockReturnValue({}),
+  desc: vi.fn(),
 }));
 
 /**
@@ -123,44 +125,32 @@ vi.mock('dotenv', async (importOriginal) => {
  * Default behavior: db.select() returns empty array []
  * Tests should mock it explicitly with mockReturnValue()
  */
-vi.mock('@services/dbService', () => {
-  return {
-    __esModule: true,
-    db: {
-      insert: vi.fn(),
-      select: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            then: (resolve: any) => resolve([]),
-            limit: vi.fn().mockResolvedValue([]),
-          }),
+vi.mock('@services/dbService', async () => {
+  const { createDbServiceMock } = await import('./helpers/dbMock');
+  const mock = createDbServiceMock({
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          then: (resolve: any) => resolve([]),
+          limit: vi.fn().mockResolvedValue([]),
         }),
       }),
-    },
-    pool: new Proxy(
-      {},
-      {
-        get: () => {
-          throw new Error(
-            '❌ pool was accessed during a unit test. ' +
-              'Mock it explicitly or move this test to integration.',
-          );
-        },
-      },
-    ),
-    query: () => {
-      throw new Error(
-        '❌ query was called during a unit test. ' +
-          'Mock it explicitly or move this test to integration.',
-      );
-    },
-    verifyConnection: () => {
-      throw new Error(
-        '❌ verifyConnection was called during a unit test. ' +
-          'Mock it explicitly or move this test to integration.',
-      );
-    },
-  };
+    }),
+  });
+  
+  mock.pool = new Proxy({}, {
+    get: () => {
+      throw new Error('❌ pool was accessed during a unit test. Mock it explicitly or move this test to integration.');
+    }
+  });
+  mock.query = vi.fn().mockImplementation(() => {
+    throw new Error('❌ query was called during a unit test. Mock it explicitly or move this test to integration.');
+  });
+  mock.verifyConnection = vi.fn().mockImplementation(() => {
+    throw new Error('❌ verifyConnection was called during a unit test. Mock it explicitly or move this test to integration.');
+  });
+  
+  return mock;
 });
 
 // --- Global mocks for route-level service dependencies ---
@@ -196,4 +186,3 @@ vi.mock('@services/auth/emailVerificationService', () => ({
 // need the real implementations. Route-level tests that require mocking these
 // services should declare per-test-file mocks before importing the modules
 // (see tests that include the "MOCKS — MUST APPEAR BEFORE IMPORTS" pattern).
-

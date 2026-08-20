@@ -40,6 +40,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { configGet } from '@helpers/config.js';
 import * as schema from '@db/schema';
+export { schema };
 
 // === Environment variables ===
 const DB_HOST = configGet('DB_HOSTNAME');

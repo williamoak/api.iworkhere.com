@@ -5,11 +5,10 @@ import { describe, test, expect } from 'vitest';
 import { getUserById } from '@services/users/getUserById';
 import { db } from '@services/dbService';
 
-vi.mock('@services/dbService', () => ({
-  db: {
-    select: vi.fn(),
-  },
-}));
+vi.mock('@services/dbService', async () => {
+  const { createDbServiceMock } = await import('../../helpers/dbMock');
+  return createDbServiceMock();
+});
 
 describe('getUserById', () => {
   test('should return user when found', async () => {

@@ -11,11 +11,10 @@ import * as authContextModule from '@services/auth/authContext'
  * ------------------------------------------------------------
  */
 
-vi.mock('@services/dbService', () => ({
-    db: {
-        select: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@helpers/config', () => ({
     configGet: vi.fn((key: string) => {

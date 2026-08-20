@@ -36,14 +36,10 @@ vi.mock('@helpers/config', () => ({
     }
 }))
 
-vi.mock('@services/dbService', () => ({
-    db: {
-        insert: vi.fn(),
-        select: vi.fn(),
-        update: vi.fn(),
-        transaction: vi.fn(),
-    },
-}))
+vi.mock('@services/dbService', async () => {
+    const { createDbServiceMock } = await import('../../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock('@db/schema', () => ({
     authTokens: {

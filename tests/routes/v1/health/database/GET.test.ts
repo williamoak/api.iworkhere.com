@@ -5,9 +5,10 @@ import type { HealthResponse } from "@models/health";
 // MOCK: database service
 // ---------------------------------------------------------------------------
 
-vi.mock("@services/dbService", () => ({
-    query: vi.fn()
-}));
+vi.mock("@services/dbService", async () => {
+  const { createDbServiceMock } = await import('../../../../helpers/dbMock');
+  return createDbServiceMock();
+})
 
 import handler, { __test__ } from "@routes/v1/health/database/GET";
 import { query } from "@services/dbService";

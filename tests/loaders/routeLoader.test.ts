@@ -64,16 +64,10 @@ vi.mock("@helpers/config", () => ({
     }),
 }));
 
-vi.mock("@services/dbService", () => ({
-    db: {
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        execute: vi.fn().mockResolvedValue([]),
-    },
-}));
+vi.mock("@services/dbService", async () => {
+    const { createDbServiceMock } = await import('../helpers/dbMock');
+    return createDbServiceMock();
+})
 
 vi.mock("drizzle-orm", () => ({
     eq: vi.fn(),

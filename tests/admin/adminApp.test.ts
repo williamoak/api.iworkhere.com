@@ -44,8 +44,9 @@ let mockTokenRows: any[] = [{
 
 let selectCallCount = 0;
 
-vi.mock("@services/dbService", () => ({
-    db: {
+vi.mock("@services/dbService", async () => {
+    const { createDbServiceMock } = await import('../helpers/dbMock');
+    return createDbServiceMock({
         select: vi.fn().mockImplementation(() => {
             selectCallCount++;
             const isTokenQuery = selectCallCount % 2 === 0;
@@ -60,8 +61,8 @@ vi.mock("@services/dbService", () => ({
             };
             return builder;
         }),
-    },
-}));
+    });
+});
 
 let mockReqAuth: any = { userId: "user-123" };
 
