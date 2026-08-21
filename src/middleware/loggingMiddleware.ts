@@ -56,7 +56,7 @@ export function loggingMiddleware() {
         });
 
         // Create a deferred promise for tenantTransaction to wait on
-        let resolveLogging: () => void;
+        let resolveLogging!: () => void;
         const loggingPromise = new Promise<void>((resolve) => {
             resolveLogging = resolve;
         });
