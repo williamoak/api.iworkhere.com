@@ -22,6 +22,9 @@ import { tenantMiddleware } from "@middleware/tenantMiddleware";
 import { tenantTransaction } from "@middleware/tenantTransaction";
 import { loggingMiddleware } from "@middleware/loggingMiddleware";
 import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
+import { localMiddleware } from "@middleware/localMiddleware";
+
+export * from "@middleware/localMiddleware";
 
 export function applyGlobalMiddleware(app: Application) {
     // 1. Tenant Resolution
@@ -35,4 +38,7 @@ export function applyGlobalMiddleware(app: Application) {
     
     // 4. Authentication
     app.use(webAuthMiddleware);
+
+    // 5. Localization
+    app.use(localMiddleware());
 }

@@ -1,4 +1,18 @@
 import Redis from 'ioredis';
+import {
+  localizationCache,
+  LocalizationCache,
+  getSupportedLanguages,
+  getSupportedSlugs,
+  dirtyCache,
+  invalidateCache,
+  isCacheDirty,
+  setCachedSupportedLanguages,
+  setCachedSupportedSlugs,
+  resetLocalizationCache,
+  refreshCache,
+  getLanguageCandidates,
+} from './localizationCache';
 
 const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
@@ -8,7 +22,12 @@ const redis = new Redis({
 
 export type CacheValue = unknown;
 
-class CacheStore {
+export class CacheStore {
+  /**
+   * Localization-specific cache instance.
+   */
+  readonly localization: LocalizationCache = localizationCache;
+
   /**
    * Retrieve a cached value by key.
    */
@@ -71,3 +90,21 @@ class CacheStore {
  * Singleton cache instance.
  */
 export const cacheStore = new CacheStore();
+
+/* ------------------------------------------------------------------ */
+/* Re-exported Localization Cache Utilities                           */
+/* ------------------------------------------------------------------ */
+export {
+  localizationCache,
+  LocalizationCache,
+  getSupportedLanguages,
+  getSupportedSlugs,
+  dirtyCache,
+  invalidateCache,
+  isCacheDirty,
+  setCachedSupportedLanguages,
+  setCachedSupportedSlugs,
+  resetLocalizationCache,
+  refreshCache,
+  getLanguageCandidates,
+};

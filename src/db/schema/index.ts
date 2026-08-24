@@ -15,6 +15,7 @@ export * from "@db/schema/email_verification_tokens";
 export * from "@db/schema/email_audit_logs";
 export * from "@db/schema/password_reset_tokens";
 export * from "@db/schema/config";
+export * from "@db/schema/localizations";
 
 // --- Warframe Calculator tables ---
 export * from "@db/schema/warframes";
