@@ -59,7 +59,7 @@ const ISO_639_EQUIVALENCES: Record<string, string[]> = {
     ja: ['jpn'],
     jpn: ['ja'],
     ru: ['rus'],
-    ru: ['rus'],
+    rus: ['ru'],
     ar: ['ara'],
     ara: ['ar'],
 };

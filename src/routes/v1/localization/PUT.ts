@@ -248,7 +248,7 @@ export function makePutLocalizationHandler(repo: LocalizationWriteRepository = d
             const parseResult = schema.body.safeParse(rawBody);
 
             if (!parseResult.success) {
-                const issues = parseResult.error.issues || parseResult.error.errors || [];
+                const issues = parseResult.error.issues;
                 return res.status(400).json({
                     error: 'VALIDATION_ERROR',
                     message: issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', '),

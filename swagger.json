@@ -39,6 +39,9 @@
       "name": "health"
     },
     {
+      "name": "localization"
+    },
+    {
       "name": "monitor"
     },
     {
@@ -618,6 +621,130 @@
         "description": "Provides runtime memory usage information for both the Node.js process\n  and the underlying operating system.\n\n  External HTTP requests receive a structured JSON health response suitable\n  for health checks, diagnostics, and dashboards.\n\n  Internal invocations (such as health aggregators) receive the same object\n  directly as a return value, enabling efficient collection without HTTP\n  loopback.",
         "tags": [
           "health"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/localization": {
+      "delete": {
+        "summary": "Delete a localization record.",
+        "description": "Deletes a localization record using deterministic resolution:\n  1) id / uuid — deletes the exact record by UUID\n  2) slug + lang — deletes the exact matching record\n  3) slug only — deletes the record ONLY if exactly one record exists\n\nAmbiguous deletes are rejected with 409 CONFLICT.\nAutomatically dirties the in-memory cache of supported languages and slugnames.",
+        "tags": [
+          "localization"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Exact UUID of the localization record to delete",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "description": "Localization slug identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "description": "Language code (required to disambiguate if multiple languages exist for slug)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Fetch localization records or resolve localized text.",
+        "description": "Deterministic, identifier-based retrieval and dynamic language fallback resolution\nof localization strings with in-memory caching of supported languages and slugnames.\n\nResolution order:\n  1) id — fetch exact record by UUID\n  2) slug + lang — resolve localized text with dynamic language candidate fallback\n  3) slug only — return slug with comma-delimited list of supported language codes\n  4) lang only — return language code with comma-delimited list of supported slugnames\n  5) no query params — returns 400 error (must provide either slug or lang as a minimum)",
+        "tags": [
+          "localization"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "Exact UUID of the localization record",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "description": "Localization slug identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "description": "Language code or tag (e.g. en_ca, can_fr, en_us, eng, fr)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Create or update a localization record.",
+        "description": "Inserts or updates a localization record identified by (slug, lang).\nIf a matching record exists, its text, metadata, and timestamp are updated in place.\nOtherwise, a new localization record is inserted.\nAutomatically dirties the in-memory cache of supported languages and slugnames.",
+        "tags": [
+          "localization"
         ],
         "parameters": [],
         "responses": {
