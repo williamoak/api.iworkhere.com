@@ -61,9 +61,18 @@ import GET, {
 /* Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function createReq(query: Record<string, unknown>): Request {
+function createReq(
+    query: Record<string, unknown> = {},
+    headers: Record<string, string> = {},
+    cookies: Record<string, string> = {},
+): Request {
     return {
         query,
+        headers,
+        cookies,
+        get(header: string) {
+            return headers[header.toLowerCase()] || headers[header];
+        },
     } as unknown as Request;
 }
 
@@ -354,5 +363,171 @@ describe('GET /v1/localization', () => {
 
         expect(res.statusCode).toBe(404);
         expect(res.body.error).toBe('NOT_FOUND');
+    });
+
+    test('resolves slug when lang is provided via X-Lang header', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'x-lang': 'en_ca' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe('Enter your username');
+        expect(res.body.requestedLang).toBe('en_ca');
+    });
+
+    test('resolves slug when lang is provided in "X-lang=en_ca" header format', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'x-lang': 'X-lang=en_ca' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe('Enter your username');
+        expect(res.body.requestedLang).toBe('en_ca');
+    });
+
+    test('resolves slug when lang is provided in header key "x-lang=en_ca"', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'x-lang=en_ca': '' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe('Enter your username');
+        expect(res.body.requestedLang).toBe('en_ca');
+    });
+
+    test('resolves slug when lang is provided via X-Language header', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'x-language': 'can_fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('can_fr');
+    });
+
+    test('resolves slug when lang is provided via cookie', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            {},
+            { lang: 'can_fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('can_fr');
+    });
+
+    test('resolves slug when lang is provided via Accept-Language header', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'accept-language': 'fr-CA,fr;q=0.9,en-US;q=0.8' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('fr-CA');
+    });
+
+    test('resolves slug when lang is provided via X-Language-Hint header', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'x-language-hint': 'can_fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('can_fr');
+    });
+
+    test('resolves slug when lang is provided via Language-Hint header', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { 'language-hint': 'can_fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('can_fr');
+    });
+
+    test('resolves slug when lang is provided via Language header', async () => {
+        const req = createReq(
+            { slug: 'username' },
+            { language: 'can_fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('can_fr');
+    });
+
+    test('resolves slug when lang is provided via language_hint query param', async () => {
+        const req = createReq(
+            { slug: 'username', language_hint: 'can_fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('username');
+        expect(res.body.text).toBe("nom d'utilisateur");
+        expect(res.body.requestedLang).toBe('can_fr');
+    });
+
+    test('returns slugs list when lang is provided via X-Lang header without slug in query', async () => {
+        const req = createReq(
+            {},
+            { 'x-lang': 'fr' },
+        );
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.lang).toBe('fr');
+        expect(res.body.slugs).toBe('username');
+        expect(res.body.slugnames).toBe('username');
+        expect(repo.findByLang).toHaveBeenCalledWith('fr');
     });
 });

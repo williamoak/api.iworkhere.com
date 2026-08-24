@@ -35,6 +35,8 @@ import { logger } from '@helpers/logger';
 import {
     dbLocalizationRepository,
     getLanguageCandidates,
+    extractLanguage,
+    cleanLanguageCode,
     type LocalizationRepository,
 } from '@routes/v1/localization/GET';
 
@@ -126,56 +128,15 @@ export const getLocalizedText = getLocalization;
 /* Language Detection Helper                                          */
 /* ------------------------------------------------------------------ */
 
+export { cleanLanguageCode, extractLanguage };
+
 /**
  * Resolves the language code from the HTTP request context.
- * Checks query param -> headers (x-lang, accept-language) -> cookies -> default.
+ * Checks query param -> headers (x-language-hint, accept-language, x-lang, etc.) -> cookies -> default.
  */
 export function resolveLanguage(req?: Request, defaultLang = 'en'): string {
     if (!req) return defaultLang;
-
-    // 1. Query parameter (?lang=en_ca or ?locale=can_fr)
-    if (typeof req.query?.lang === 'string' && req.query.lang.trim()) {
-        return req.query.lang.trim();
-    }
-    if (typeof req.query?.locale === 'string' && req.query.locale.trim()) {
-        return req.query.locale.trim();
-    }
-
-    // 2. Custom header (X-Lang, X-Language, X-Locale)
-    const customHeader =
-        req.headers?.['x-lang'] ||
-        req.headers?.['x-language'] ||
-        req.headers?.['x-locale'];
-    if (typeof customHeader === 'string' && customHeader.trim()) {
-        return customHeader.trim();
-    }
-
-    // 3. Cookie (lang or locale)
-    if (
-        req.cookies?.lang &&
-        typeof req.cookies.lang === 'string' &&
-        req.cookies.lang.trim()
-    ) {
-        return req.cookies.lang.trim();
-    }
-    if (
-        req.cookies?.locale &&
-        typeof req.cookies.locale === 'string' &&
-        req.cookies.locale.trim()
-    ) {
-        return req.cookies.locale.trim();
-    }
-
-    // 4. Accept-Language header (e.g. "fr-CA,fr;q=0.9,en-US;q=0.8")
-    const acceptLang = req.headers?.['accept-language'];
-    if (typeof acceptLang === 'string' && acceptLang.trim()) {
-        const primary = acceptLang.split(',')[0]?.split(';')[0]?.trim();
-        if (primary && primary !== '*') {
-            return primary;
-        }
-    }
-
-    return defaultLang;
+    return extractLanguage(req) || defaultLang;
 }
 
 /* ------------------------------------------------------------------ */

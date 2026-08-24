@@ -83,7 +83,36 @@ export async function createBaseApp() {
     app.use(cors({
         origin: corsOrigin,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization", "X-Tenant", "X-Device-Id"],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "X-Tenant",
+            "X-Device-Id",
+            "X-Lang",
+            "x-lang",
+            "X-Language",
+            "x-language",
+            "X-Locale",
+            "x-locale",
+            "X-Language-Hint",
+            "x-language-hint",
+            "Language-Hint",
+            "language-hint",
+            "X-Lang-Hint",
+            "x-lang-hint",
+            "Lang-Hint",
+            "lang-hint",
+            "Language",
+            "language",
+            "Lang",
+            "lang",
+            "Locale",
+            "locale",
+            "Accept-Language",
+            "accept-language",
+            "Content-Language",
+            "content-language"
+        ],
         credentials: true
     }));
 

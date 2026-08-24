@@ -96,6 +96,132 @@ function normalize(param: unknown): string | undefined {
     return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function cleanLanguageCode(raw: unknown): string | undefined {
+    if (typeof raw !== 'string') return undefined;
+    let trimmed = raw.trim();
+    if (!trimmed || trimmed === '*') return undefined;
+
+    // 1. Handle comma-separated list e.g. Accept-Language: "fr-CA,fr;q=0.9,en-US;q=0.8"
+    if (trimmed.includes(',')) {
+        trimmed = trimmed.split(',')[0].trim();
+    }
+
+    // 2. Handle quality / parameter values e.g. "fr-CA;q=0.9"
+    if (trimmed.includes(';')) {
+        trimmed = trimmed.split(';')[0].trim();
+    }
+
+    // 3. Handle key-value formats like "X-lang=en_ca", "lang=en_ca", "Language-Hint: can_fr"
+    if (trimmed.includes('=')) {
+        const parts = trimmed.split('=');
+        trimmed = parts[parts.length - 1].trim();
+    } else if (trimmed.includes(':')) {
+        const parts = trimmed.split(':');
+        trimmed = parts[parts.length - 1].trim();
+    }
+
+    // 4. Strip quotes if any
+    trimmed = trimmed.replace(/^["']|["']$/g, '').trim();
+
+    return trimmed.length > 0 && trimmed !== '*' ? trimmed : undefined;
+}
+
+export function extractLanguage(req: Request): string | undefined {
+    if (!req) return undefined;
+
+    // 1. Query parameters
+    const queryKeys = [
+        'lang',
+        'locale',
+        'language',
+        'language_hint',
+        'language-hint',
+        'lang_hint',
+        'lang-hint',
+        'x-lang',
+        'x-language',
+        'x-locale',
+        'x-language-hint',
+        'x-lang-hint',
+        'X-lang',
+        'X-Lang',
+        'X-Language',
+        'X-Locale',
+        'X-Language-Hint',
+        'Language-Hint',
+        'Language_Hint',
+        'Lang-Hint',
+        'Lang_Hint',
+    ];
+    if (req.query) {
+        for (const key of queryKeys) {
+            const val = cleanLanguageCode(req.query[key]);
+            if (val) return val;
+        }
+    }
+
+    // 2. Custom and standard HTTP headers
+    const headerKeys = [
+        'x-language-hint',
+        'language-hint',
+        'x-lang-hint',
+        'lang-hint',
+        'x-lang',
+        'x-language',
+        'x-locale',
+        'language',
+        'lang',
+        'locale',
+        'content-language',
+        'accept-language',
+    ];
+    for (const key of headerKeys) {
+        const headerVal =
+            req.headers?.[key] ||
+            (typeof req.get === 'function' ? req.get(key) : undefined);
+        const cleaned = cleanLanguageCode(headerVal);
+        if (cleaned) return cleaned;
+    }
+
+    // Check header keys for cases where client sent header like "X-lang=en_ca" or "Language-Hint=can_fr"
+    if (req.headers) {
+        for (const [key] of Object.entries(req.headers)) {
+            const lowerKey = key.toLowerCase();
+            if (
+                lowerKey.startsWith('x-lang') ||
+                lowerKey.startsWith('x-language') ||
+                lowerKey.startsWith('x-locale') ||
+                lowerKey.startsWith('language-hint') ||
+                lowerKey.startsWith('lang-hint') ||
+                lowerKey.startsWith('language=') ||
+                lowerKey.startsWith('lang=') ||
+                lowerKey.startsWith('locale=')
+            ) {
+                const parsed = cleanLanguageCode(key);
+                if (parsed) return parsed;
+            }
+        }
+    }
+
+    // 3. Cookies
+    const cookieKeys = [
+        'lang',
+        'locale',
+        'language',
+        'language_hint',
+        'lang_hint',
+        'x-lang',
+    ];
+    if (req.cookies) {
+        for (const key of cookieKeys) {
+            const val = cleanLanguageCode(req.cookies[key]);
+            if (val) return val;
+        }
+    }
+
+    return undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* Repository                                                         */
 /* ------------------------------------------------------------------ */
@@ -230,9 +356,9 @@ export const dbLocalizationRepository: LocalizationRepository = {
 export function makeGetLocalizationHandler(repo: LocalizationRepository) {
     return async function GET(req: Request, res: Response) {
         try {
-            const id = normalize(req.query.id);
-            const slug = normalize(req.query.slug);
-            const lang = normalize(req.query.lang);
+            const id = normalize(req.query?.id);
+            const slug = normalize(req.query?.slug);
+            const lang = extractLanguage(req);
 
             // 1. Guard rails
             if (id && (slug || lang)) {
@@ -336,4 +462,6 @@ export const __test__ = {
     dbLocalizationRepository,
     makeGetLocalizationHandler,
     getLanguageCandidates,
+    extractLanguage,
+    cleanLanguageCode,
 };

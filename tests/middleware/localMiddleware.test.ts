@@ -220,6 +220,26 @@ describe('localMiddleware', () => {
             expect(resolveLanguage(req)).toBe('can_fr');
         });
 
+        test('resolves from X-lang=en_ca header format', () => {
+            const req = { headers: { 'x-lang': 'X-lang=en_ca' } } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('en_ca');
+        });
+
+        test('resolves from header key formatted as x-lang=en_ca', () => {
+            const req = { headers: { 'x-lang=en_ca': '' } } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('en_ca');
+        });
+
+        test('resolves from custom X-Language header', () => {
+            const req = { headers: { 'x-language': 'en_us' } } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('en_us');
+        });
+
+        test('resolves from req.query x-lang param', () => {
+            const req = { query: { 'x-lang': 'en_ca' } } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('en_ca');
+        });
+
         test('resolves from cookies', () => {
             const req = { cookies: { lang: 'fr' } } as unknown as Request;
             expect(resolveLanguage(req)).toBe('fr');
@@ -230,6 +250,41 @@ describe('localMiddleware', () => {
                 headers: { 'accept-language': 'fr-CA,fr;q=0.9,en-US;q=0.8' },
             } as unknown as Request;
             expect(resolveLanguage(req)).toBe('fr-CA');
+        });
+
+        test('resolves from X-Language-Hint header', () => {
+            const req = {
+                headers: { 'x-language-hint': 'can_fr' },
+            } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('can_fr');
+        });
+
+        test('resolves from Language-Hint header', () => {
+            const req = {
+                headers: { 'language-hint': 'can_fr' },
+            } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('can_fr');
+        });
+
+        test('resolves from Language header', () => {
+            const req = {
+                headers: { language: 'can_fr' },
+            } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('can_fr');
+        });
+
+        test('resolves from Content-Language header', () => {
+            const req = {
+                headers: { 'content-language': 'can_fr' },
+            } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('can_fr');
+        });
+
+        test('resolves from language_hint query param', () => {
+            const req = {
+                query: { language_hint: 'can_fr' },
+            } as unknown as Request;
+            expect(resolveLanguage(req)).toBe('can_fr');
         });
 
         test('defaults to en when no indicators are present', () => {
