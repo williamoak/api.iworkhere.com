@@ -4,7 +4,7 @@
  * @internal
  * @module Middleware
  * @tag localization, middleware, i18n
- * @version 1.0.0
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path src/middleware/localMiddleware.ts
  * @summary Localization middleware and translation resolver.

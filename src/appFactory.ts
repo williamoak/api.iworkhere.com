@@ -111,7 +111,17 @@ export async function createBaseApp() {
             "Accept-Language",
             "accept-language",
             "Content-Language",
-            "content-language"
+            "content-language",
+            "X-Log-Visit",
+            "x-log-visit",
+            "X-Skip-Logging",
+            "x-skip-logging",
+            "X-No-Log",
+            "x-no-log",
+            "X-Audit-Log",
+            "x-audit-log",
+            "X-Log",
+            "x-log"
         ],
         credentials: true
     }));

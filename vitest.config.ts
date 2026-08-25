@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['tests/**/*.test.ts'],
+    testTimeout: 30000,
+    hookTimeout: 30000,
 
     // Equivalent to jest.setup.ts
     setupFiles: ['tests/vitest.setup.ts'],

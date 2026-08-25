@@ -4,7 +4,7 @@
  * @external
  * @module routes/v1/localization
  * @tag localization
- * @version 1.0.0
+ * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/localization
  * @summary Create or update a localization record.

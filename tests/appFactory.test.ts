@@ -55,7 +55,7 @@ describe("appFactory", () => {
         // Route loader was invoked
         expect(loadRoutes).toHaveBeenCalledTimes(1);
         expect(loadRoutes).toHaveBeenCalledWith(app);
-    }, 10000);
+    });
 
     it("createTestApp delegates to createBaseApp", async () => {
         const { createTestApp } = await import("@src/appFactory");

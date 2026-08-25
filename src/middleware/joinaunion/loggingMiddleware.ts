@@ -4,14 +4,16 @@
  * @internal
  * @module Middleware
  * @tag api, logging, joinaunion
- * @version 1.0.1
+ * @version 1.0.3
  * @author william.r.oak@gmail.com
  * @path src/middleware/joinaunion/loggingMiddleware.ts
  * @summary Tenant-specific visit logging middleware for joinaunion.
  * @description
  *   Audit logging implementation specific to the joinaunion tenant.
- *   Checks for enabled logging in the database configuration and records
- *   visit details including user information and device fingerprinting.
+ *   Determines whether incoming API requests should be recorded to the
+ *   visit_info database table and executes the insertion, while bypassing
+ *   internal infrastructure and telemetry requests such as localization,
+ *   health checks, and monitor pings.
  * @requestExample none
  * @response none
  * @requires {
@@ -26,6 +28,37 @@ import { sql } from 'drizzle-orm';
 import crypto from 'crypto';
 
 /**
+ * Checks whether an incoming request is for internal infrastructure, health telemetry,
+ * or localization endpoints that should not be recorded into the visit_info audit table.
+ */
+function isExemptFromVisitLogging(req: Request): boolean {
+    const p = req.path || '';
+    const orig = req.originalUrl || '';
+    const base = req.baseUrl || '';
+
+    return (
+        p.startsWith('/v1/localization') ||
+        p.startsWith('/localization') ||
+        orig.startsWith('/v1/localization') ||
+        orig.startsWith('/localization') ||
+        base.startsWith('/v1/localization') ||
+        base.startsWith('/localization') ||
+        p.startsWith('/v1/health') ||
+        p.startsWith('/health') ||
+        orig.startsWith('/v1/health') ||
+        orig.startsWith('/health') ||
+        p.startsWith('/v1/monitor') ||
+        p.startsWith('/monitor') ||
+        orig.startsWith('/v1/monitor') ||
+        orig.startsWith('/monitor') ||
+        p === '/ping' ||
+        orig === '/ping' ||
+        p === '/favicon.ico' ||
+        orig === '/favicon.ico'
+    );
+}
+
+/**
  * Formats a hex string into a UUIDv7-style deterministic string.
  * UUIDv7 structure: [48 bits timestamp][4 bits version (7)][62 bits random/data]
  * We simulate this by placing '7' in the version position of our hash.
@@ -37,10 +70,19 @@ function formatToUUID7(hex: string): string {
 
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
     logger.warn(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
+
+    if (isExemptFromVisitLogging(req)) {
+        res.locals.visitLogged = true;
+        logger.log(`[DEBUG] [JOINAUNION] Exempt endpoint detected (${req.path}), bypassing visit_info DB logging.`);
+        next();
+        return;
+    }
+
     const doLogging = async () => {
         logger.warn(`[DEBUG] [JOINAUNION] Starting doLogging for ${req.path}`);
-        if (res.locals.visitLogged) {
-            logger.log(`[DEBUG] [JOINAUNION] Already logged, skipping.`);
+        if (res.locals.visitLogged || isExemptFromVisitLogging(req)) {
+            logger.log(`[DEBUG] [JOINAUNION] Already logged or exempt endpoint (${req.path}), skipping.`);
+            res.locals.visitLogged = true;
             return;
         }
         
