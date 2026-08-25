@@ -9,7 +9,7 @@
       "name": "auth, email, verify"
     },
     {
-      "name": "auth, eula"
+      "name": "auth, eula, localization, deepl"
     },
     {
       "name": "auth, login"
@@ -149,12 +149,22 @@
     },
     "/v1/auth/eula": {
       "get": {
-        "summary": "Fetch the current End User License Agreement (EULA).",
-        "description": "Returns the latest EULA document stored as a dedicated record in the config\ntable (name = \"eula\"). This endpoint is intentionally isolated from general\nconfig querying: it does not accept query parameters and can only return the\nlatest EULA record.",
+        "summary": "Fetch the current End User License Agreement (EULA) with dynamic localization support.",
+        "description": "Returns the latest EULA document with multi-language resolution:\n1) If the current language is English, fetches the EULA text from the config table (name = \"eula\").\n2) If the selected language is not English, checks the localization table for slug = \"eula\" and lang = currently_selected_language.\n3) If there is a valid localized EULA, returns that.\n4) If not cached, translates the base English EULA via DeepL, saves the translated record in the localizations table, and returns it.",
         "tags": [
-          "auth, eula"
+          "auth, eula, localization, deepl"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "description": "Optional language code (e.g. en_ca, can_fr, fr, es)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response"
