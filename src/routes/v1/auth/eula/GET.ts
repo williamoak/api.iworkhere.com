@@ -56,7 +56,6 @@
 
 import type { Request, Response } from 'express';
 import { desc, eq } from 'drizzle-orm';
-
 import { db } from '@services/dbService';
 import { configTable } from '@db/schema/config';
 import { localizations, type Localization } from '@db/schema/localizations';

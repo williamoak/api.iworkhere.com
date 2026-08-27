@@ -530,4 +530,19 @@ describe('GET /v1/localization', () => {
         expect(res.body.slugnames).toBe('username');
         expect(repo.findByLang).toHaveBeenCalledWith('fr');
     });
+
+    test('resolves missing slug via fallback query parameter', async () => {
+        const req = createReq({
+            slug: 'missing_btn',
+            lang: 'en_ca',
+            fallback: 'Click Here',
+        });
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('missing_btn');
+        expect(res.body.text).toBe('Click Here');
+    });
 });

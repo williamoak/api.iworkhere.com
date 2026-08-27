@@ -76,6 +76,10 @@ import {
     invalidateCache,
     refreshCache,
 } from '@cache/localizationCache';
+import {
+    resolveCanonicalSlug,
+    resolveAndTranslateLocalization,
+} from '@services/localizationResolverService';
 
 export {
     getLanguageCandidates,
@@ -279,43 +283,75 @@ export const dbLocalizationRepository: LocalizationRepository = {
     },
 
     async findBySlug(slug: string) {
-        const rows = await db
-            .select()
-            .from(localizations)
-            .where(eq(localizations.slug, slug))
-            .orderBy(asc(localizations.lang));
+        const canonicalSlug = resolveCanonicalSlug(slug);
+        const slugsToCheck = Array.from(new Set([slug, canonicalSlug]));
 
-        return rows.map(mapRow);
+        for (const s of slugsToCheck) {
+            const rows = await db
+                .select()
+                .from(localizations)
+                .where(eq(localizations.slug, s))
+                .orderBy(asc(localizations.lang));
+
+            if (rows.length > 0) {
+                return rows.map(mapRow);
+            }
+        }
+
+        return [];
     },
 
     async findBySlugAndLang(slug: string, lang: string) {
-        const rows = await db
-            .select()
-            .from(localizations)
-            .where(eq(localizations.slug, slug));
+        const canonicalSlug = resolveCanonicalSlug(slug);
+        const slugsToCheck = Array.from(new Set([slug, canonicalSlug]));
 
-        if (rows.length === 0) return null;
-
-        const availableLanguages = rows.map((r) => r.lang);
-        const candidates = getLanguageCandidates(lang, availableLanguages);
-
-        for (const candidate of candidates) {
-            const found = rows.find(
-                (r) =>
-                    r.lang === candidate ||
-                    r.lang.toLowerCase() === candidate.toLowerCase() ||
-                    r.lang.toLowerCase().replace(/-/g, '_') ===
-                        candidate.toLowerCase().replace(/-/g, '_'),
-            );
-            if (found) return mapRow(found);
+        let allRows: Localization[] = [];
+        for (const s of slugsToCheck) {
+            const rows = await db
+                .select()
+                .from(localizations)
+                .where(eq(localizations.slug, s));
+            if (rows.length > 0) {
+                allRows = rows;
+                break;
+            }
         }
 
-        const enFallback = rows.find(
-            (r) =>
-                r.lang.toLowerCase().startsWith('en') ||
-                r.lang.toLowerCase() === 'eng',
-        );
-        return enFallback ? mapRow(enFallback) : mapRow(rows[0]);
+        if (allRows.length > 0) {
+            const availableLanguages = allRows.map((r) => r.lang);
+            const candidates = getLanguageCandidates(lang, availableLanguages);
+
+            for (const candidate of candidates) {
+                const found = allRows.find(
+                    (r) =>
+                        r.lang === candidate ||
+                        r.lang.toLowerCase() === candidate.toLowerCase() ||
+                        r.lang.toLowerCase().replace(/-/g, '_') ===
+                            candidate.toLowerCase().replace(/-/g, '_'),
+                );
+                if (found) return mapRow(found);
+            }
+        }
+
+        // Dynamically resolve and translate if not found in DB
+        const dynamicRecord = await resolveAndTranslateLocalization({
+            slug,
+            lang,
+        });
+        if (dynamicRecord) {
+            return dynamicRecord;
+        }
+
+        if (allRows.length > 0) {
+            const enFallback = allRows.find(
+                (r) =>
+                    r.lang.toLowerCase().startsWith('en') ||
+                    r.lang.toLowerCase() === 'eng',
+            );
+            return enFallback ? mapRow(enFallback) : mapRow(allRows[0]);
+        }
+
+        return null;
     },
 
     async findByLang(lang: string) {
@@ -390,7 +426,15 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
 
             // 3. Both slug AND lang provided -> resolve specific translation
             if (slug && lang) {
-                const record = await repo.findBySlugAndLang(slug, lang);
+                const fallbackQuery = normalize(req.query?.fallback);
+                let record = await repo.findBySlugAndLang(slug, lang);
+                if (!record && fallbackQuery) {
+                    record = await resolveAndTranslateLocalization({
+                        slug,
+                        lang,
+                        fallbackText: fallbackQuery,
+                    });
+                }
                 if (!record) {
                     return res.status(404).json({
                         error: 'NOT_FOUND',
