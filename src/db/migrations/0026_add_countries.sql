@@ -1,0 +1,27 @@
+CREATE TABLE IF NOT EXISTS "countries" (
+	"name" text PRIMARY KEY NOT NULL,
+	"alpha2_code" text,
+	"alpha3_code" text,
+	"cioc" text,
+	"capital" text,
+	"region" text,
+	"subregion" text,
+	"population" integer,
+	"demonym" text,
+	"area" double precision,
+	"gini" double precision,
+	"native_name" text,
+	"numeric_code" text,
+	"flag" text,
+	"independent" boolean,
+	"top_level_domain" jsonb,
+	"calling_codes" jsonb,
+	"currencies" jsonb,
+	"languages" jsonb,
+	"latlng" jsonb,
+	"borders" jsonb,
+	"timezones" jsonb,
+	"flags" jsonb,
+	"population_density" double precision
+);
+--> statement-breakpoint

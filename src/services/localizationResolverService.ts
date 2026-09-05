@@ -33,6 +33,7 @@ import { logger } from '@helpers/logger';
 import { dirtyCache } from '@cache/localizationCache';
 import {
   translateWithDeepL,
+  translateWithGemini,
   getLanguageName,
 } from '@services/translationService';
 import { isEnglishLanguage } from '@routes/v1/auth/eula/GET';
@@ -213,7 +214,14 @@ export async function resolveAndTranslateLocalization({
   }
 
   try {
-    const translatedText = await translator(baseEnglish, normalizedLang);
+    let translatedText = await translator(baseEnglish, normalizedLang);
+    
+    // Fallback to Gemini if DeepL failed
+    if (!translatedText && translator === translateWithDeepL) {
+      logger.log(`[LOCALIZATION_RESOLVER] DeepL failed for '${normalizedSlug}', trying Gemini fallback`);
+      translatedText = await translateWithGemini(baseEnglish, normalizedLang);
+    }
+
     if (translatedText && translatedText.trim().length > 0) {
       // Save to localizations table under normalizedSlug
       const rows = await db
@@ -225,7 +233,7 @@ export async function resolveAndTranslateLocalization({
           text: translatedText,
           codepage: 'UTF-8',
           direction: 'ltr',
-          description: `Auto-translated via DeepL from base '${canonicalSlug}'`,
+          description: `Auto-translated via ${translatedText === baseEnglish ? 'fallback' : 'AI'} from base '${canonicalSlug}'`,
         })
         .onConflictDoUpdate({
           target: [localizations.slug, localizations.lang],
@@ -234,7 +242,7 @@ export async function resolveAndTranslateLocalization({
             languageName: getLanguageName(normalizedLang),
             codepage: 'UTF-8',
             direction: 'ltr',
-            description: `Auto-translated via DeepL from base '${canonicalSlug}'`,
+            description: `Auto-translated via ${translatedText === baseEnglish ? 'fallback' : 'AI'} from base '${canonicalSlug}'`,
             updatedAt: new Date(),
           },
         })

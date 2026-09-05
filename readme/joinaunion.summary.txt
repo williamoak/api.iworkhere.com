@@ -1,0 +1,470 @@
+
+Below is a concise proposal you can send/adapt.
+
+Writing
+Proposal: Anonymous Worker Intake Portal for JoinAUnion.ca
+
+Objective
+Create a simple, anonymous online portal at JoinAUnion.ca that helps Canadian workers explore unionization options without initially revealing their identity. The portal should collect non-identifying workplace and occupation information, then route the worker toward the most appropriate union, CLC affiliate, organizing contact, or informational resource.
+
+1. Core Concept
+Item
+Description
+Public-facing purpose
+
+“I want to join a union. Where do I start?”
+
+
+User identity
+
+Anonymous by default
+
+
+Main value
+
+Removes fear, confusion, and friction for workers
+
+
+Strategic owner
+
+CLC, affiliates, or labour organizing coalition
+
+
+Domain role
+
+National call-to-action and campaign landing page
+
+
+Primary URL
+
+JoinAUnion.ca
+
+
+Supporting URLs
+
+Join-A-Union.ca, JoinATradeUnion.ca, JoinALabourUnion.ca, JoinALabourUnion.com, possible .org variants
+
+
+2. User Flow
+
+Step
+
+Worker Sees
+
+System Does
+
+
+1. Welcome page
+
+Explains anonymity and purpose
+
+
+2. Province / territory
+
+Determines labour jurisdiction
+
+
+3. City or postal prefix
+
+Determines local routing
+
+
+4. Industry
+
+Narrows likely union category
+
+
+5. Job type / occupation
+
+Improves routing accuracy
+
+
+6. Employer name, optional
+
+Helps identify existing bargaining units
+
+
+7. Workplace concerns
+
+Captures organizing motivation
+
+
+8. Contact choice
+
+Anonymous info only, email, phone, or request callback
+
+
+9. Result page
+
+Suggests next steps and possible union contact
+
+
+10. Admin review
+
+Organizers can review anonymized leads
+
+
+
+3. Minimum Viable Product
+
+Feature
+
+MVP Requirement
+
+Anonymous questionnaire
+
+Yes
+
+
+Province / industry / occupation intake
+
+Yes
+
+
+Employer field
+
+Optional
+
+
+Contact info
+
+Optional
+
+
+Consent checkbox
+
+Required before contact submission
+
+
+Admin dashboard
+
+Basic lead review
+
+Routing logic
+
+Rules-based at first
+
+
+Database
+
+PostgreSQL or MySQL
+
+API-ready structure
+
+Yes
+
+
+AI assistant
+
+Phase 2
+
+
+Multilingual
+
+Phase 2, English/French first
+
+
+4. Suggested Data Fields
+
+Category
+
+Fields:
+
+
+Location
+
+Province, city, postal prefix
+
+
+Work
+
+Industry, occupation, employer name, workplace size
+
+
+Concerns
+
+Wages, safety, scheduling, harassment, benefits, job security, unfair discipline
+
+
+Union status
+
+Not unionized, unsure, already unionized
+
+
+Contact preference
+
+Anonymous, email, phone, secure form
+
+
+Consent
+
+Permission to forward to organizer
+
+Routing
+
+Suggested affiliate, confidence score, notes
+
+
+Analytics
+
+Timestamp, source domain, campaign tag, device type
+
+
+5. Privacy Principles
+
+Principle
+
+Requirement
+
+Anonymous first
+
+No name, email, or phone required to explore
+
+Consent-based contact
+
+
+Worker chooses whether to be contacted
+
+Minimal data
+
+
+Collect only what is needed
+
+No employer notification
+
+Clearly state employer is not contacted
+
+
+Secure storage
+
+Encrypt sensitive contact fields
+
+
+Role-based access
+
+Organizers see only relevant leads
+
+Audit log
+
+Track admin access and changes
+
+Data retention
+
+Define deletion or retention policy
+
+
+6. Technical Architecture
+
+Layer
+
+Suggested Approach
+
+
+Front end
+
+Responsive website, mobile-first
+
+
+Back end
+
+Node, Python, PHP, or similar existing team preference
+
+
+Database
+
+PostgreSQL preferred; MySQL acceptable
+
+
+Data format
+
+JSON API-ready records
+
+Admin dashboard
+
+Secure login, filtered lead review
+
+
+Routing engine
+
+Rule table: province + industry + occupation + employer
+
+AI layer
+
+
+Later: guided intake assistant and routing support
+
+
+Hosting
+
+Canadian-hosted preferred for trust
+
+Security
+
+HTTPS, WAF, rate limiting, encrypted fields
+
+
+Analytics
+
+Privacy-respecting campaign/source tracking
+
+
+7. Build Timeline
+
+Phase
+
+Time
+
+Deliverables
+
+
+1. Discovery
+
+1 week
+
+Confirm user flow, data fields, privacy language, routing categories
+
+
+2. Wireframes
+
+1 week
+
+Mobile-first mockups for public portal and admin dashboard
+
+
+3. Database/API design
+
+1 week
+
+Schema, lead model, routing model, consent model
+
+
+4. MVP development
+
+3–4 weeks
+
+Public form, database, basic routing, admin login
+
+
+5. Testing
+
+1–2 weeks
+
+Security, usability, form logic, mobile testing
+
+
+6. Soft launch
+
+1 week
+
+Private demo version for CLC review
+
+
+7. Phase 2 planning
+
+1 week
+
+AI assistant, affiliate routing, multilingual support
+
+Estimated MVP timeline: 8–11 weeks.
+
+
+8. Phase 2 Enhancements
+
+Feature
+
+Benefit
+
+AI intake assistant
+
+Helps workers explain their situation naturally
+
+French language support initially
+
+
+National Canadian usability
+
+Affiliate dashboard
+
+Allows CLC affiliates to receive routed inquiries
+
+
+Campaign landing pages
+
+Custom URLs for radio, print, TikTok, YouTube, billboards
+
+Secure worker inbox
+
+Lets workers continue anonymously
+
+Employer/bargaining-unit lookup
+
+Improves routing accuracy
+
+
+Analytics dashboard
+
+Shows organizing interest by region, sector, and issue
+
+
+9. Domain Strategy
+
+Domain
+
+Best Use
+
+JoinAUnion.ca
+
+Primary spoken/radio/video call-to-action
+
+
+Join-A-Union.ca
+
+Print-friendly readable version
+
+
+JoinATradeUnion.ca
+
+Trades-specific campaign
+
+
+JoinALabourUnion.ca
+
+Labour-language campaign variant
+
+
+JoinALabourUnion.com
+
+Defensive and international spillover
+
+.org variants
+
+Trust-oriented public education or campaign use
+
+
+10. CLC-Facing Narrative:
+
+
+JoinAUnion.ca should not be treated as merely a domain name. It can become a national, worker-friendly organizing doorway.
+
+Many workers are curious about joining a union but do not know where to start, which union applies to them, or whether making contact is safe. A neutral, anonymous portal lowers that barrier. It lets workers explore their options without pressure, then voluntarily connect with the appropriate union or organizer when ready.
+
+The domain package also supports national advertising. JoinAUnion.ca is ideal for radio, video, and word-of-mouth. Hyphenated versions such as Join-A-Union.ca are easier to read in print, billboards, posters, and handouts. Additional related domains provide campaign flexibility and defensive protection.
+
+The portal would help the CLC and affiliated unions:
+
+create a single national entry point for workers;
+
+increase organizing inquiries;
+
+route workers to the correct affiliate;
+
+gather anonymous trend data by region, industry, and workplace concern;
+
+support national campaigns with simple, memorable calls to action;
+
+strengthen the CLC’s role as the central public gateway for Canadian workers considering union membership.
+
+
+The core message is simple:
+
+“If you are wondering how to join a union in Canada, start at JoinAUnion.ca.”

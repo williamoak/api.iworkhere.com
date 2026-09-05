@@ -845,6 +845,30 @@
         }
       }
     },
+    "/v1/monitor/lang": {
+      "get": {
+        "summary": "Monitor unique language count.",
+        "description": "Returns the number of unique language values present in the localizations table.\nDefaults to a count of 2 if the database is unreachable.",
+        "tags": [
+          "monitor"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/v1/warframe/modules": {
       "delete": {
         "summary": "Delete a module by mod_id.",

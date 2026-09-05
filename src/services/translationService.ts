@@ -3,13 +3,13 @@
  * @file translationService.ts
  * @external
  * @module services/translationService
- * @tag translation, deepl, localization
- * @version 1.1.0
+ * @tag translation, deepl, gemini, localization
+ * @version 1.2.0
  * @author william.r.oak@gmail.com
- * @summary DeepL translation service for text translation.
+ * @summary Translation service for text translation via DeepL and Gemini.
  * @description
- * Translates text into target languages using the DeepL API with automatic
- * endpoint detection (Free vs Pro) and language code mapping.
+ * Translates text into target languages using the DeepL API or Gemini AI
+ * with automatic endpoint detection and language code mapping.
  *
  * @requires
  * {
@@ -179,6 +179,72 @@ export async function translateWithDeepL(
         return typeof translated === 'string' && translated.length > 0 ? translated : null;
     } catch (err) {
         logger.warn('[DeepL] Translation request failed:', err);
+        return null;
+    }
+}
+
+/**
+ * Translates text into target language using Gemini API.
+ * Returns translated string or null if translation could not be performed.
+ */
+export async function translateWithGemini(
+    text: string,
+    targetLanguage: string,
+    options: { apiKey?: string } = {}
+): Promise<string | null> {
+    if (!text || !text.trim()) {
+        return text;
+    }
+
+    const apiKey = options.apiKey || process.env.GEMINI_KEY || process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+        logger.warn('[Gemini] No API key found in environment (GEMINI_KEY). Skipping translation.');
+        return null;
+    }
+
+    const languageName = getLanguageName(targetLanguage);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+
+    const prompt = `You are a professional translator. Translate the following text into ${languageName}. 
+Maintain the same tone and context. If it looks like a UI label or button text, keep it concise.
+Return ONLY the translated text, no quotes or explanations.
+
+Text: "${text}"`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.1,
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            logger.warn(`[Gemini] API error (${response.status}): ${errText}`);
+            return null;
+        }
+
+        const data = (await response.json()) as any;
+        const translatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (typeof translatedText === 'string') {
+            return translatedText.trim().replace(/^"|"$/g, '');
+        }
+        return null;
+    } catch (error) {
+        logger.warn(`[Gemini] auto-translation failed for '${text}':`, error);
         return null;
     }
 }
