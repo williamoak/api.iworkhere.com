@@ -52,19 +52,28 @@
  * @requires
  * {
  *   "tables": ["localizations"],
- *   "services": ["dbService", "localizationResolverService"]
+ *   "services": ["dbService", "localizationResolverService", "cacheStore"]
  * }
  */
 
 import type { Request, Response } from 'express';
 import { dbLocalizationRepository, extractLanguage } from '@routes/v1/localization/GET';
 import { resolveAndTranslateLocalization } from '@services/localizationResolverService';
+import { cacheStore } from '@cache/cacheStore';
 import { logger } from '@helpers/logger';
 
 export default async function GET(req: Request, res: Response) {
     try {
-        const slug = req.query.slug as string;
-        if (!slug || typeof slug !== 'string') {
+        const slugRaw = req.query.slug;
+        const slugs = Array.isArray(slugRaw)
+            ? slugRaw.map((s) => String(s).trim()).filter(Boolean)
+            : typeof slugRaw === 'string' && slugRaw.includes(',')
+            ? slugRaw.split(',').map((s) => s.trim()).filter(Boolean)
+            : slugRaw && typeof slugRaw === 'string'
+            ? [slugRaw.trim()]
+            : [];
+
+        if (slugs.length === 0) {
             return res.status(400).json({
                 error: 'INVALID_REQUEST',
                 message: 'slug query parameter is required',
@@ -74,26 +83,51 @@ export default async function GET(req: Request, res: Response) {
         const lang = (req.query.lang as string) || extractLanguage(req) || 'en_ca';
         const fallback = req.query.fallback as string;
 
-        // 1. Try to find existing record
-        let record = await dbLocalizationRepository.findBySlugAndLang(slug, lang);
+        const results = await Promise.all(
+            slugs.map(async (slug) => {
+                const cacheKey = `localization:${slug}:${lang}`;
 
-        // 2. If not found and it's not English, or if we have a fallback hint, try to translate/resolve
-        if (!record) {
-            record = await resolveAndTranslateLocalization({
-                slug,
-                lang,
-                fallbackText: fallback,
-            });
+                // 1. Try to find in memory cache
+                let record = await cacheStore.get<any>(cacheKey);
+                if (record) return record;
+
+                // 2. Try to find existing record in database
+                record = await dbLocalizationRepository.findBySlugAndLang(slug, lang);
+
+                // 3. If not found and it's not English, or if we have a fallback hint, try to translate/resolve
+                if (!record) {
+                    record = await resolveAndTranslateLocalization({
+                        slug,
+                        lang,
+                        fallbackText: fallback,
+                    });
+                }
+
+                if (record) {
+                    // 4. Save to memory cache
+                    await cacheStore.set(cacheKey, record, 86400000);
+                    return record;
+                }
+                return null;
+            }),
+        );
+
+        const validResults = results.filter(Boolean);
+
+        if (slugs.length === 1) {
+            if (validResults.length === 0) {
+                return res.status(404).json({
+                    error: 'NOT_FOUND',
+                    message: `Localization not found for slug '${slugs[0]}' in language '${lang}'`,
+                });
+            }
+            return res.status(200).json(validResults[0]);
         }
 
-        if (!record) {
-            return res.status(404).json({
-                error: 'NOT_FOUND',
-                message: `Localization not found for slug '${slug}' in language '${lang}'`,
-            });
-        }
-
-        return res.status(200).json(record);
+        return res.status(200).json({
+            records: validResults,
+            count: validResults.length,
+        });
     } catch (err) {
         logger.error('GET /v1/monitor/localization error:', err);
         return res.status(500).json({

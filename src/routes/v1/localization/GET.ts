@@ -67,6 +67,7 @@ import { asc, eq } from 'drizzle-orm';
 
 import { db } from '@services/dbService';
 import { localizations, type Localization } from '@db/schema/localizations';
+import { cacheStore } from '@cache/cacheStore';
 import { logger } from '@helpers/logger';
 import {
     getLanguageCandidates,
@@ -348,7 +349,7 @@ export const dbLocalizationRepository: LocalizationRepository = {
                     r.lang.toLowerCase().startsWith('en') ||
                     r.lang.toLowerCase() === 'eng',
             );
-            return enFallback ? mapRow(enFallback) : mapRow(allRows[0]);
+            return enFallback ? mapRow(enFallback) : null;
         }
 
         return null;
@@ -393,11 +394,18 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
     return async function GET(req: Request, res: Response) {
         try {
             const id = normalize(req.query?.id);
-            const slug = normalize(req.query?.slug);
+            const slugRaw = req.query?.slug;
+            const slugs = Array.isArray(slugRaw)
+                ? slugRaw.map((s) => String(s).trim()).filter(Boolean)
+                : typeof slugRaw === 'string' && slugRaw.includes(',')
+                ? slugRaw.split(',').map((s) => s.trim()).filter(Boolean)
+                : normalize(slugRaw)
+                ? [normalize(slugRaw)!]
+                : [];
             const lang = extractLanguage(req);
 
             // 1. Guard rails
-            if (id && (slug || lang)) {
+            if (id && (slugs.length > 0 || lang)) {
                 return res.status(400).json({
                     error: 'INVALID_REQUEST',
                     message: 'id cannot be combined with slug or lang',
@@ -405,7 +413,7 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
             }
 
             // Must provide either slug or lang as a minimum (if no id)
-            if (!id && !slug && !lang) {
+            if (!id && slugs.length === 0 && !lang) {
                 return res.status(400).json({
                     error: 'INVALID_REQUEST',
                     message: 'Must provide either slug or lang as a minimum',
@@ -424,32 +432,58 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
                 return res.status(200).json(record);
             }
 
-            // 3. Both slug AND lang provided -> resolve specific translation
-            if (slug && lang) {
+            // 3. Both slug AND lang provided -> resolve specific translation(s)
+            if (slugs.length > 0 && lang) {
                 const fallbackQuery = normalize(req.query?.fallback);
-                let record = await repo.findBySlugAndLang(slug, lang);
-                if (!record && fallbackQuery) {
-                    record = await resolveAndTranslateLocalization({
-                        slug,
-                        lang,
-                        fallbackText: fallbackQuery,
-                    });
-                }
-                if (!record) {
-                    return res.status(404).json({
-                        error: 'NOT_FOUND',
-                        message: `Localization not found for slug '${slug}'`,
-                    });
+
+                const results = await Promise.all(
+                    slugs.map(async (s) => {
+                        const cacheKey = `localization:${s}:${lang}`;
+                        let record = await cacheStore.get<LocalizationRecord>(
+                            cacheKey,
+                        );
+
+                        if (!record) {
+                            record = await repo.findBySlugAndLang(s, lang);
+                            if (!record && fallbackQuery && slugs.length === 1) {
+                                record = await resolveAndTranslateLocalization({
+                                    slug: s,
+                                    lang,
+                                    fallbackText: fallbackQuery,
+                                });
+                            }
+                            if (record) {
+                                await cacheStore.set(cacheKey, record, 86400000);
+                            }
+                        }
+                        return record ? { ...record, requestedLang: lang } : null;
+                    }),
+                );
+
+                const validResults = results.filter(
+                    (r): r is LocalizationRecord & { requestedLang: string } =>
+                        r !== null,
+                );
+
+                if (slugs.length === 1) {
+                    if (validResults.length === 0) {
+                        return res.status(404).json({
+                            error: 'NOT_FOUND',
+                            message: `Localization not found for slug '${slugs[0]}'`,
+                        });
+                    }
+                    return res.status(200).json(validResults[0]);
                 }
 
                 return res.status(200).json({
-                    ...record,
-                    requestedLang: lang,
+                    records: validResults,
+                    count: validResults.length,
                 });
             }
 
             // 4. Slug only -> return slug with comma-delimited list of supported language codes
-            if (slug) {
+            if (slugs.length > 0) {
+                const slug = slugs[0]; // Take first slug for this legacy behavior
                 const records = await repo.findBySlug(slug);
                 if (!records || records.length === 0) {
                     return res.status(404).json({
@@ -469,7 +503,7 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
                 });
             }
 
-            // 5. Lang only -> return language code with comma-delimited list of supported slugnames
+            // 5. Lang only -> return language code with full records
             if (lang) {
                 const records = await repo.findByLang(lang);
                 if (!records || records.length === 0) {
@@ -487,6 +521,8 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
                     lang,
                     slugs,
                     slugnames: slugs,
+                    records,
+                    count: records.length,
                 });
             }
         } catch (err) {
