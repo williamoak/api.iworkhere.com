@@ -121,6 +121,9 @@ vi.mock('@services/dbService', () => {
 });
 
 vi.mock('@cache/localizationCache', () => ({
+  localizationCache: {
+    dirty: vi.fn(),
+  },
   dirtyCache: vi.fn(),
   getLanguageCandidates: vi.fn((lang: string) => [lang, 'en']),
 }));
