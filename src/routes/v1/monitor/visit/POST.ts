@@ -52,7 +52,7 @@ export default async function handler(
     req: Request,
     res: Response
 ): Promise<{ ok: true } | void | Response> {
-    const { device_id, user_id, request_method, note } = req.body;
+    const { device_id, user_id, request_method, note, latitude, longitude } = req.body || {};
     
     if (device_id) {
         res.locals.visitDeviceId = device_id;
@@ -68,6 +68,14 @@ export default async function handler(
 
     if (note) {
         res.locals.visitNote = note;
+    }
+
+    if (latitude !== undefined) {
+        res.locals.visitLatitude = latitude;
+    }
+
+    if (longitude !== undefined) {
+        res.locals.visitLongitude = longitude;
     }
 
     try {
@@ -89,6 +97,15 @@ export default async function handler(
         const finalNote = note || `visit: ${req.path}`;
         const finalMethod = request_method || req.method || 'GET';
 
+        const parseCoord = (val: any) => {
+            if (val === undefined || val === null || val === '') return null;
+            const num = typeof val === 'number' ? val : parseFloat(String(val));
+            return Number.isFinite(num) ? num : null;
+        };
+
+        const finalLat = parseCoord(latitude ?? req.headers['x-latitude'] ?? req.headers['x-lat']);
+        const finalLng = parseCoord(longitude ?? req.headers['x-longitude'] ?? req.headers['x-long'] ?? req.headers['x-lng']);
+
         // Using ORM for insertion. The tenant schema is handled by the search_path 
         // set in the tenantTransaction middleware.
         await db.insert(visitInfo).values({
@@ -96,6 +113,8 @@ export default async function handler(
             userId: finalUserId,
             requestMethod: finalMethod,
             touchTime: new Date(),
+            latitude: finalLat,
+            longitude: finalLng,
             note: finalNote
         });
         

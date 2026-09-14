@@ -68,6 +68,15 @@ function formatToUUID7(hex: string): string {
     return `${s.slice(0, 8)}-${s.slice(8, 12)}-7${s.slice(13, 16)}-${s.slice(16, 20)}-${s.slice(20, 32)}`;
 }
 
+/**
+ * Safely parses a coordinate (latitude/longitude) value to a finite number or null.
+ */
+function parseCoordinate(val: any): number | null {
+    if (val === undefined || val === null || val === '') return null;
+    const num = typeof val === 'number' ? val : parseFloat(String(val));
+    return Number.isFinite(num) ? num : null;
+}
+
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
     logger.warn(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
 
@@ -130,12 +139,37 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
             const note = (res.locals.visitNote as string) || `visit: ${req.path}`;
             const method = res.locals.visitRequestMethod || req.method || 'GET';
 
-            logger.warn(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, note=${note}`);
+            const latitude = parseCoordinate(
+                res.locals.visitLatitude ??
+                req.headers['x-latitude'] ??
+                req.headers['x-lat'] ??
+                (req.body as any)?.latitude ??
+                (req.body as any)?.lat ??
+                req.query?.latitude ??
+                req.query?.lat
+            );
+
+            const longitude = parseCoordinate(
+                res.locals.visitLongitude ??
+                req.headers['x-longitude'] ??
+                req.headers['x-long'] ??
+                req.headers['x-lng'] ??
+                (req.body as any)?.longitude ??
+                (req.body as any)?.long ??
+                (req.body as any)?.lng ??
+                req.query?.longitude ??
+                req.query?.long ??
+                req.query?.lng
+            );
+
+            logger.warn(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, note=${note}`);
             const values = {
                 deviceId: deviceId as string,
                 userId: userId,
                 requestMethod: method as string,
                 touchTime: new Date(),
+                latitude: latitude,
+                longitude: longitude,
                 note: note as string
             };
             logger.warn(`[DEBUG] [JOINAUNION] Values:`, JSON.stringify(values));

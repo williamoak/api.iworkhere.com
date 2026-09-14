@@ -49,12 +49,16 @@ async function applyMigration() {
             user_id UUID,
             request_method TEXT NOT NULL DEFAULT 'GET',
             touch_time TIMESTAMP WITH TIME ZONE NOT NULL,
+            latitude DOUBLE PRECISION,
+            longitude DOUBLE PRECISION,
             note TEXT
         );
 
         -- Add columns if they don't exist (for existing tables)
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS user_id UUID;
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS request_method TEXT NOT NULL DEFAULT 'GET';
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
         -- Create indexes
         CREATE INDEX IF NOT EXISTS visit_info_${schema}_id_idx ON ${schema}.visit_info (id);
