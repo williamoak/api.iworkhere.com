@@ -77,6 +77,24 @@ function parseCoordinate(val: any): number | null {
     return Number.isFinite(num) ? num : null;
 }
 
+/**
+ * Safely parses location source value to a sanitized string (max 32 chars) or null.
+ */
+function parseLocationSource(val: any): string | null {
+    if (val === undefined || val === null || val === '') return null;
+    const str = String(val).trim();
+    return str.length > 0 ? str.slice(0, 32) : null;
+}
+
+/**
+ * Safely parses city value to a sanitized string (max 128 chars) or null.
+ */
+function parseCity(val: any): string | null {
+    if (val === undefined || val === null || val === '') return null;
+    const str = String(val).trim();
+    return str.length > 0 ? str.slice(0, 128) : null;
+}
+
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
     logger.warn(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
 
@@ -162,7 +180,44 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 req.query?.lng
             );
 
-            logger.warn(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, note=${note}`);
+            const locationSource = parseLocationSource(
+                res.locals.visitLocationSource ??
+                req.headers['x-location-source'] ??
+                req.headers['x-loc-source'] ??
+                (req.body as any)?.location_source ??
+                (req.body as any)?.locationSource ??
+                req.query?.location_source ??
+                req.query?.locationSource
+            );
+
+            const city = parseCity(
+                res.locals.visitCity ??
+                req.headers['x-city'] ??
+                req.headers['x-client-city'] ??
+                (req.body as any)?.city ??
+                req.query?.city
+            );
+
+            const requestLogPayload = {
+                method: req.method,
+                url: req.originalUrl || req.path,
+                headers: req.headers,
+                body: req.body,
+                query: req.query,
+                resLocals: {
+                    visitLocationSource: res.locals.visitLocationSource,
+                    visitCity: res.locals.visitCity,
+                    visitLatitude: res.locals.visitLatitude,
+                    visitLongitude: res.locals.visitLongitude,
+                    visitNote: res.locals.visitNote,
+                    visitDeviceId: res.locals.visitDeviceId,
+                    visitUserId: res.locals.visitUserId,
+                }
+            };
+            console.log(`[LoggingMiddleware] [JOINAUNION] Request JSON for ${req.method} ${req.originalUrl || req.path}:\n` + JSON.stringify(requestLogPayload, null, 2));
+            logger.warn(`[DEBUG] [JOINAUNION] Request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestLogPayload));
+
+            logger.warn(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, locationSource=${locationSource}, city=${city}, note=${note}`);
             const values = {
                 deviceId: deviceId as string,
                 userId: userId,
@@ -170,6 +225,8 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 touchTime: new Date(),
                 latitude: latitude,
                 longitude: longitude,
+                locationSource: locationSource,
+                city: city,
                 note: note as string
             };
             logger.warn(`[DEBUG] [JOINAUNION] Values:`, JSON.stringify(values));

@@ -21,12 +21,16 @@
  *   {
  *     "device_id": "string",
  *     "user_id": "string",
+ *     "page_name": "string",
  *     "request_method": "string",
+ *     "latitude": "number",
+ *     "longitude": "number",
+ *     "location_source": "string",
  *     "note": "string"
  *   }
  *
  * @requestExample
- *   { "method": "POST", "url": "/v1/monitor/visit", "body": { "device_id": "optional-uuid", "user_id": "optional-uuid", "request_method": "GET", "note": "visit: About Page" } }
+ *   { "method": "POST", "url": "/v1/monitor/visit", "body": { "user_id": "optional-uuid", "device_id": "optional-uuid", "page_name": "home", "request_method": "GET", "latitude": 41.8781, "longitude": -87.6298, "location_source": "ip_centroid" } }
  *
  * @response
  *   { "ok": true }
@@ -52,7 +56,17 @@ export default async function handler(
     req: Request,
     res: Response
 ): Promise<{ ok: true } | void | Response> {
-    const { device_id, user_id, request_method, note, latitude, longitude } = req.body || {};
+    const requestJson = {
+        method: req.method,
+        url: req.originalUrl || req.path,
+        headers: req.headers,
+        body: req.body,
+        query: req.query
+    };
+    console.log('[Visit Endpoint] Request JSON:\n' + JSON.stringify(requestJson, null, 2));
+    logger.warn(`[Visit Endpoint] Incoming request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestJson));
+
+    const { device_id, user_id, request_method, page_name, note, latitude, longitude, location_source, city } = req.body || {};
     
     if (device_id) {
         res.locals.visitDeviceId = device_id;
@@ -68,6 +82,8 @@ export default async function handler(
 
     if (note) {
         res.locals.visitNote = note;
+    } else if (page_name) {
+        res.locals.visitNote = `visit: ${page_name}`;
     }
 
     if (latitude !== undefined) {
@@ -76,6 +92,14 @@ export default async function handler(
 
     if (longitude !== undefined) {
         res.locals.visitLongitude = longitude;
+    }
+
+    if (location_source !== undefined) {
+        res.locals.visitLocationSource = location_source;
+    }
+
+    if (city !== undefined) {
+        res.locals.visitCity = city;
     }
 
     try {
@@ -94,7 +118,7 @@ export default async function handler(
             finalDeviceId = formatToUUID7(hash);
         }
 
-        const finalNote = note || `visit: ${req.path}`;
+        const finalNote = note || (page_name ? `visit: ${page_name}` : `visit: ${req.path}`);
         const finalMethod = request_method || req.method || 'GET';
 
         const parseCoord = (val: any) => {
@@ -103,8 +127,22 @@ export default async function handler(
             return Number.isFinite(num) ? num : null;
         };
 
+        const parseSource = (val: any): string | null => {
+            if (val === undefined || val === null || val === '') return null;
+            const str = String(val).trim();
+            return str.length > 0 ? str.slice(0, 32) : null;
+        };
+
+        const parseCityVal = (val: any): string | null => {
+            if (val === undefined || val === null || val === '') return null;
+            const str = String(val).trim();
+            return str.length > 0 ? str.slice(0, 128) : null;
+        };
+
         const finalLat = parseCoord(latitude ?? req.headers['x-latitude'] ?? req.headers['x-lat']);
         const finalLng = parseCoord(longitude ?? req.headers['x-longitude'] ?? req.headers['x-long'] ?? req.headers['x-lng']);
+        const finalLocationSource = parseSource(location_source ?? req.headers['x-location-source']);
+        const finalCity = parseCityVal(city ?? req.headers['x-city'] ?? req.headers['x-client-city']);
 
         // Using ORM for insertion. The tenant schema is handled by the search_path 
         // set in the tenantTransaction middleware.
@@ -115,6 +153,8 @@ export default async function handler(
             touchTime: new Date(),
             latitude: finalLat,
             longitude: finalLng,
+            locationSource: finalLocationSource,
+            city: finalCity,
             note: finalNote
         });
         
@@ -124,5 +164,7 @@ export default async function handler(
         logger.error(`[Visit Endpoint] Failed to record visit for tenant ${(req as any).tenant}:`, e);
     }
 
-    return res.json({ ok: true });
+    const responseJson = { ok: true as const };
+    console.log('[Visit Endpoint] Response JSON:\n' + JSON.stringify(responseJson, null, 2));
+    return res.json(responseJson);
 }

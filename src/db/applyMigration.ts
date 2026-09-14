@@ -51,6 +51,7 @@ async function applyMigration() {
             touch_time TIMESTAMP WITH TIME ZONE NOT NULL,
             latitude DOUBLE PRECISION,
             longitude DOUBLE PRECISION,
+            location_source VARCHAR(32),
             note TEXT
         );
 
@@ -59,6 +60,7 @@ async function applyMigration() {
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS request_method TEXT NOT NULL DEFAULT 'GET';
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS location_source VARCHAR(32);
 
         -- Create indexes
         CREATE INDEX IF NOT EXISTS visit_info_${schema}_id_idx ON ${schema}.visit_info (id);
@@ -73,6 +75,9 @@ async function applyMigration() {
 
     await pool.query(createTableQuery('joinaunion'));
     await pool.query(createTableQuery('public'));
+
+    // 6. Add city column only to joinaunion.visit_info
+    await pool.query(`ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS city VARCHAR(128);`);
 
     logger.log("Migration applied successfully!");
   } catch (error) {

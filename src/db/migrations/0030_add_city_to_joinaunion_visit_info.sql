@@ -1,0 +1,1 @@
+ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS city VARCHAR(128);

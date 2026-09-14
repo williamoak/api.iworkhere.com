@@ -204,6 +204,13 @@
       "when": 1782000006000,
       "tag": "0028_add_latitude_and_longitude_to_visit_info",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1782000007000,
+      "tag": "0029_add_location_source_to_visit_info",
+      "breakpoints": true
     }
   ]
 }

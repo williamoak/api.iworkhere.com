@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, doublePrecision, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, doublePrecision, varchar, index } from 'drizzle-orm/pg-core';
 
 export const visitInfo = pgTable('visit_info', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -8,6 +8,8 @@ export const visitInfo = pgTable('visit_info', {
     touchTime: timestamp('touch_time', { withTimezone: true }).notNull(),
     latitude: doublePrecision('latitude'),
     longitude: doublePrecision('longitude'),
+    locationSource: varchar('location_source', { length: 32 }),
+    city: varchar('city', { length: 128 }),
     note: text('note'),
 }, (table) => {
     return {

@@ -241,6 +241,85 @@ describe('joinaunion/loggingMiddleware', () => {
         expect(insertedValues).not.toBeNull();
         expect(insertedValues.latitude).toBeNull();
         expect(insertedValues.longitude).toBeNull();
+        expect(insertedValues.locationSource).toBeNull();
+        expect(res.locals.visitLogged).toBe(true);
+    });
+
+    test('extracts location_source from headers or res.locals', async () => {
+        let insertedValues: any = null;
+        const mockDb = {
+            insert: vi.fn().mockReturnValue({
+                values: vi.fn().mockImplementation((val) => {
+                    insertedValues = val;
+                    return Promise.resolve({});
+                }),
+            }),
+            execute: vi.fn().mockResolvedValue({ rows: [] }),
+        };
+
+        const req = {
+            path: '/v1/auth/me',
+            originalUrl: '/v1/auth/me',
+            headers: {
+                'user-agent': 'mobile-app',
+                'x-latitude': '41.8781',
+                'x-longitude': '-87.6298',
+                'x-location-source': 'ip_centroid',
+                'x-city': 'Chicago',
+            },
+        } as any;
+        const res = { locals: {}, writableEnded: true } as any;
+        const next = vi.fn();
+
+        await dbStorage.run(mockDb as any, async () => {
+            await joinaunionLoggingMiddleware(req, res, next);
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(mockDb.insert).toHaveBeenCalled();
+        expect(insertedValues).not.toBeNull();
+        expect(insertedValues.latitude).toBe(41.8781);
+        expect(insertedValues.longitude).toBe(-87.6298);
+        expect(insertedValues.locationSource).toBe('ip_centroid');
+        expect(insertedValues.city).toBe('Chicago');
+        expect(res.locals.visitLogged).toBe(true);
+    });
+
+    test('extracts city from res.locals when set', async () => {
+        let insertedValues: any = null;
+        const mockDb = {
+            insert: vi.fn().mockReturnValue({
+                values: vi.fn().mockImplementation((val) => {
+                    insertedValues = val;
+                    return Promise.resolve({});
+                }),
+            }),
+            execute: vi.fn().mockResolvedValue({ rows: [] }),
+        };
+
+        const req = {
+            path: '/v1/auth/me',
+            originalUrl: '/v1/auth/me',
+            headers: { 'user-agent': 'mobile-app' },
+        } as any;
+        const res = {
+            locals: {
+                visitCity: 'Toronto',
+            },
+            writableEnded: true,
+        } as any;
+        const next = vi.fn();
+
+        await dbStorage.run(mockDb as any, async () => {
+            await joinaunionLoggingMiddleware(req, res, next);
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        expect(mockDb.insert).toHaveBeenCalled();
+        expect(insertedValues).not.toBeNull();
+        expect(insertedValues.city).toBe('Toronto');
         expect(res.locals.visitLogged).toBe(true);
     });
 });
