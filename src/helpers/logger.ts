@@ -19,24 +19,28 @@ import { configGet } from '@helpers/config';
 
 const DEBUG = configGet('DEBUG') === 'true';
 
-export const logger = {
-    log: (message?: any, forceLog: boolean = false, ...optionalParams: any[]) => {
-        const isForceLogBoolean = typeof forceLog === 'boolean';
-        const shouldForce = isForceLogBoolean ? forceLog : false;
-        if (DEBUG || shouldForce) {
-            if (isForceLogBoolean) {
-                if (optionalParams.length > 0) {
-                    console.log(message, ...optionalParams);
-                } else if (message !== undefined) {
-                    console.log(message);
-                } else {
-                    console.log();
-                }
+function log(message?: any, forceLog?: boolean, ...optionalParams: any[]): void;
+function log(message?: any, ...optionalParams: any[]): void;
+function log(message?: any, forceLog: any = false, ...optionalParams: any[]): void {
+    const isForceLogBoolean = typeof forceLog === 'boolean';
+    const shouldForce = isForceLogBoolean ? forceLog : false;
+    if (DEBUG || shouldForce) {
+        if (isForceLogBoolean) {
+            if (optionalParams.length > 0) {
+                console.log(message, ...optionalParams);
+            } else if (message !== undefined) {
+                console.log(message);
             } else {
-                console.log(message, forceLog, ...optionalParams);
+                console.log();
             }
+        } else {
+            console.log(message, forceLog, ...optionalParams);
         }
-    },
+    }
+}
+
+export const logger = {
+    log,
     error: (...args: any[]) => {
         console.error(...args);
     },

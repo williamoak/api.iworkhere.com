@@ -31,4 +31,9 @@ describe('logger helper', () => {
         logger.log('this is a test');
         expect(consoleLogSpy).not.toHaveBeenCalled();
     });
+
+    it('handles multiple non-boolean arguments when forceLog is omitted', () => {
+        logger.log('message:', { foo: 'bar' }, 123);
+        expect(consoleLogSpy).not.toHaveBeenCalled();
+    });
 });
