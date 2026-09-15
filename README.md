@@ -20,6 +20,12 @@ A production-oriented TypeScript and Express API for the iworkhere applications.
 - **Data-backed localization**: supported languages and slugs are discovered from the database, cached in memory, invalidated on mutation, and resolved with ISO-639, region, dialect, and family fallbacks.
 - **Contract and test discipline**: Zod validation, DTO overlays, OpenAPI/Swagger generation, strict TypeScript settings, isolated Vitest mocks, CI typechecking, and critical-vulnerability auditing reinforce the API contract.
 
+### Executive documents
+
+- <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Resume (September 2026)</a>
+- <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Cover Letter (September 2026)</a>
+- <a href="https://api.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
+
 ## Architecture at a glance
 
 ```text
@@ -96,12 +102,6 @@ All versioned routes currently live under `/v1`.
 - **Monitoring**: `/v1/monitor`, `/v1/monitor/lang`, `/v1/monitor/localization`, `/v1/monitor/network`, `/v1/monitor/visit`
 - **Warframe data**: CRUD-style endpoints for `/v1/warframe/modules`, `/v1/warframe/warframes`, and `/v1/warframe/weapons`
 - **Generated documentation**: `GET /v1/readme`; development Swagger UI is available at `/docs`
-
-### Executive documents
-
-- <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Resume (September 2026)</a>
-- <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Cover Letter (September 2026)</a>
-- <a href="https://api.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
 
 ## Authentication design
 
