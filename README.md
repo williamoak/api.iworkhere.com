@@ -97,6 +97,11 @@ All versioned routes currently live under `/v1`.
 - **Warframe data**: CRUD-style endpoints for `/v1/warframe/modules`, `/v1/warframe/warframes`, and `/v1/warframe/weapons`
 - **Generated documentation**: `GET /v1/readme`; development Swagger UI is available at `/docs`
 
+### Executive documents
+
+- [William Oak Executive Resume (September 2026)](https://api.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf)
+- [William Oak Executive Cover Letter (September 2026)](https://api.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf)
+
 The checked-in [`swagger.json`](./swagger.json) is the machine-readable contract. Regenerate it with `npm run swagger:gen`.
 
 ## Authentication design

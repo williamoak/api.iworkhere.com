@@ -362,4 +362,22 @@ describe("appFactory", () => {
             if (dirCreated && fs.existsSync(coverageDir)) fs.rmdirSync(coverageDir);
         }
     });
+
+    it("serves the public executive resume and cover letter PDFs", async () => {
+        vi.resetModules();
+        delete process.env.DEBUG;
+        delete process.env.AUTH_ME_DEBUG;
+        const { createBaseApp } = await import("@src/appFactory");
+        const app = await createBaseApp();
+
+        for (const documentName of [
+            "William.Oak.Executive.Resume.Sept.2026.pdf",
+            "William.Oak.Executive.Cover.Letter.Sept.2026.pdf",
+        ]) {
+            const response = await testRoute(app, `/readme/${documentName}`);
+
+            expect(response.status).toBe(200);
+            expect(response.headers.get("content-type")).toMatch(/^application\/pdf/);
+        }
+    });
 });

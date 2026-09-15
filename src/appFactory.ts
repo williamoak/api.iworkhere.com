@@ -52,6 +52,11 @@ const explicitAllowedOrigins = new Set(
         .filter(Boolean)
 );
 
+const publicReadmeDocuments = [
+    "William.Oak.Executive.Resume.Sept.2026.pdf",
+    "William.Oak.Executive.Cover.Letter.Sept.2026.pdf",
+] as const;
+
 const corsOrigin: NonNullable<CorsOptions["origin"]> = (origin, callback) => {
     if (!origin || origin === "null") {
         callback(null, true);
@@ -130,6 +135,13 @@ export async function createBaseApp() {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
     app.use(cookieParser());
+
+    for (const documentName of publicReadmeDocuments) {
+        app.get(`/readme/${documentName}`, (_req, res) => {
+            res.sendFile(path.resolve(process.cwd(), "readme", documentName));
+        });
+    }
+
     applyGlobalMiddleware(app);
     app.use(express.static("public"));
     app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
