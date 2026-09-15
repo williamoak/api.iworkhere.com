@@ -161,27 +161,94 @@ describe('DELETE /v1/localization', () => {
         expect(isCacheDirty()).toBe(true);
     });
 
-    test('returns 409 CONFLICT when deleting by slug only and multiple languages exist', async () => {
-        const match1: LocalizationRecord = {
-            id: 'match-1',
-            slug: 'username',
-            lang: 'eng',
-            text: 'Username',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-        const match2: LocalizationRecord = {
-            id: 'match-2',
-            slug: 'username',
-            lang: 'fr',
-            text: "Nom d'utilisateur",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+    test('returns 404 when deleting by slug and lang and record not found', async () => {
+        (mockRepo.deleteBySlugAndLang as any).mockResolvedValueOnce(false);
 
-        (mockRepo.findBySlug as any).mockResolvedValueOnce([match1, match2]);
+        const req = createMockReq({ slug: 'username', lang: 'es' });
+        const res = createMockRes();
 
-        const req = createMockReq({ slug: 'username' });
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(404);
+        expect(res.body.error).toBe('NOT_FOUND');
+    });
+
+    test('returns 404 when deleting by slug only and record not found', async () => {
+        (mockRepo.findBySlug as any).mockResolvedValueOnce([]);
+
+        const req = createMockReq({ slug: 'missing_slug' });
+        const res = createMockRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(404);
+        expect(res.body.error).toBe('NOT_FOUND');
+    });
+
+    test('executes default DELETE handler with database queries', async () => {
+        const { db } = await import('@services/dbService');
+
+        vi.mocked(db.delete).mockReturnValue({
+            where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([{ id: 'uuid-1' }]),
+            }),
+        } as any);
+
+        const req = createMockReq({ id: 'uuid-1' });
+        const res = createMockRes();
+
+        await DELETE(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.success).toBe(true);
+    });
+
+    test('executes the default repository slug-and-language delete path', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.delete).mockReturnValue({
+            where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([{ id: 'uuid-1' }]),
+            }),
+        } as any);
+
+        const res = createMockRes();
+        await DELETE(createMockReq({ slug: 'welcome', lang: 'eng' }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ success: true });
+    });
+
+    test('executes the default repository slug-only mapping path', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([{
+                    id: 'uuid-2', slug: 'welcome', lang: 'eng', languageName: 'English',
+                    text: 'Welcome', codepage: 'UTF-8', direction: 'ltr', description: null,
+                    createdAt: new Date(), updatedAt: new Date(),
+                }]),
+            }),
+        } as any);
+        vi.mocked(db.delete).mockReturnValue({
+            where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([{ id: 'uuid-2' }]),
+            }),
+        } as any);
+
+        const res = createMockRes();
+        await DELETE(createMockReq({ slug: 'welcome' }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ success: true });
+    });
+
+    test('returns 409 conflict when deleting by slug only and multiple records match', async () => {
+        (mockRepo.findBySlug as any).mockResolvedValueOnce([
+            { id: '1', slug: 'dup_slug', lang: 'eng' },
+            { id: '2', slug: 'dup_slug', lang: 'fr' },
+        ]);
+
+        const req = createMockReq({ slug: 'dup_slug' });
         const res = createMockRes();
 
         await handler(req, res);
@@ -189,4 +256,32 @@ describe('DELETE /v1/localization', () => {
         expect(res.statusCode).toBe(409);
         expect(res.body.error).toBe('CONFLICT');
     });
+
+    test('returns 404 when deleting by slug only and record deletion fails', async () => {
+        (mockRepo.findBySlug as any).mockResolvedValueOnce([
+            { id: '1', slug: 'dup_slug', lang: 'eng' },
+        ]);
+        (mockRepo.deleteById as any).mockResolvedValueOnce(false);
+
+        const req = createMockReq({ slug: 'dup_slug' });
+        const res = createMockRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(404);
+        expect(res.body.error).toBe('NOT_FOUND');
+    });
+
+    test('returns 500 on unexpected error in handler', async () => {
+        (mockRepo.deleteById as any).mockRejectedValueOnce(new Error('crash'));
+
+        const req = createMockReq({ id: 'uuid-1' });
+        const res = createMockRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toBe('INTERNAL_ERROR');
+    });
+
 });

@@ -53,6 +53,9 @@ vi.mock('@db/schema/localizations', () => ({
 import GET, {
     makeGetLocalizationHandler,
     getLanguageCandidates,
+    cleanLanguageCode,
+    extractLanguage,
+    __test__,
     type LocalizationRecord,
     type LocalizationRepository,
 } from '@routes/v1/localization/GET';
@@ -221,6 +224,23 @@ describe('GET /v1/localization', () => {
         expect(candidates).toContain('en_us');
         expect(candidates).toContain('eng');
         expect(candidates).toContain('en');
+    });
+
+    test('normalizes language code formats and rejects empty wildcards', () => {
+        expect(cleanLanguageCode(' fr-CA,fr;q=0.9 ')).toBe('fr-CA');
+        expect(cleanLanguageCode('fr-CA;q=0.9')).toBe('fr-CA');
+        expect(cleanLanguageCode('Language-Hint: can_fr')).toBe('can_fr');
+        expect(cleanLanguageCode("'en_ca'")).toBe('en_ca');
+        expect(cleanLanguageCode('*')).toBeUndefined();
+        expect(cleanLanguageCode(42)).toBeUndefined();
+    });
+
+    test('extracts language from a header-like key and returns undefined without a request', () => {
+        expect(extractLanguage({
+            query: {},
+            headers: { 'Language-Hint=can_fr': '' },
+        } as unknown as Request)).toBe('can_fr');
+        expect(extractLanguage(undefined as unknown as Request)).toBeUndefined();
     });
 
     test('returns 400 when no query parameters are provided', async () => {
@@ -544,5 +564,308 @@ describe('GET /v1/localization', () => {
         expect(res.statusCode).toBe(200);
         expect(res.body.slug).toBe('missing_btn');
         expect(res.body.text).toBe('Click Here');
+    });
+
+    test('extracts language from cookies and various header formats', async () => {
+        const reqWithLocaleCookie = createReq(
+            { slug: 'username' },
+            {},
+            { locale: 'can_fr' }
+        );
+        const res1 = createRes();
+        await handler(reqWithLocaleCookie, res1);
+        expect(res1.statusCode).toBe(200);
+        expect(res1.body.requestedLang).toBe('can_fr');
+
+        const reqWithXLocaleHeader = createReq(
+            { slug: 'username' },
+            { 'x-locale': 'can_fr' }
+        );
+        const res2 = createRes();
+        await handler(reqWithXLocaleHeader, res2);
+        expect(res2.statusCode).toBe(200);
+        expect(res2.body.requestedLang).toBe('can_fr');
+    });
+
+    test('executes default GET export with database queries', async () => {
+        const { db } = await import('@services/dbService');
+
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue([
+                        {
+                            id: 'uuid-1',
+                            slug: 'test_slug',
+                            lang: 'eng',
+                            languageName: 'English',
+                            text: 'Test Text',
+                            codepage: 'UTF-8',
+                            direction: 'ltr',
+                            description: null,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        },
+                    ]),
+                }),
+            }),
+        } as any);
+
+        const req = createReq({ id: 'uuid-1' });
+        const res = createRes();
+
+        await GET(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.slug).toBe('test_slug');
+    });
+
+    test('executes the default repository slug-only query and maps records', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    orderBy: vi.fn().mockResolvedValue([{
+                        id: 'slug-id', slug: 'welcome', lang: 'eng', languageName: 'English',
+                        text: 'Welcome', codepage: 'UTF-8', direction: 'ltr', description: null,
+                        createdAt: new Date(), updatedAt: new Date(),
+                    }]),
+                }),
+            }),
+        } as any);
+
+        const res = createRes();
+        await GET(createReq({ slug: 'welcome' }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({ slug: 'welcome', languages: 'eng', langs: 'eng' });
+    });
+
+    test('executes the default repository language-only query and maps records', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockResolvedValue([{
+                    id: 'lang-id', slug: 'welcome', lang: 'eng', languageName: 'English',
+                    text: 'Welcome', codepage: 'UTF-8', direction: 'ltr', description: null,
+                    createdAt: new Date(), updatedAt: new Date(),
+                }]),
+            }),
+        } as any);
+
+        const res = createRes();
+        await GET(createReq({ lang: 'eng' }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({ lang: 'eng', slugs: 'welcome', count: 1 });
+        expect(res.body.records[0].value).toBe('Welcome');
+    });
+
+    test('executes the default repository localized query and maps the matched record', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([{
+                    id: 'localized-id', slug: 'welcome', lang: 'eng', languageName: 'English',
+                    text: 'Welcome', codepage: 'UTF-8', direction: 'ltr', description: null,
+                    createdAt: new Date(), updatedAt: new Date(),
+                }]),
+            }),
+        } as any);
+
+        const res = createRes();
+        await GET(createReq({ slug: 'welcome', lang: 'eng' }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({ id: 'localized-id', value: 'Welcome', requestedLang: 'eng' });
+    });
+
+    test('returns an empty list when the default repository finds no slug records', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    orderBy: vi.fn().mockResolvedValue([]),
+                }),
+            }),
+        } as any);
+
+        await expect(__test__.dbLocalizationRepository.findBySlug('missing_slug'))
+            .resolves.toEqual([]);
+    });
+
+    test('falls back to an English record in the default repository when the requested language is unavailable', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([{
+                    id: 'english-id', slug: 'welcome', lang: 'eng', languageName: 'English',
+                    text: 'Welcome', codepage: 'UTF-8', direction: 'ltr', description: null,
+                    createdAt: new Date(), updatedAt: new Date(),
+                }]),
+            }),
+        } as any);
+
+        await expect(__test__.dbLocalizationRepository.findBySlugAndLang('welcome', 'de'))
+            .resolves.toMatchObject({ lang: 'de', value: 'Welcome' });
+    });
+
+    test('maps all records from the default repository getAll method', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                orderBy: vi.fn().mockResolvedValue([{
+                    id: 'all-id', slug: 'welcome', lang: 'eng', languageName: 'English',
+                    text: 'Welcome', codepage: 'UTF-8', direction: 'ltr', description: null,
+                    createdAt: new Date(), updatedAt: new Date(),
+                }]),
+            }),
+        } as any);
+
+        await expect(__test__.dbLocalizationRepository.getAll())
+            .resolves.toEqual([expect.objectContaining({ id: 'all-id', value: 'Welcome' })]);
+    });
+
+    test('returns no record when the default repository has no English fallback', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([{
+                    id: 'french-id', slug: 'bonjour', lang: 'fr', languageName: 'French',
+                    text: 'Bonjour', codepage: 'UTF-8', direction: 'ltr', description: null,
+                    createdAt: new Date(), updatedAt: new Date(),
+                }]),
+            }),
+        } as any);
+
+        await expect(__test__.dbLocalizationRepository.findBySlugAndLang('bonjour', 'de'))
+            .resolves.toBeNull();
+    });
+
+    test('returns null when the default repository has no rows at all', async () => {
+        const { db } = await import('@services/dbService');
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([]),
+            }),
+        } as any);
+
+        await expect(__test__.dbLocalizationRepository.findBySlugAndLang('unknown_slug', 'de'))
+            .resolves.toBeNull();
+    });
+
+    test('handles batch slug queries with lang', async () => {
+        const req = createReq({
+            slug: 'username,welcome_title',
+            lang: 'eng',
+        });
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.count).toBe(2);
+        expect(res.body.records).toHaveLength(2);
+    });
+
+    test('handles array slug queries and omits unresolved records from batch results', async () => {
+        const req = createReq({
+            slug: ['username', 'missing_slug'],
+            lang: 'eng',
+        });
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.count).toBe(1);
+        expect(res.body.records[0].slug).toBe('username');
+    });
+
+    test('writes a resolved translation to cache before returning it', async () => {
+        const resolved: LocalizationRecord = {
+            ...mockRecords[0],
+            slug: 'cache_write_slug',
+            text: 'Cached after lookup',
+        };
+        repo.findBySlugAndLang = vi.fn().mockResolvedValue(resolved);
+        const req = createReq({ slug: 'cache_write_slug', lang: 'eng' });
+        const res = createRes();
+
+        await handler(req, res);
+        const { cacheStore } = await import('@cache/cacheStore');
+
+        expect(res.statusCode).toBe(200);
+        expect((await cacheStore.get('localization:cache_write_slug:eng'))?.text)
+            .toBe('Cached after lookup');
+    });
+
+    test('retrieves translation from cacheStore when available', async () => {
+        const { cacheStore } = await import('@cache/cacheStore');
+        await cacheStore.set('localization:cached_slug:eng', {
+            id: 'cached-id',
+            slug: 'cached_slug',
+            lang: 'eng',
+            text: 'Cached translation',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }, 60000);
+
+        const req = createReq({
+            slug: 'cached_slug',
+            lang: 'eng',
+        });
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.text).toBe('Cached translation');
+    });
+
+    test('uses the explicit fallback resolver when the repository has no match', async () => {
+        const { cacheStore } = await import('@cache/cacheStore');
+        await cacheStore.clear();
+
+        const fallbackHandler = makeGetLocalizationHandler({
+            getById: vi.fn(),
+            findBySlug: vi.fn(),
+            findBySlugAndLang: vi.fn().mockResolvedValue(null),
+            findByLang: vi.fn(),
+            getAll: vi.fn(),
+        });
+        const res = createRes();
+
+        await fallbackHandler(createReq({
+            slug: 'fallback_unique_slug',
+            lang: 'fr',
+            fallback: 'Fallback source text',
+        }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.requestedLang).toBe('fr');
+        expect(res.body.value).toBeDefined();
+    });
+
+    test('returns 500 on unexpected errors in handler', async () => {
+        const errorRepo: LocalizationRepository = {
+            getById: vi.fn(),
+            findBySlug: vi.fn(),
+            findBySlugAndLang: vi.fn().mockRejectedValue(new Error('boom')),
+            findByLang: vi.fn(),
+            getAll: vi.fn(),
+        };
+        const errHandler = makeGetLocalizationHandler(errorRepo);
+
+        const req = createReq({
+            slug: 'crash_slug',
+            lang: 'eng',
+        });
+        const res = createRes();
+
+        await errHandler(req, res);
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toBe('INTERNAL_ERROR');
     });
 });

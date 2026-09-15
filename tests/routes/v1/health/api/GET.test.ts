@@ -60,6 +60,20 @@ describe("health/api handler (internal mode)", () => {
         expect(result.data).toHaveProperty("uptime");
         const data = result.data as any;
         expect(typeof data.uptime).toBe("number");
+    });
+});
 
+describe("health/api handler (external mode)", () => {
+    it("calls res.json with the health response", async () => {
+        const req = mockReq();
+        const res = mockExternalRes();
+
+        await handler(req, res);
+
+        expect(res.json).toHaveBeenCalledTimes(1);
+        const sent = res.json.mock.calls[0][0];
+        expect(sent.status).toBe("ok");
+        expect(sent.name).toBe("api");
+        expect(sent.data).toHaveProperty("uptime");
     });
 });

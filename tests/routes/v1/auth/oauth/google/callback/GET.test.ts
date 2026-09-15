@@ -131,4 +131,92 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     expect(res.redirectUrl).toContain("billapp://auth");
     expect(res.redirectUrl).toContain("access_token=at");
   });
+
+  it("redirects to failureRedirectUrl when query has error or missing params", async () => {
+    const res = createRes();
+    await GET({ query: { error: "access_denied" } } as any, res);
+
+    expect(res.statusCode).toBe(302);
+    expect(res.redirectUrl).toBe("/error");
+  });
+
+  it("redirects to failureRedirectUrl when Google token exchange fails", async () => {
+    vi.mocked(verifyState).mockReturnValue({ app_key: "bill.iworkhere.com" } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1" } as any);
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      json: () => Promise.resolve({ error: "invalid_grant" }),
+    } as any);
+
+    const res = createRes();
+    await GET({ query: { code: "bad_code", state: "s" } } as any, res);
+
+    expect(res.statusCode).toBe(302);
+    expect(res.redirectUrl).toBe("/error");
+  });
+
+  it("creates new user and oauth record for first-time Google login", async () => {
+    vi.mocked(verifyState).mockReturnValue({ app_key: "bill.iworkhere.com" } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
+    vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue(null as any);
+    vi.mocked(db.query.users.findFirst).mockResolvedValue(null as any);
+
+    let insertCount = 0;
+    insertBuilderMock.returning.mockImplementation(() => {
+      insertCount++;
+      if (insertCount === 1) return Promise.resolve([{ id: "new-user-id" }]);
+      return Promise.resolve([{ userId: "new-user-id" }]);
+    });
+
+    const res = createRes();
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(db.insert).toHaveBeenCalledTimes(2);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("links oauth record to existing user when user exists by email", async () => {
+    vi.mocked(verifyState).mockReturnValue({ app_key: "bill.iworkhere.com" } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
+    vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue(null as any);
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({ id: "existing-user-id" } as any);
+
+    insertBuilderMock.returning.mockResolvedValue([{ userId: "existing-user-id" }]);
+
+    const res = createRes();
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("handles web standard redirect_uri by setting cookie and redirecting without token query params", async () => {
+    vi.mocked(verifyState).mockReturnValue({
+      app_key: "bill.iworkhere.com",
+      redirect_uri: "https://bill.iworkhere.com/dashboard",
+    } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
+    vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
+
+    const res = createRes();
+    const cookieSpy = vi.spyOn(res, 'cookie');
+
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(cookieSpy).toHaveBeenCalledWith('auth_token', 'at', expect.any(Object));
+    expect(res.statusCode).toBe(302);
+    expect(res.redirectUrl).toBe("https://bill.iworkhere.com/dashboard");
+  });
+
+  it("handles unexpected errors in callback by returning 500 Authentication Error", async () => {
+    vi.mocked(verifyState).mockImplementation(() => {
+      throw new Error("Invalid state signature");
+    });
+
+    const res = createRes();
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.sentHtml).toBe("Authentication Error");
+  });
 });

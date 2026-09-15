@@ -62,18 +62,25 @@ function createReq(options?: {
 }
 
 function createRes(): ResMock {
-    return {
+    let finishHandler: (() => void) | undefined;
+    const res = {
         statusCode: 0,
         body: undefined,
+        on(event: string, cb: () => void) {
+            if (event === 'finish') finishHandler = cb;
+            return this;
+        },
         status(code: number) {
             this.statusCode = code;
             return this;
         },
         json(payload: unknown) {
             this.body = payload;
+            if (finishHandler) finishHandler();
             return this;
         },
     } as ResMock;
+    return res;
 }
 
 describe('GET /v1/auth/me', () => {
@@ -236,6 +243,8 @@ describe('GET /v1/auth/me', () => {
 
     it('handles debug mode without changing the response contract', async () => {
         process.env.AUTH_ME_DEBUG = '1';
+        vi.resetModules();
+        const { GET: getWithDebug } = await import('@routes/v1/auth/me/GET');
 
         vi.mocked(getUserById).mockResolvedValue({
             id: 'user-debug',
@@ -252,7 +261,7 @@ describe('GET /v1/auth/me', () => {
         });
         const res = createRes();
 
-        await GET(req, res);
+        await getWithDebug(req, res);
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({

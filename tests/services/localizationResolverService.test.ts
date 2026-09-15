@@ -128,6 +128,15 @@ vi.mock('@cache/localizationCache', () => ({
   getLanguageCandidates: vi.fn((lang: string) => [lang, 'en']),
 }));
 
+vi.mock('@services/translationService', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    translateWithDeepL: vi.fn(),
+    translateWithGemini: vi.fn(),
+  };
+});
+
 import {
   resolveCanonicalSlug,
   fetchBaseEnglishText,
@@ -136,6 +145,7 @@ import {
 } from '@services/localizationResolverService';
 import { dirtyCache } from '@cache/localizationCache';
 import type { Localization } from '@db/schema/localizations';
+import { db } from '@services/dbService';
 
 describe('localizationResolverService', () => {
   beforeEach(() => {
@@ -191,6 +201,36 @@ describe('localizationResolverService', () => {
   });
 
   describe('fetchBaseEnglishText', () => {
+    test('continues to config lookup when localization queries fail', async () => {
+      const select = vi.mocked(db.select);
+      select.mockImplementationOnce(() => {
+        throw new Error('localization database unavailable');
+      });
+
+      await expect(fetchBaseEnglishText('username')).resolves.toBeNull();
+    });
+
+    test('returns fallback text when config queries fail', async () => {
+      const select = vi.mocked(db.select);
+      const defaultSelect = select.getMockImplementation();
+      expect(defaultSelect).toBeDefined();
+      select
+        .mockImplementationOnce(defaultSelect!)
+        .mockImplementationOnce(() => {
+          throw new Error('config database unavailable');
+        });
+
+      await expect(fetchBaseEnglishText('username', 'Fallback text')).resolves.toBe(
+        'Fallback text',
+      );
+    });
+
+    test('returns null when no base text exists for a non-English resolution', async () => {
+      await expect(
+        resolveAndTranslateLocalization({ slug: 'missing_slug', lang: 'fr' }),
+      ).resolves.toBeNull();
+    });
+
     test('fetches English text from localizations table', async () => {
       mockDbState.localizations = [
         {
@@ -230,12 +270,42 @@ describe('localizationResolverService', () => {
       expect(text).toBe('Raw string EULA content');
     });
 
+    test('fetches English text from config table with JSON string containing text property', async () => {
+      mockDbState.config = [
+        {
+          name: 'eula',
+          version: '1.01',
+          value: JSON.stringify({ text: 'Parsed JSON EULA text' }),
+        },
+      ];
+
+      const text = await fetchBaseEnglishText('eula_body_text');
+      expect(text).toBe('Parsed JSON EULA text');
+    });
+
+    test('fetches English text from config table with non-text JSON object', async () => {
+      mockDbState.config = [
+        {
+          name: 'eula',
+          version: '1.01',
+          value: { otherKey: 123 },
+        },
+      ];
+
+      const text = await fetchBaseEnglishText('eula_body_text');
+      expect(text).toBe('{"otherKey":123}');
+    });
+
     test('uses fallbackText when not found in DB', async () => {
       const text = await fetchBaseEnglishText(
         'custom_slug',
         'Default fallback text',
       );
       expect(text).toBe('Default fallback text');
+    });
+
+    test('returns null when slug is empty and no fallback is provided', async () => {
+      expect(await fetchBaseEnglishText('')).toBeNull();
     });
   });
 
@@ -258,6 +328,17 @@ describe('localizationResolverService', () => {
       expect(record?.text).toBe('EULA Agreement');
       expect(record?.value).toBe('EULA Agreement');
       expect(record?.lang).toBe('en_ca');
+    });
+
+    test('returns null when English is requested but no base text exists', async () => {
+      mockDbState.config = [];
+      mockDbState.localizations = [];
+
+      const record = await resolveAndTranslateLocalization({
+        slug: 'nonexistent_slug',
+        lang: 'en',
+      });
+      expect(record).toBeNull();
     });
 
     test('translates and saves into localizations table for non-English request', async () => {
@@ -291,6 +372,80 @@ describe('localizationResolverService', () => {
       expect(record?.value).toBe('Texte du contrat EULA en français');
     });
 
+    test('returns a generated record when persistence returns no rows', async () => {
+      mockDbState.config = [
+        {
+          name: 'eula',
+          version: '1.01',
+          value: { text: 'Base English EULA' },
+        },
+      ];
+      vi.mocked(db.insert).mockImplementationOnce(() => ({
+        values: () => ({
+          onConflictDoUpdate: () => ({
+            returning: async () => [],
+          }),
+        }),
+      }) as any);
+
+      const record = await resolveAndTranslateLocalization({
+        slug: 'eula_body_text',
+        lang: 'es',
+        translator: vi.fn().mockResolvedValue('Texto traducido'),
+      });
+
+      expect(record).toMatchObject({
+        slug: 'eula_body_text',
+        lang: 'es',
+        text: 'Texto traducido',
+        value: 'Texto traducido',
+      });
+      expect(record?.id).toBe('00000000-0000-0000-0000-000000000000');
+    });
+
+    test('persists unchanged source text as a fallback translation', async () => {
+      mockDbState.config = [
+        {
+          name: 'eula',
+          version: '1.01',
+          value: { text: 'Base English EULA' },
+        },
+      ];
+
+      const record = await resolveAndTranslateLocalization({
+        slug: 'eula_body_text',
+        lang: 'es',
+        translator: vi.fn().mockResolvedValue('Base English EULA'),
+      });
+
+      expect(record?.description).toContain('fallback');
+      expect(record?.text).toBe('Base English EULA');
+    });
+
+    test('falls back to Gemini when default translator returns null', async () => {
+      mockDbState.config = [
+        {
+          name: 'eula',
+          version: '1.01',
+          value: { text: 'Base English EULA' },
+        },
+      ];
+
+      const { translateWithDeepL, translateWithGemini } = await import(
+        '@services/translationService'
+      );
+      vi.mocked(translateWithDeepL).mockResolvedValueOnce(null);
+      vi.mocked(translateWithGemini).mockResolvedValueOnce('Texto traducido por Gemini');
+
+      const record = await resolveAndTranslateLocalization({
+        slug: 'eula_body_text',
+        lang: 'es',
+      });
+
+      expect(record).not.toBeNull();
+      expect(record?.text).toBe('Texto traducido por Gemini');
+    });
+
     test('falls back to base English text if translation returns null', async () => {
       mockDbState.config = [
         {
@@ -313,6 +468,27 @@ describe('localizationResolverService', () => {
       expect(record?.lang).toBe('es');
       expect(record?.text).toBe('Base English EULA');
       expect(record?.value).toBe('Base English EULA');
+    });
+
+    test('handles translator exceptions gracefully and falls back to base English', async () => {
+      mockDbState.config = [
+        {
+          name: 'eula',
+          version: '1.01',
+          value: { text: 'Base English EULA' },
+        },
+      ];
+
+      const mockTranslator = vi.fn().mockRejectedValue(new Error('Network failure'));
+
+      const record = await resolveAndTranslateLocalization({
+        slug: 'eula_body_text',
+        lang: 'es',
+        translator: mockTranslator,
+      });
+
+      expect(record).not.toBeNull();
+      expect(record?.text).toBe('Base English EULA');
     });
 
     test('returns null if slug or lang is missing', async () => {

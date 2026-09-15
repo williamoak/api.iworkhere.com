@@ -328,4 +328,101 @@ describe('PUT /v1/auth/register', () => {
     
     loggerSpy.mockRestore()
   })
+
+  test('returns 409 CONFLICT when database throws 23505 with unmapped constraint', async () => {
+    ;(resolveAuthContext as any).mockResolvedValue({
+      applicationId: 'app-id',
+    })
+    ;(hashPassword as any).mockResolvedValue('hashed-password')
+
+    const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+
+    const dbError = new Error('duplicate key value violates unique constraint');
+    (dbError as any).code = '23505';
+
+    ;(db.transaction as any).mockRejectedValueOnce(dbError)
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      username: 'bill',
+      email: 'bill@example.com',
+      password: 'goodpassword',
+    })
+
+    const res = createRes()
+
+    await PUT(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body).toEqual({
+      error: 'CONFLICT',
+      message: 'A conflict occurred with existing data',
+    })
+
+    loggerSpy.mockRestore()
+  })
+
+  test('returns 500 INTERNAL_ERROR on unexpected database error', async () => {
+    ;(resolveAuthContext as any).mockResolvedValue({
+      applicationId: 'app-id',
+    })
+    ;(hashPassword as any).mockResolvedValue('hashed-password')
+
+    const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+
+    ;(db.transaction as any).mockRejectedValueOnce(new Error('Connection lost'))
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      username: 'bill',
+      email: 'bill@example.com',
+      password: 'goodpassword',
+    })
+
+    const res = createRes()
+
+    await PUT(req, res)
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({
+      error: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+    })
+
+    loggerSpy.mockRestore()
+  })
+
+  test('handles sendVerificationEmail background failure without breaking registration', async () => {
+    ;(resolveAuthContext as any).mockResolvedValue({
+      applicationId: 'app-id',
+    })
+    ;(hashPassword as any).mockResolvedValue('hashed-password')
+    ;(issueEmailVerificationToken as any).mockResolvedValue({
+      token: 'raw-email-token',
+    })
+    const { sendVerificationEmail } = await import('@services/auth/emailVerificationService')
+    vi.mocked(sendVerificationEmail).mockRejectedValueOnce(new Error('SMTP down'))
+
+    ;(db.transaction as any).mockImplementation(async (fn: any) =>
+      fn({
+        insert: () => ({
+          values: () => ({}),
+        }),
+      })
+    )
+
+    const req = createReq({
+      app_key: 'bill.iworkhere.com',
+      username: 'bill',
+      email: 'bill@example.com',
+      password: 'goodpassword',
+    })
+
+    const res = createRes()
+
+    await PUT(req, res)
+
+    expect(res.statusCode).toBe(201)
+    expect(res.body.user.status).toBe('pending')
+  })
 })

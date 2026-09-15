@@ -51,7 +51,7 @@ import {
     setCachedSupportedSlugs,
     getLanguageCandidates,
     resetLocalizationCache,
-} from '@cache/localizationCache';
+} from '@routes/v1/localization/localizationCache';
 
 describe('localizationCache', () => {
     beforeEach(() => {

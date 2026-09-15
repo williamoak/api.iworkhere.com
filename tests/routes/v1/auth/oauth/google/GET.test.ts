@@ -26,8 +26,9 @@ vi.mock("@helpers/config", () => ({
 }));
 
 import GET from "@routes/v1/auth/oauth/google/GET";
-import { resolveApplicationFromRequest } from "@services/auth/applicationOriginResolver";
+import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
+import { config } from "@helpers/config";
 
 type ResMock = Response & {
   statusCode: number;
@@ -105,5 +106,186 @@ describe("GET /v1/auth/oauth/google", () => {
 
     expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", "https://bill.iworkhere.com", "redirect");
     expect(res.statusCode).toBe(302);
+  });
+
+  it("uses caller origin directly when redirect_uri is missing and caller origin exists", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockReturnValue("https://custom-caller.iworkhere.com");
+
+    const req = { query: {} } as unknown as Request;
+    const res = createRes();
+
+    await GET(req, res);
+
+    expect(signState).toHaveBeenCalledWith(
+      "bill.iworkhere.com",
+      "https://custom-caller.iworkhere.com",
+      "redirect"
+    );
+    expect(res.statusCode).toBe(302);
+  });
+
+  it("uses caller origin when redirect_uri is relative path", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockReturnValue("https://portal.iworkhere.com/");
+
+    const req = {
+      query: { redirect_uri: "/dashboard" },
+    } as unknown as Request;
+    const res = createRes();
+
+    await GET(req, res);
+
+    expect(signState).toHaveBeenCalledWith(
+      "bill.iworkhere.com",
+      "https://portal.iworkhere.com/dashboard",
+      "redirect"
+    );
+    expect(res.statusCode).toBe(302);
+  });
+
+  it("handles getCallerOrigin error and falls back to APP_URL", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockImplementation(() => {
+      throw new Error("Invalid origin");
+    });
+
+    const req = { query: {} } as unknown as Request;
+    const res = createRes();
+
+    await GET(req, res);
+
+    expect(signState).toHaveBeenCalledWith(
+      "bill.iworkhere.com",
+      "https://bill.iworkhere.com",
+      "redirect"
+    );
+    expect(res.statusCode).toBe(302);
+  });
+
+  it("falls back to APP_URL when no caller origin is available", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockReturnValue(undefined);
+
+    const req = { query: {} } as unknown as Request;
+    const res = createRes();
+
+    await GET(req, res);
+
+    expect(signState).toHaveBeenCalledWith(
+      "bill.iworkhere.com",
+      "https://bill.iworkhere.com",
+      "redirect"
+    );
+  });
+
+  it("leaves redirect_uri undefined when both origin fallbacks are unavailable", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockReturnValue(undefined);
+    const originalAppUrl = config.APP_URL;
+    delete config.APP_URL;
+
+    try {
+      const req = { query: {} } as unknown as Request;
+      const res = createRes();
+
+      await GET(req, res);
+
+      expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", undefined, "redirect");
+    } finally {
+      config.APP_URL = originalAppUrl;
+    }
+  });
+
+  it("leaves redirect_uri undefined when origin resolution fails without APP_URL", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockImplementation(() => {
+      throw new Error("Invalid origin");
+    });
+    const originalAppUrl = config.APP_URL;
+    delete config.APP_URL;
+
+    try {
+      const req = { query: {} } as unknown as Request;
+      const res = createRes();
+
+      await GET(req, res);
+
+      expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", undefined, "redirect");
+    } finally {
+      config.APP_URL = originalAppUrl;
+    }
+  });
+
+  it("uses APP_URL to expand a relative redirect when caller origin is unavailable", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockReturnValue(undefined);
+
+    const req = { query: { redirect_uri: "/mobile/callback" } } as unknown as Request;
+    const res = createRes();
+
+    await GET(req, res);
+
+    expect(signState).toHaveBeenCalledWith(
+      "bill.iworkhere.com",
+      "https://bill.iworkhere.com/mobile/callback",
+      "redirect"
+    );
+  });
+
+  it("does not expand a relative redirect when no base origin exists", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(getCallerOrigin).mockReturnValue(undefined);
+    const originalAppUrl = config.APP_URL;
+    delete config.APP_URL;
+
+    try {
+      const req = { query: { redirect_uri: "/mobile/callback" } } as unknown as Request;
+      const res = createRes();
+
+      await GET(req, res);
+
+      expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", "/mobile/callback", "redirect");
+    } finally {
+      config.APP_URL = originalAppUrl;
+    }
+  });
+
+  it("passes undefined redirect_uri to signState for a non-string query value", async () => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+
+    const req = { query: { redirect_uri: ["/one", "/two"] } } as unknown as Request;
+    const res = createRes();
+
+    await GET(req, res);
+
+    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", undefined, "redirect");
   });
 });

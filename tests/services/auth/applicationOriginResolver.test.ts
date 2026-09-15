@@ -1,9 +1,14 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { Request } from 'express'
 import { AuthError } from '@services/auth/authContext'
-import { resolveApplicationFromRequest } from '@services/auth/applicationOriginResolver'
+import {
+    getCallerOrigin,
+    normalizeOrigin,
+    resolveApplicationFromRequest,
+} from '@services/auth/applicationOriginResolver'
 import { db } from '@services/dbService'
 import * as authContextModule from '@services/auth/authContext'
+import { config } from '@helpers/config'
 
 /**
  * ------------------------------------------------------------
@@ -64,6 +69,39 @@ const createMockRequest = (overrides: Partial<Request> = {}): Request => ({
  */
 
 describe('applicationOriginResolver', () => {
+    describe('origin parsing', () => {
+        test('normalizes origin protocol, host, and case', () => {
+            expect(normalizeOrigin('HTTPS://Example.COM/path?q=1')).toBe('https://example.com')
+        })
+
+        test('uses referer origin when origin header is absent', () => {
+            const req = createMockRequest({
+                get: ((header: string) => header === 'referer' ? 'https://Example.com/page' : undefined) as any,
+            })
+
+            expect(getCallerOrigin(req)).toBe('https://example.com')
+        })
+
+        test('rejects an invalid origin header', () => {
+            const req = createMockRequest({
+                get: ((header: string) => header === 'origin' ? 'not a url' : undefined) as any,
+            })
+
+            expect(() => getCallerOrigin(req)).toThrowError(
+                expect.objectContaining({ code: 'ORIGIN_INVALID', httpStatus: 400 }),
+            )
+        })
+
+        test('rejects an invalid referer header', () => {
+            const req = createMockRequest({
+                get: ((header: string) => header === 'referer' ? 'not a url' : undefined) as any,
+            })
+
+            expect(() => getCallerOrigin(req)).toThrowError(
+                expect.objectContaining({ code: 'REFERER_INVALID', httpStatus: 400 }),
+            )
+        })
+    })
 
     describe('resolveApplicationFromRequest', () => {
         test('resolves from explicit app_key in query', async () => {
@@ -133,6 +171,38 @@ describe('applicationOriginResolver', () => {
                 code: 'APP_ORIGIN_REQUIRED'
             })
         })
+
+        test('uses a valid APP_URL when request has no origin', async () => {
+            config.APP_URL = 'https://Configured.Example/path'
+            ;(db.select as any).mockReturnValue({
+                from: () => ({
+                    innerJoin: () => ({
+                        where: () => ({
+                            limit: () => Promise.resolve([{
+                                applicationId: 'configured-app',
+                                applicationKey: 'configured-key',
+                                applicationEnabled: true,
+                                originEnabled: true,
+                            }]),
+                        }),
+                    }),
+                }),
+            })
+
+            await expect(resolveApplicationFromRequest(createMockRequest())).resolves.toMatchObject({
+                applicationId: 'configured-app',
+            })
+            delete config.APP_URL
+        })
+
+        test('requires an origin when APP_URL is invalid', async () => {
+            config.APP_URL = 'not a url'
+
+            await expect(resolveApplicationFromRequest(createMockRequest())).rejects.toMatchObject({
+                code: 'APP_ORIGIN_REQUIRED',
+            })
+            delete config.APP_URL
+        })
     })
 
     describe('resolveAuthContextFromOrigin DB logic', () => {
@@ -179,6 +249,27 @@ describe('applicationOriginResolver', () => {
             await expect(resolveApplicationFromRequest(req)).rejects.toMatchObject({
                 code: 'APP_ORIGIN_DISABLED'
             })
+        })
+
+        test('throws APP_DISABLED if the resolved application is disabled', async () => {
+            ;(db.select as any).mockReturnValue({
+                from: () => ({
+                    innerJoin: () => ({
+                        where: () => ({
+                            limit: () => Promise.resolve([{
+                                applicationId: 'app',
+                                applicationKey: 'key',
+                                applicationEnabled: false,
+                                originEnabled: true,
+                            }]),
+                        }),
+                    }),
+                }),
+            })
+
+            await expect(resolveApplicationFromRequest(createMockRequest({
+                get: ((header: string) => header === 'origin' ? 'https://disabled-app.com' : undefined) as any,
+            }))).rejects.toMatchObject({ code: 'APP_DISABLED' })
         })
     })
 })

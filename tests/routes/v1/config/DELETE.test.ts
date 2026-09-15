@@ -208,6 +208,43 @@ describe("DELETE /v1/config", () => {
         expect(res.body.error).toBe("INVALID_REQUEST")
     })
 
+    test("returns 404 when name-only delete matches zero records", async () => {
+        vi.spyOn(repo, "findByName").mockResolvedValueOnce([])
+
+        const req = createReq({ name: "missing" })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(404)
+        expect(res.body.error).toBe("NOT_FOUND")
+    })
+
+    test("returns 404 when name + version delete matches zero records", async () => {
+        vi.spyOn(repo, "findByNameAndVersion").mockResolvedValueOnce([])
+
+        const req = createReq({ name: "missing", version: "1.00" })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(404)
+        expect(res.body.error).toBe("NOT_FOUND")
+    })
+
+    test("returns 400 when uuid is combined with version", async () => {
+        const req = createReq({
+            uuid: "uuid",
+            version: "1.00",
+        })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(400)
+        expect(res.body.error).toBe("INVALID_REQUEST")
+    })
+
     test("returns 400 when no identifier is provided", async () => {
         const req = createReq({})
         const res = createRes()
@@ -216,5 +253,32 @@ describe("DELETE /v1/config", () => {
 
         expect(res.statusCode).toBe(400)
         expect(res.body.error).toBe("INVALID_REQUEST")
+    })
+
+    describe("dbConfigDeleteRepository queries", () => {
+        test("executes database queries in deleteById, findByName, and findByNameAndVersion", async () => {
+            const { db } = await import("@services/dbService")
+            
+            vi.mocked(db.delete).mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    returning: vi.fn().mockResolvedValue([{ id: "uuid-1" }]),
+                }),
+            } as any)
+
+            const deleted = await repo.deleteById("uuid-1")
+            expect(deleted).toBe(true)
+
+            vi.mocked(db.select).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockResolvedValue([{ id: "1" }]),
+                }),
+            } as any)
+
+            const byName = await repo.findByName("test")
+            expect(byName).toHaveLength(1)
+
+            const byNameVer = await repo.findByNameAndVersion("test", "1.00")
+            expect(byNameVer).toHaveLength(1)
+        })
     })
 })

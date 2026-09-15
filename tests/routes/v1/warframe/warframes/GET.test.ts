@@ -231,6 +231,66 @@ describe("GET /v1/warframe/warframes", () => {
         expect(res.body.data.warframe.base_health).toBe(100)
     })
 
+    test("resolves a warframe when warframe_id is provided as an array", async () => {
+        ;(db.select as any)
+            .mockReturnValueOnce({
+                from: async () => [
+                    { warframe_id: "1", name: "Excalibur" },
+                ],
+            })
+            .mockReturnValueOnce({
+                from: () => ({
+                    where: async () => [
+                        {
+                            warframeId: "1",
+                            name: "Excalibur",
+                            baseHealth: 100,
+                        },
+                    ],
+                }),
+            })
+
+        const req = createReq({
+            warframe_id: ["1", "2"],
+        })
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.warframe.name).toBe("Excalibur")
+    })
+
+    test("resolves a warframe when warframe_id is provided as an array with mixed types", async () => {
+        ;(db.select as any)
+            .mockReturnValueOnce({
+                from: async () => [
+                    { warframe_id: "1", name: "Excalibur" },
+                ],
+            })
+            .mockReturnValueOnce({
+                from: () => ({
+                    where: async () => [
+                        {
+                            warframeId: "1",
+                            name: "Excalibur",
+                            baseHealth: 100,
+                        },
+                    ],
+                }),
+            })
+
+        const req = createReq({
+            warframe_id: ["1", 123 as any],
+        })
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.warframe.name).toBe("Excalibur")
+    })
+
     test("returns empty warframe when warframe_id does not match any record", async () => {
         ;(db.select as any)
             .mockReturnValueOnce({

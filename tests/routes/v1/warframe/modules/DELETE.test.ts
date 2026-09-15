@@ -142,6 +142,30 @@ describe('DELETE /v1/warframe/modules', () => {
         expect(res.body.data.name).toBe('Vitality')
     })
 
+    test('deletes a module when mod_id is supplied as an array', async () => {
+        ;(db.delete as any).mockReturnValueOnce({
+            where: () => ({
+                returning: async () => [
+                    {
+                        modId: '1',
+                        name: 'Vitality',
+                    },
+                ],
+            }),
+        })
+
+        const req = createReq({
+            mod_id: ['1', '2'],
+        })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.name).toBe('Vitality')
+    })
+
     test('succeeds with null data when no matching record exists', async () => {
         ;(db.delete as any).mockReturnValueOnce({
             where: () => ({

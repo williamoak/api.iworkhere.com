@@ -215,4 +215,19 @@ describe("adminApp", () => {
             loggerErrorSpy.mockRestore();
         });
     });
+
+    describe("welcomePage client template", () => {
+        it("renders authenticated and unauthenticated welcome pages", async () => {
+            const { welcomePage } = await import("@src/admin/client/welcomePage");
+            const authed = welcomePage(true);
+            expect(authed).toContain("You are logged in");
+            expect(authed).toContain("Go to Admin Dashboard");
+
+            const unauthed = welcomePage(false);
+            expect(unauthed).toContain('form action="/admin/login"');
+            expect(unauthed).toContain("Username:");
+
+            await import("@src/admin/client/index");
+        });
+    });
 });

@@ -11,6 +11,7 @@
 
 import { describe, test, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { logger } from '@helpers/logger'
+import { configGet } from '@helpers/config'
 
 /**
  * ------------------------------------------------------------
@@ -227,9 +228,23 @@ describe('issueEmailVerificationToken', () => {
       httpStatus: 400,
     })
   })
+
+  test('rejects an invalid token TTL configuration', async () => {
+    vi.mocked(configGet).mockReturnValueOnce('not-a-number' as any)
+
+    await expect(issueEmailVerificationToken({
+      userId: 'user-id', applicationId: 'app-id', email: 'bill@example.com',
+    })).rejects.toThrow('EMAIL_VERIFY_TOKEN_TTL_SECONDS misconfigured')
+  })
 })
 
 describe('resendEmailVerificationToken', () => {
+  test('does nothing when email is missing or blank', async () => {
+    await resendEmailVerificationToken({ applicationId: 'app-id' })
+    await resendEmailVerificationToken({ applicationId: 'app-id', email: '   ' })
+
+    expect(db.select).not.toHaveBeenCalled()
+  })
   test('does nothing if user not found', async () => {
     mockSelectOnce([])
 
@@ -288,5 +303,30 @@ describe('resendEmailVerificationToken', () => {
     // Verify that sendEmail was called
     const { sendEmail } = await import('@helpers/mailer');
     expect(sendEmail).toHaveBeenCalled();
+  })
+
+  test('logs background email failures without rejecting resend', async () => {
+    mockSelectOnce([{ userId: 'user-id', status: 'pending' }])
+    ;(db.transaction as any).mockImplementation(async (fn: any) => {
+      await fn({
+        delete: () => ({ where: () => Promise.resolve() }),
+        insert: () => ({ values: () => Promise.resolve() }),
+      })
+    })
+    const { sendEmail } = await import('@helpers/mailer')
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error('SMTP unavailable'))
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+
+    await expect(resendEmailVerificationToken({
+      applicationId: 'app-id', email: 'user@example.com',
+    })).resolves.toBeUndefined()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[resend] Background email send failed:',
+      expect.any(Error),
+    )
+    errorSpy.mockRestore()
   })
 })

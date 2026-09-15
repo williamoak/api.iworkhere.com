@@ -78,6 +78,7 @@ vi.mock('drizzle-orm', () => ({
   inArray: vi.fn(),
   sql: vi.fn().mockReturnValue({}),
   desc: vi.fn(),
+  asc: vi.fn(),
 }));
 
 /**

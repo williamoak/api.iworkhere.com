@@ -56,7 +56,7 @@ function createReq(body: any, auth: any = { userId: 'u123' }): Request {
   return {
     body,
     validated: { body },
-    auth,
+    auth: auth ? auth : undefined,
   } as unknown as Request;
 }
 
@@ -117,6 +117,31 @@ describe('PUT /v1/auth/upgrade', () => {
         username: 'newuser',
         status: 'active'
       }
+    });
+  });
+
+  it('returns 401 when request is not authenticated', async () => {
+    const req = createReq({ username: 'newuser', password: 'password123' }, null);
+    const res = createRes();
+
+    await PUT(req, res);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+  });
+
+  it('returns 500 when transaction throws generic error', async () => {
+    mockTx.query.userAuthLocal.findFirst.mockRejectedValue(new Error('DB transaction crash'));
+
+    const req = createReq({ username: 'newuser', password: 'password123' });
+    const res = createRes();
+
+    await PUT(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({
+      error: 'INTERNAL_ERROR',
+      message: 'DB transaction crash',
     });
   });
 });

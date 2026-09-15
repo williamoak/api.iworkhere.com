@@ -24,6 +24,7 @@ import {
   mapToDeepLTargetLang,
   getLanguageName,
   translateWithDeepL,
+  translateWithGemini,
   LANGUAGE_NAME_MAP,
   DEEPL_TARGET_LANG_MAP,
 } from '@services/translationService';
@@ -65,6 +66,7 @@ describe('translationService', () => {
     });
 
     it('falls back gracefully to uppercase base tag for other languages', () => {
+      expect(mapToDeepLTargetLang('')).toBe('EN');
       expect(mapToDeepLTargetLang('ko_kr')).toBe('KO');
       expect(mapToDeepLTargetLang('sv')).toBe('SV');
     });
@@ -91,6 +93,11 @@ describe('translationService', () => {
 
     it('falls back to uppercase for unknown language codes', () => {
       expect(getLanguageName('custom_lang')).toBe('CUSTOM_LANG');
+    });
+
+    it('resolves names from dialect segments and two-letter prefixes', () => {
+      expect(getLanguageName('region-fr')).toBe('French');
+      expect(getLanguageName('es419')).toBe('Spanish');
     });
 
     it('exports expected lookup dictionaries', () => {
@@ -142,6 +149,23 @@ describe('translationService', () => {
       expect(result).toBe('Bonjour le monde');
     });
 
+    it('includes requested formality in the DeepL payload', async () => {
+      process.env.DEEPL_API_KEY = 'mock-key';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ translations: [{ text: 'Bonjour' }] }),
+      });
+
+      await translateWithDeepL('Hello', 'fr', { formality: 'more' });
+
+      const [, options] = (global.fetch as any).mock.calls[0];
+      expect(JSON.parse(options.body)).toMatchObject({
+        text: ['Hello'],
+        target_lang: 'FR',
+        formality: 'more',
+      });
+    });
+
     it('sends POST request to DeepL pro endpoint when key does not end with :fx', async () => {
       process.env.DEEPL_API_KEY = 'pro-key-abc';
 
@@ -182,6 +206,89 @@ describe('translationService', () => {
 
       const result = await translateWithDeepL('Hello world', 'can_fr');
       expect(result).toBeNull();
+    });
+
+    it('returns null when DeepL response has no translation text', async () => {
+      process.env.DEEPL_API_KEY = 'mock-key';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ translations: [] }),
+      });
+
+      await expect(translateWithDeepL('Hello world', 'fr')).resolves.toBeNull();
+    });
+  });
+
+  describe('translateWithGemini', () => {
+    it('returns original text if input is empty or whitespace', async () => {
+      expect(await translateWithGemini('', 'es')).toBe('');
+      expect(await translateWithGemini('   ', 'es')).toBe('   ');
+    });
+
+    it('returns null when no Gemini API key is configured', async () => {
+      delete process.env.GEMINI_KEY;
+      delete process.env.GEMINI_API_KEY;
+
+      const result = await translateWithGemini('Hello world', 'es');
+      expect(result).toBeNull();
+    });
+
+    it('translates text using Gemini API successfully', async () => {
+      process.env.GEMINI_KEY = 'gemini-key-123';
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: '"Hola Mundo"' }],
+              },
+            },
+          ],
+        }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await translateWithGemini('Hello World', 'es');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toContain('gemini-3.6-flash:generateContent?key=gemini-key-123');
+      expect(options.method).toBe('POST');
+      expect(result).toBe('Hola Mundo');
+    });
+
+    it('handles Gemini HTTP error response', async () => {
+      process.env.GEMINI_KEY = 'gemini-key-123';
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error',
+      });
+
+      const result = await translateWithGemini('Hello World', 'es');
+      expect(result).toBeNull();
+    });
+
+    it('handles Gemini network throw gracefully', async () => {
+      process.env.GEMINI_KEY = 'gemini-key-123';
+
+      global.fetch = vi.fn().mockRejectedValue(new Error('Fetch timeout'));
+
+      const result = await translateWithGemini('Hello World', 'es');
+      expect(result).toBeNull();
+    });
+
+    it('returns null when Gemini succeeds without translated text', async () => {
+      process.env.GEMINI_KEY = 'gemini-key-123';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ candidates: [] }),
+      });
+
+      await expect(translateWithGemini('Hello World', 'es')).resolves.toBeNull();
     });
   });
 });

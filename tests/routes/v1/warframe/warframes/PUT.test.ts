@@ -211,6 +211,82 @@ describe("PUT /v1/warframe/warframes", () => {
         expect(res.body.data.class).toBe("normal")
     })
 
+    test("inserts when multiple warframes match name but 0 match class", async () => {
+        ;(db.select as any).mockReturnValueOnce({
+            from: () => ({
+                where: async () => [
+                    { warframeId: "1", class: "prime" },
+                    { warframeId: "2", class: "umbra" },
+                ],
+            }),
+        })
+        ;(db.insert as any).mockReturnValueOnce({
+            values: () => ({
+                returning: async () => [
+                    {
+                        warframeId: "3",
+                        name: "Excalibur",
+                        class: "normal",
+                        baseHealth: 100,
+                    },
+                ],
+            }),
+        })
+
+        const req = createReq({
+            name: "Excalibur",
+            class: "normal",
+            base_health: 100,
+        })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(db.select).toHaveBeenCalledOnce()
+        expect(db.insert).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+    })
+
+    test("updates when multiple warframes match name and exactly 1 matches class", async () => {
+        ;(db.select as any).mockReturnValueOnce({
+            from: () => ({
+                where: async () => [
+                    { warframeId: "1", class: "prime" },
+                    { warframeId: "2", class: "normal" },
+                ],
+            }),
+        })
+        ;(db.update as any).mockReturnValueOnce({
+            set: () => ({
+                where: () => ({
+                    returning: async () => [
+                        {
+                            warframeId: "2",
+                            name: "Excalibur",
+                            class: "normal",
+                            baseHealth: 150,
+                        },
+                    ],
+                }),
+            }),
+        })
+
+        const req = createReq({
+            name: "Excalibur",
+            class: "normal",
+            base_health: 150,
+        })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(db.select).toHaveBeenCalledOnce()
+        expect(db.update).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+    })
+
     test("returns 409 when multiple warframes match name and class", async () => {
         ;(db.select as any).mockReturnValueOnce({
             from: () => ({
@@ -232,6 +308,106 @@ describe("PUT /v1/warframe/warframes", () => {
         expect(res.statusCode).toBe(409)
         expect(res.body.success).toBe(false)
         expect(res.body.error).toContain("Multiple warframes")
+    })
+
+    test("updates a warframe when name resolves to exactly one match", async () => {
+        ;(db.select as any).mockReturnValueOnce({
+            from: () => ({
+                where: async () => [
+                    {
+                        warframeId: "1",
+                        name: "Excalibur",
+                        class: "normal",
+                    },
+                ],
+            }),
+        })
+
+        ;(db.update as any).mockReturnValueOnce({
+            set: () => ({
+                where: () => ({
+                    returning: async () => [
+                        {
+                            warframeId: "1",
+                            name: "Excalibur",
+                            class: "normal",
+                            baseHealth: 150,
+                        },
+                    ],
+                }),
+            }),
+        })
+
+        const req = createReq({
+            name: "Excalibur",
+            class: "normal",
+            base_health: 150,
+        })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(db.select).toHaveBeenCalledOnce()
+        expect(db.update).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+    })
+
+    test("performs fallback insert when neither warframe_id nor name is provided", async () => {
+        ;(db.insert as any).mockReturnValueOnce({
+            values: () => ({
+                returning: async () => [{ warframeId: "new-wf", baseHealth: 100 }],
+            }),
+        })
+
+        const req = createReq({ base_health: 100 })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(db.insert).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+    })
+
+    test("handles ZodError and returns 400 with missing and empty field details", async () => {
+        const { z } = await import("zod")
+        const { warframeInsertSchema } = await import("@src/validation/warframe")
+        const { overlayDto } = await import("@src/dto/dtoOverlay")
+        
+        vi.mocked(overlayDto).mockReturnValueOnce({
+            merged: {
+                name: "",
+                description: null,
+                class: "normal",
+                missingField: "value",
+            },
+            providedFields: new Set(["name", "description", "class"]),
+        } as any)
+
+        const zodErr = new z.ZodError([
+            {
+                code: "invalid_type",
+                expected: "string",
+                received: "undefined",
+                path: ["name"],
+                message: "Required",
+            },
+        ])
+        vi.mocked(warframeInsertSchema.parse).mockImplementationOnce(() => {
+            throw zodErr
+        })
+
+        const req = createReq({})
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(400)
+        expect(res.body.error).toBe("Validation failed")
+        expect(res.body.details).toBeDefined()
+        expect(res.body.missing_fields).toEqual(["missingField"])
+        expect(res.body.empty_fields).toEqual(["name", "description"])
     })
 
     test("returns 500 on unexpected errors", async () => {

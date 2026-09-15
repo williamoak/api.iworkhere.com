@@ -69,6 +69,16 @@ describe('resolveAuthContext', () => {
             })
     })
 
+    test('uses the request host when body has no app_key', async () => {
+        mockDbResult([{ id: 'app-id', appKey: 'host.example', isEnabled: true }])
+
+        const req = { get: (header: string) => header === 'host' ? 'host.example' : undefined } as any
+        await expect(resolveAuthContext({}, req)).resolves.toEqual({
+            applicationId: 'app-id',
+            applicationKey: 'host.example',
+        })
+    })
+
     test('throws if application is not found', async () => {
         mockDbResult([])
 

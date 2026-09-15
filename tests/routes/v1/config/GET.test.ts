@@ -1,26 +1,3 @@
-/**
- * @myDocBlock v2.3
- * @file GET.test.ts
- * @internal
- * @module tests/routes/v1/config
- * @tag config, test
- * @version 1.1.0
- * @author william.r.oak@gmail.com
- * @path tests/routes/v1/config/GET.test.ts
- * @summary Unit tests for GET /v1/config (deterministic contract).
- *
- * @description
- * Verifies that GET /v1/config enforces strict identifier-based resolution:
- *   - returns all records when no query params are provided
- *   - returns a single record by id
- *   - returns a single record by name + version
- *   - rejects ambiguous name-only lookups
- *   - rejects version-only lookups
- *   - rejects invalid identifier combinations
- *
- * These tests are security-critical and must not regress.
- */
-
 import { describe, test, expect, vi, beforeEach } from "vitest"
 import type { Request, Response } from "express"
 
@@ -48,7 +25,8 @@ vi.mock("@db/schema/config", () => ({
 /* Imports                                                            */
 /* ------------------------------------------------------------------ */
 
-import GET from "@routes/v1/config/GET"
+import GET, { __test__ } from "@routes/v1/config/GET"
+import { db } from "@services/dbService"
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
@@ -84,36 +62,7 @@ function createRes(): ResMock {
     return res as unknown as ResMock
 }
 
-/* ------------------------------------------------------------------ */
-/* Repository spy injection                                           */
-/* ------------------------------------------------------------------ */
-
-const repoSpy = {
-    getById: vi.fn(),
-    findByName: vi.fn(),
-    findByNameAndVersion: vi.fn(),
-    getAll: vi.fn(),
-}
-
-vi.mock("@routes/v1/config/GET", async (importOriginal) => {
-    const actual = await importOriginal<any>()
-
-    return {
-        ...actual,
-        __test__: actual.__test__,
-        default: async (req: Request, res: Response) => {
-            // Patch repository at runtime
-            actual.__test__.dbConfigRepository.getById = repoSpy.getById
-            actual.__test__.dbConfigRepository.findByName =
-                repoSpy.findByName
-            actual.__test__.dbConfigRepository.findByNameAndVersion =
-                repoSpy.findByNameAndVersion
-            actual.__test__.dbConfigRepository.getAll = repoSpy.getAll
-
-            return actual.default(req, res)
-        },
-    }
-})
+const repo = __test__.dbConfigRepository
 
 beforeEach(() => {
     vi.clearAllMocks()
@@ -125,9 +74,9 @@ beforeEach(() => {
 
 describe("GET /v1/config", () => {
     test("returns all records when no query params are provided", async () => {
-        repoSpy.getAll.mockResolvedValueOnce([
-            { id: "1" },
-            { id: "2" },
+        vi.spyOn(repo, "getAll").mockResolvedValueOnce([
+            { id: "1" } as any,
+            { id: "2" } as any,
         ])
 
         const req = createReq({})
@@ -137,15 +86,15 @@ describe("GET /v1/config", () => {
 
         expect(res.statusCode).toBe(200)
         expect(res.body).toHaveLength(2)
-        expect(repoSpy.getAll).toHaveBeenCalledOnce()
+        expect(repo.getAll).toHaveBeenCalledOnce()
     })
 
     test("returns a single record by id", async () => {
-        repoSpy.getById.mockResolvedValueOnce({
+        vi.spyOn(repo, "getById").mockResolvedValueOnce({
             id: "abc",
             name: "test",
             version: "1.02",
-        })
+        } as any)
 
         const req = createReq({ id: "abc" })
         const res = createRes()
@@ -154,11 +103,11 @@ describe("GET /v1/config", () => {
 
         expect(res.statusCode).toBe(200)
         expect(res.body.id).toBe("abc")
-        expect(repoSpy.getById).toHaveBeenCalledOnce()
+        expect(repo.getById).toHaveBeenCalledOnce()
     })
 
     test("returns 404 when id does not exist", async () => {
-        repoSpy.getById.mockResolvedValueOnce(null)
+        vi.spyOn(repo, "getById").mockResolvedValueOnce(null)
 
         const req = createReq({ id: "missing" })
         const res = createRes()
@@ -170,8 +119,8 @@ describe("GET /v1/config", () => {
     })
 
     test("returns a single record by name + version", async () => {
-        repoSpy.findByNameAndVersion.mockResolvedValueOnce([
-            { id: "1", version: "1.03" },
+        vi.spyOn(repo, "findByNameAndVersion").mockResolvedValueOnce([
+            { id: "1", version: "1.03" } as any,
         ])
 
         const req = createReq({ name: "test", version: "1.03" })
@@ -184,7 +133,7 @@ describe("GET /v1/config", () => {
     })
 
     test("returns 404 when name + version does not match", async () => {
-        repoSpy.findByNameAndVersion.mockResolvedValueOnce([])
+        vi.spyOn(repo, "findByNameAndVersion").mockResolvedValueOnce([])
 
         const req = createReq({ name: "test", version: "9.99" })
         const res = createRes()
@@ -195,10 +144,51 @@ describe("GET /v1/config", () => {
         expect(res.body.error).toBe("NOT_FOUND")
     })
 
+    test("returns 409 when name and version matches multiple records", async () => {
+        vi.spyOn(repo, "findByNameAndVersion").mockResolvedValueOnce([
+            { id: "1", version: "1.00" } as any,
+            { id: "2", version: "1.00" } as any,
+        ])
+
+        const req = createReq({ name: "test", version: "1.00" })
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(409)
+        expect(res.body.error).toBe("CONFLICT")
+    })
+
+    test("returns 200 when name-only lookup finds exactly one record", async () => {
+        vi.spyOn(repo, "findByName").mockResolvedValueOnce([
+            { id: "1", name: "test", version: "1.00" } as any,
+        ])
+
+        const req = createReq({ name: "test" })
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(res.body.id).toBe("1")
+    })
+
+    test("returns 404 when name-only lookup finds zero records", async () => {
+        vi.spyOn(repo, "findByName").mockResolvedValueOnce([])
+
+        const req = createReq({ name: "missing-name" })
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(404)
+        expect(res.body.error).toBe("NOT_FOUND")
+    })
+
     test("returns 409 when name-only lookup is ambiguous", async () => {
-        repoSpy.findByName.mockResolvedValueOnce([
-            { id: "1" },
-            { id: "2" },
+        vi.spyOn(repo, "findByName").mockResolvedValueOnce([
+            { id: "1" } as any,
+            { id: "2" } as any,
         ])
 
         const req = createReq({ name: "test" })
@@ -231,5 +221,83 @@ describe("GET /v1/config", () => {
 
         expect(res.statusCode).toBe(400)
         expect(res.body.error).toBe("INVALID_REQUEST")
+    })
+
+    describe("dbConfigRepository queries", () => {
+        test("executes database queries in getById", async () => {
+            vi.mocked(db.select).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue([
+                            {
+                                id: "uuid-1",
+                                name: "config-key",
+                                version: 1.0,
+                                value: { setting: true },
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                            },
+                        ]),
+                    }),
+                }),
+            } as any)
+
+            const rec = await repo.getById("uuid-1")
+            expect(rec?.name).toBe("config-key")
+
+            vi.mocked(db.select).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue([]),
+                    }),
+                }),
+            } as any)
+
+            const missing = await repo.getById("missing")
+            expect(missing).toBeNull()
+        })
+
+        test("executes database queries in findByName", async () => {
+            vi.mocked(db.select).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        orderBy: vi.fn().mockResolvedValue([
+                            { id: "1", name: "k", version: 1.0, value: {}, createdAt: new Date(), updatedAt: new Date() },
+                        ]),
+                    }),
+                }),
+            } as any)
+
+            const list = await repo.findByName("k")
+            expect(list).toHaveLength(1)
+        })
+
+        test("executes database queries in findByNameAndVersion", async () => {
+            vi.mocked(db.select).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue([
+                            { id: "1", name: "k", version: 1.0, value: {}, createdAt: new Date(), updatedAt: new Date() },
+                        ]),
+                    }),
+                }),
+            } as any)
+
+            const list = await repo.findByNameAndVersion("k", "1.0")
+            expect(list).toHaveLength(1)
+        })
+
+        test("executes database queries in getAll", async () => {
+            vi.mocked(db.select).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    orderBy: vi.fn().mockResolvedValue([
+                        { id: "1", name: "k", version: 1.0, value: {}, createdAt: new Date(), updatedAt: new Date() },
+                    ]),
+                }),
+            } as any)
+
+            const list = await repo.getAll()
+            expect(list).toHaveLength(1)
+        })
     })
 })

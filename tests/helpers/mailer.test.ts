@@ -170,24 +170,60 @@ describe('mailer', () => {
             consoleSpy.mockRestore()
         })
 
-        test('includes auditType in mailer call', async () => {
+        test('logs ethereal preview URL when SMTP_HOST includes ethereal', async () => {
+            const { configGet } = await import('@helpers/config');
+            vi.mocked(configGet).mockImplementation((key: string) => {
+                const config: Record<string, string> = {
+                    SMTP_HOST: 'smtp.ethereal.email',
+                    SMTP_PORT: '465',
+                    SMTP_USER: 'test@ethereal.email',
+                    SMTP_PASS: 'password',
+                    SMTP_FROM_EMAIL: 'noreply@test.com',
+                    DEBUG: 'true'
+                };
+                return config[key] || '';
+            });
+
+            resetTransporter();
+
             mockSendMail.mockResolvedValue({
-                messageId: 'msg-123',
-            })
+                messageId: 'msg-ethereal',
+            });
+
+            const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+            await sendEmail({
+                to: 'user@example.com',
+                subject: 'Test Ethereal',
+                text: 'Test body',
+            });
+
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Preview URL: http://ethereal.email/message/123')
+            );
+
+            consoleSpy.mockRestore();
+        })
+
+        test('handles non-Error objects during failed send', async () => {
+            mockSendMail.mockRejectedValue('Raw string error');
 
             await sendEmail({
                 to: 'user@example.com',
                 subject: 'Test',
                 text: 'Test',
-                auditType: 'password_reset',
-                auditUserId: 'user-456',
-            })
+                throwOnError: false,
+                auditUserId: 'user-123',
+                auditType: 'verification',
+            });
 
             expect(logEmailAudit).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    emailType: 'password_reset',
+                    status: 'failed',
+                    errorMessage: 'Raw string error',
                 })
-            )
+            );
         })
+
     })
 })

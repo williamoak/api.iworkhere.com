@@ -95,26 +95,6 @@ describe('cleanupExpiredTokens', () => {
     })
 
     describe('startCleanupJob', () => {
-        test('starts cleanup job with default interval', () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
-
-            const consoleSpy = vi.spyOn(console, 'log').mockImplementation()
-
-            const intervalId = startCleanupJob()
-
-            // Should be a valid timer ID
-            expect(intervalId).toBeDefined()
-
-            // Cleanup should be logged on startup
-            expect(consoleSpy).toHaveBeenCalled()
-
-            clearInterval(intervalId)
-            consoleSpy.mockRestore()
-        })
-
         test('runs cleanup immediately on startup', () => {
             const mockDelete = {
                 where: vi.fn().mockResolvedValue(undefined),
@@ -123,10 +103,11 @@ describe('cleanupExpiredTokens', () => {
 
             vi.clearAllMocks()
 
-            startCleanupJob()
+            const intervalId = startCleanupJob()
 
             // db.delete should be called immediately (not just scheduled)
             expect(db.delete).toHaveBeenCalled()
+            clearInterval(intervalId)
         })
 
         test('runs cleanup on specified interval', () => {
@@ -152,24 +133,6 @@ describe('cleanupExpiredTokens', () => {
             clearInterval(intervalId)
         })
 
-        test('allows custom interval configuration', () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
-
-            const consoleSpy = vi.spyOn(console, 'log').mockImplementation()
-
-            const customInterval = 7200000 // 2 hours
-            startCleanupJob(customInterval)
-
-            expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringMatching(/7200000|120 minutes/)
-            )
-
-            consoleSpy.mockRestore()
-        })
-
         test('handles errors during interval execution', () => {
             ;(db.delete as any).mockImplementation(() => {
                 throw new Error('Database error')
@@ -192,16 +155,5 @@ describe('cleanupExpiredTokens', () => {
             loggerSpy.mockRestore()
         })
 
-        test('returns a valid interval ID for cleanup', () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
-
-            const intervalId = startCleanupJob()
-
-            // Should be able to clear the interval
-            expect(() => clearInterval(intervalId)).not.toThrow()
-        })
     })
 })

@@ -170,4 +170,43 @@ describe('PUT /v1/auth/refresh', () => {
             message: 'Token is invalid',
         })
     })
+
+    test('prefers middleware-validated body when present', async () => {
+        ;(refreshTokens as any).mockResolvedValue({
+            access: {
+                token: 'new-access-token',
+                expiresAt: new Date('2030-01-01'),
+            },
+            refresh: {
+                token: 'new-refresh-token',
+                expiresAt: new Date('2030-02-01'),
+            },
+        })
+
+        const req = createReq({})
+        ;(req as any).validated = {
+            body: { refresh_token: 'validated-token' },
+        }
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(refreshTokens).toHaveBeenCalledWith('validated-token')
+    })
+
+    test('returns 500 when unexpected non-AuthError is thrown', async () => {
+        ;(refreshTokens as any).mockRejectedValue(new Error('crash'))
+
+        const req = createReq({ refresh_token: 'token' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
+    })
 })

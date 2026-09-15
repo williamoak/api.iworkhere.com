@@ -194,5 +194,35 @@ describe('passwordService', () => {
                 enforcePasswordHistory(userId, 'new-password', 'new-hash')
             ).resolves.toBeUndefined()
         })
+
+        test('checks existing history and inserts when the password is not reused', async () => {
+            ;(db.select as any).mockReturnValueOnce({
+                from: () => ({
+                    where: () => Promise.resolve([
+                        { passwordHash: 'old-hash' },
+                    ]),
+                }),
+            })
+            ;(bcrypt.compare as any).mockResolvedValue(false)
+            ;(db.insert as any).mockReturnValue({
+                values: () => Promise.resolve(),
+            })
+
+            await expect(
+                enforcePasswordHistory(userId, 'new-password', 'new-hash')
+            ).resolves.toBeUndefined()
+
+            expect(db.insert).toHaveBeenCalled()
+        })
+
+        test('rejects a missing plaintext password before querying history', async () => {
+            await expect(
+                enforcePasswordHistory(userId, '', 'new-hash')
+            ).rejects.toMatchObject({
+                code: 'PASSWORD_INVALID',
+                httpStatus: 400,
+            })
+            expect(db.select).not.toHaveBeenCalled()
+        })
     })
 })

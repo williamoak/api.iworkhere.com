@@ -199,4 +199,19 @@ describe('PUT /v1/auth/emailverify', () => {
 
         expect(res.statusCode).toBe(401)
     })
+
+    test('returns 500 when unexpected non-AuthError is thrown', async () => {
+        ;(verifyEmailToken as any).mockRejectedValue(new Error('crash'))
+
+        const req = createReq({ token: 'valid-token' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body).toEqual({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        })
+    })
 })

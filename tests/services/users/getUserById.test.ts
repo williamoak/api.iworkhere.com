@@ -39,4 +39,23 @@ describe('getUserById', () => {
     const result = await getUserById('1');
     expect(result).toBeNull();
   });
+
+  test('should return null when userId is empty string', async () => {
+    const result = await getUserById('');
+    expect(result).toBeNull();
+  });
+
+  test('should handle user with null email', async () => {
+    const mockUser = { id: '2', username: 'guest', email: null, status: 'active' };
+    const mockQueryChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([mockUser]),
+    };
+
+    vi.mocked(db.select).mockReturnValue(mockQueryChain as any);
+
+    const result = await getUserById('2');
+    expect(result).toEqual({ id: '2', username: 'guest', email: null, status: 'active', eulaAccepted: null });
+  });
 });

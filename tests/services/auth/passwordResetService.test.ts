@@ -124,6 +124,12 @@ describe('passwordResetService', () => {
         expect(result.token).toBe('noop')
     })
 
+    test('initiate: rejects a blank identifier', async () => {
+        await expect(initiatePasswordReset('   ')).rejects.toMatchObject({
+            code: 'INVALID_REQUEST', httpStatus: 400,
+        })
+    })
+
     test('initiate: throws if user is not active', async () => {
         mockSelectOnce([{ userId: 'u1', status: 'pending' }])
 
@@ -157,6 +163,12 @@ describe('passwordResetService', () => {
         await expect(
             verifyPasswordResetToken('bad-token')
         ).rejects.toBeInstanceOf(AuthError)
+    })
+
+    test('verify: rejects a blank token', async () => {
+        await expect(verifyPasswordResetToken('')).rejects.toMatchObject({
+            code: 'INVALID_TOKEN', httpStatus: 400,
+        })
     })
 
     test('verify: throws if token is expired', async () => {
@@ -201,6 +213,22 @@ describe('passwordResetService', () => {
         ).rejects.toBeInstanceOf(AuthError)
     })
 
+    test('complete: rejects a blank new password', async () => {
+        await expect(completePasswordReset('token', '   ')).rejects.toMatchObject({
+            code: 'INVALID_REQUEST', httpStatus: 400,
+        })
+    })
+
+    test('complete: rejects an expired reset token', async () => {
+        mockSelectOnce([{
+            tokenId: 't1', userId: 'u1', expiresAt: new Date(Date.now() - 1000),
+        }])
+
+        await expect(completePasswordReset('expired-token', 'newpass')).rejects.toMatchObject({
+            code: 'TOKEN_EXPIRED', httpStatus: 401,
+        })
+    })
+
     test('complete: resets password, revokes tokens, deletes reset token', async () => {
         mockSelectOnce([
             {
@@ -236,5 +264,20 @@ describe('passwordResetService', () => {
             'hashed-password'
         )
         expect(db.transaction).toHaveBeenCalled()
+    })
+
+    test('rejects invalid reset TTL configuration during module initialization', async () => {
+        vi.resetModules()
+        vi.doMock('@helpers/config', () => ({
+            configGet: vi.fn(() => '0'),
+            config: { DEBUG: 'true' },
+        }))
+
+        await expect(import('@services/auth/passwordResetService')).rejects.toThrow(
+            'RESET_TOKEN_TTL_SECONDS must be a positive number',
+        )
+
+        vi.doUnmock('@helpers/config')
+        vi.resetModules()
     })
 })

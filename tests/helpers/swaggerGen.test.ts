@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import fs from "fs";
 import { __test__ } from "@helpers/swaggerGen";
 
 const {
@@ -266,6 +267,10 @@ it("extractJsonObject returns null if tag is missing", () => {
     expect(extractJsonObject("no tags here", "query")).toBeNull();
 });
 
+it("extractJsonObject returns null if brace is missing after tag", () => {
+    expect(extractJsonObject("@query without braces", "query")).toBeNull();
+});
+
 it("extractJsonObject returns null if braces are unbalanced", () => {
     const raw = `
     * @query
@@ -312,22 +317,123 @@ it("convertToSwagger includes only external endpoints", () => {
     expect(swagger.paths["/internal"]).toBeUndefined();
 });
 
-it("convertToSwagger skips entries with invalid method", () => {
+it("buildQueryParameters logs warning and returns empty array on invalid JSON", () => {
+    const raw = `
+    @query
+    {
+      "limit": { "type": "integer"
+    }
+    `;
+    expect(buildQueryParameters(raw)).toEqual([]);
+});
+
+it("convertToSwagger handles multiple methods on same route and default tags", () => {
     const swagger = convertToSwagger([
         {
             isExternal: true,
             module: "",
-            tag: "api",
+            tag: "",
             version: "1.0",
-            path: "/bad",
+            path: "/items",
+            summary: "Get items",
+            description: "",
+            author: "",
+            query: null,
+            __sourceFile: "/x/GET.ts",
+        },
+        {
+            isExternal: true,
+            module: "",
+            tag: "",
+            version: "1.0",
+            path: "/items",
+            summary: "Post item",
+            description: "",
+            author: "",
+            query: null,
+            __sourceFile: "/x/POST.ts",
+        },
+        {
+            isExternal: true,
+            module: "",
+            tag: "invalid",
+            version: "1.0",
+            path: null,
             summary: "",
             description: "",
             author: "",
             query: null,
-            __sourceFile: "/x/FOO.ts"
-        }
+            __sourceFile: "/tmp/nonroute/GET.ts",
+        },
     ]);
 
-    expect(Object.keys(swagger.paths)).toHaveLength(0);
+    expect(swagger.paths["/items"]).toBeDefined();
+    expect((swagger.paths["/items"] as any).get).toBeDefined();
+    expect((swagger.paths["/items"] as any).post).toBeDefined();
+    expect(swagger.tags).toEqual([{ name: "api" }]);
 });
 
+it("runs the CLI against a nested route tree and writes generated Swagger", async () => {
+    const originalArgv = process.argv[1];
+    const sourceFile = `${process.cwd()}/src/helpers/swaggerGen.ts`;
+    const routesRoot = `${process.cwd()}/src/routes`;
+    const publicRouteFile = `${routesRoot}/v1/health/GET.ts`;
+    const ignoredSourceFile = `${routesRoot}/ignored.ts`;
+    const docblock = `
+        /**
+         * @myDocBlock
+         * @external
+         * @tag health
+         * @summary Health check
+         * @description
+         * Returns the service health.
+         * @query
+         * { "verbose": { "type": "boolean", "required": false } }
+         */
+    `;
+    const writeFileSync = vi.spyOn(fs, "writeFileSync").mockImplementation(() => undefined);
+    const readdirSync = vi.spyOn(fs, "readdirSync").mockImplementation((dir) => {
+        if (dir === routesRoot) return ["v1", "ignored.ts", "types.d.ts"] as any;
+        if (dir === `${routesRoot}/v1`) return ["health"] as any;
+        if (dir === `${routesRoot}/v1/health`) return ["GET.ts", "README.md"] as any;
+        throw new Error(`Unexpected directory: ${String(dir)}`);
+    });
+    const statSync = vi.spyOn(fs, "statSync").mockImplementation((file) => ({
+        isDirectory: () => file === routesRoot + "/v1" || file === `${routesRoot}/v1/health`,
+    } as any));
+    const readFileSync = vi.spyOn(fs, "readFileSync").mockImplementation((file) => {
+        if (file === publicRouteFile) return docblock as any;
+        if (file === ignoredSourceFile) return "// no documentation" as any;
+        throw new Error(`Unexpected file: ${String(file)}`);
+    });
+    const log = vi.fn();
+
+    try {
+        process.argv[1] = sourceFile;
+        vi.resetModules();
+        vi.doMock("@helpers/logger", () => ({ logger: { log, warn: vi.fn() } }));
+
+        await import("@helpers/swaggerGen");
+
+        expect(writeFileSync).toHaveBeenCalledTimes(1);
+        const [outputFile, output] = writeFileSync.mock.calls[0];
+        expect(outputFile).toContain("swagger.json");
+
+        const generated = JSON.parse(output as string);
+        expect(generated.paths["/v1/health"].get).toMatchObject({
+            summary: "Health check",
+            tags: ["health"],
+            parameters: [{ name: "verbose", in: "query", required: false }],
+        });
+        expect(log).toHaveBeenCalledWith("  GET /v1/health");
+        expect(log).toHaveBeenCalledWith(expect.stringContaining("1 external endpoint"));
+    } finally {
+        process.argv[1] = originalArgv;
+        writeFileSync.mockRestore();
+        readdirSync.mockRestore();
+        statSync.mockRestore();
+        readFileSync.mockRestore();
+        vi.doUnmock("@helpers/logger");
+        vi.resetModules();
+    }
+});

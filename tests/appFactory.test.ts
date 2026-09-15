@@ -251,6 +251,49 @@ describe("appFactory", () => {
         delete process.env.DEBUG;
     });
 
+    it("handles circular unserializable body in AUTH_ME_DEBUG mode", async () => {
+        process.env.DEBUG = "false";
+        process.env.AUTH_ME_DEBUG = "true";
+        vi.resetModules();
+        const { logger } = await import("@helpers/logger");
+        const loggerSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+        const { createBaseApp } = await import("@src/appFactory");
+        const app = await createBaseApp();
+
+        const circular: any = { name: "test" };
+        circular.self = circular;
+
+        const req: any = {
+            method: "POST",
+            url: "/test",
+            originalUrl: "/test",
+            hostname: "localhost",
+            ip: "127.0.0.1",
+            headers: { "content-type": "application/json" },
+            get: (h: string) => req.headers[h.toLowerCase()],
+            body: circular,
+        };
+        const res: any = {
+            setHeader: vi.fn(),
+            writeHead: vi.fn(),
+            end: vi.fn(),
+        };
+
+        // Find the debug logging middleware in the app stack and invoke it
+        const stack = (app as any).router?.stack || (app as any)._router?.stack || [];
+        const debugLayer = stack.find((l: any) => l.handle && l.handle.toString().includes("JSON REQUEST"));
+        if (debugLayer) {
+            debugLayer.handle(req, res, () => {});
+        }
+
+        expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining("<unserializable body>"));
+
+        loggerSpy.mockRestore();
+        delete process.env.AUTH_ME_DEBUG;
+        delete process.env.DEBUG;
+    });
+
     it("serves root route", async () => {
         vi.resetModules();
         delete process.env.DEBUG;

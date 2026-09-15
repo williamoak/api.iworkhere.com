@@ -196,6 +196,33 @@ describe('GET /v1/warframe/modules', () => {
         expect(res.body.data.module.name).toBe('Vitality')
     })
 
+    test('resolves module when mod_id is supplied as an array', async () => {
+        ;(db.select as any)
+            .mockReturnValueOnce({
+                from: async () => [{ mod_id: '1', name: 'Vitality' }],
+            })
+            .mockReturnValueOnce({
+                from: () => ({
+                    where: async () => [
+                        {
+                            modId: '1',
+                            name: 'Vitality',
+                        },
+                    ],
+                }),
+            })
+
+        const req = createReq({
+            mod_id: ['1', '2'],
+        })
+        const res = createRes()
+
+        await GET(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.module.name).toBe('Vitality')
+    })
+
     test('falls back to name resolution when no mod_id is supplied', async () => {
         ;(db.select as any)
             // module list

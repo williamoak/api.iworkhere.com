@@ -25,7 +25,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
 import { __test__, makeGetEulaHandler, isEnglishLanguage } from '@routes/v1/auth/eula/GET';
+import GET from '@routes/v1/auth/eula/GET';
 import type { Localization } from '@db/schema/localizations';
+import { db } from '@services/dbService';
+
+vi.mock('@services/dbService', () => ({
+  db: {
+    select: vi.fn(),
+    insert: vi.fn(),
+  },
+}));
 
 type ResMock = Response & {
   statusCode: number;
@@ -318,6 +327,178 @@ describe('GET /v1/auth/eula', () => {
         lineCount: 1,
         updatedAt: '2026-08-24T00:00:00.000Z',
       });
+    });
+
+    it('handles translation exceptions gracefully by logging warning and falling back to English', async () => {
+      const configRepo = createRepo({
+        name: 'eula',
+        version: '1.00',
+        value: 'Base text',
+        updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+      });
+      const locRepo = createLocRepo(null);
+      const translator = vi.fn().mockRejectedValue(new Error('DeepL network failure'));
+
+      const handler = makeGetEulaHandler(configRepo, locRepo, translator);
+      const req = createReq({ lang: 'es' });
+      const res = createRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect((res.body as any).value).toBe('Base text');
+    });
+
+    it('returns 404 when non-English request cannot find base English EULA', async () => {
+      const configRepo = createRepo(null);
+      const locRepo = createLocRepo(null);
+      const translator = vi.fn();
+
+      const handler = makeGetEulaHandler(configRepo, locRepo, translator);
+      const req = createReq({ lang: 'es' });
+      const res = createRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({ error: 'EULA not found' });
+    });
+
+    it('executes default GET handler using db repositories', async () => {
+      const mockFrom = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([
+              {
+                name: 'eula',
+                version: '2.00',
+                value: 'Default DB EULA text',
+                updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+              },
+            ]),
+          }),
+        }),
+      });
+
+      vi.mocked(db.select).mockReturnValue({
+        from: mockFrom,
+      } as any);
+
+      const req = createReq({ lang: 'en' });
+      const res = createRes();
+
+      await GET(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect((res.body as any).name).toBe('eula');
+      expect((res.body as any).version).toBe('2.00');
+    });
+
+    it('executes dbLocalizationEulaRepository via default handler for non-English', async () => {
+      let selectCallCount = 0;
+      vi.mocked(db.select).mockImplementation(() => {
+        selectCallCount++;
+        if (selectCallCount === 1) {
+          // localizations findBySlugAndLang
+          return {
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue([
+                {
+                  id: 'uuid-1',
+                  slug: 'eula',
+                  lang: 'es',
+                  languageName: 'Spanish',
+                  text: 'Texto EULA en español',
+                  codepage: 'UTF-8',
+                  direction: 'ltr',
+                  description: 'CLUF',
+                  createdAt: new Date(),
+                  updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+                },
+              ]),
+            }),
+          } as any;
+        }
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        } as any;
+      });
+
+      const req = createReq({ lang: 'es' });
+      const res = createRes();
+
+      await GET(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect((res.body as any).lang).toBe('es');
+      expect((res.body as any).isTranslated).toBe(true);
+    });
+
+    it('executes default handler with translation and DB save for uncached non-English', async () => {
+      let selectCall = 0;
+      vi.mocked(db.select).mockImplementation(() => {
+        selectCall++;
+        if (selectCall === 1) {
+          // localizations findBySlugAndLang -> not found
+          return {
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue([]),
+            }),
+          } as any;
+        }
+        // config getLatest -> found English base
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([
+                  {
+                    name: 'eula',
+                    version: '1.00',
+                    value: 'Base English text',
+                    updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+                  },
+                ]),
+              }),
+            }),
+          }),
+        } as any;
+      });
+
+      vi.mocked(db.insert).mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([
+              {
+                id: 'uuid-saved',
+                slug: 'eula',
+                lang: 'es',
+                languageName: 'Spanish',
+                text: 'Base English text',
+                codepage: 'UTF-8',
+                direction: 'ltr',
+                description: 'EULA translated via DeepL',
+                createdAt: new Date(),
+                updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+              },
+            ]),
+          }),
+        }),
+      } as any);
+
+      const req = createReq({ lang: 'es' });
+      const res = createRes();
+
+      await GET(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect((res.body as any).lang).toBe('es');
     });
   });
 });

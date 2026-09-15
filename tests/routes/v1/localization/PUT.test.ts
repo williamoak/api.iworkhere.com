@@ -192,4 +192,152 @@ describe('PUT /v1/localization', () => {
         expect(res.statusCode).toBe(400);
         expect(res.body.error).toBe('VALIDATION_ERROR');
     });
+
+    test('upsertLocalization finds existing record by ID', async () => {
+        const existing: LocalizationRecord = {
+            id: 'uuid-123',
+            slug: 'username',
+            lang: 'eng',
+            text: 'Original text',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        (mockRepo.getById as any).mockResolvedValueOnce(existing);
+        (mockRepo.update as any).mockResolvedValueOnce({ ...existing, text: 'Updated text' });
+
+        const res = await upsertLocalization({
+            id: 'uuid-123',
+            slug: 'username',
+            lang: 'eng',
+            text: 'Updated text',
+        }, mockRepo);
+
+        expect(res.text).toBe('Updated text');
+        expect(mockRepo.getById).toHaveBeenCalledWith('uuid-123');
+        expect(mockRepo.update).toHaveBeenCalled();
+    });
+
+    test('upsertLocalization forwards explicitly supplied optional fields', async () => {
+        const existing: LocalizationRecord = {
+            id: 'uuid-123',
+            slug: 'username',
+            lang: 'eng',
+            text: 'Original text',
+            languageName: 'English',
+            codepage: 'UTF-8',
+            direction: 'ltr',
+            description: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+        const updated = { ...existing, text: 'Updated', languageName: 'Canadian English' };
+        (mockRepo.findBySlugAndLang as any).mockResolvedValueOnce(existing);
+        (mockRepo.update as any).mockResolvedValueOnce(updated);
+
+        await upsertLocalization({
+            slug: ' username ',
+            lang: ' eng ',
+            text: 'Updated',
+            languageName: 'Canadian English',
+            codepage: 'ISO-8859-1',
+            direction: 'rtl',
+            description: 'Updated description',
+        }, mockRepo);
+
+        expect(mockRepo.findBySlugAndLang).toHaveBeenCalledWith('username', 'eng');
+        expect(mockRepo.update).toHaveBeenCalledWith('uuid-123', {
+            text: 'Updated',
+            languageName: 'Canadian English',
+            codepage: 'ISO-8859-1',
+            direction: 'rtl',
+            description: 'Updated description',
+        });
+    });
+
+    test('executes default PUT handler and dbLocalizationWriteRepository', async () => {
+        const { db } = await import('@services/dbService');
+
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue([]),
+                }),
+            }),
+        } as any);
+
+        vi.mocked(db.insert).mockReturnValue({
+            values: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([
+                    {
+                        id: 'inserted-uuid',
+                        slug: 'welcome',
+                        lang: 'eng',
+                        languageName: 'English',
+                        text: 'Welcome',
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: null,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    },
+                ]),
+            }),
+        } as any);
+
+        const req = createMockReq({
+            slug: 'welcome',
+            lang: 'eng',
+            text: 'Welcome',
+        });
+        const res = createMockRes();
+
+        await PUT(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.id).toBe('inserted-uuid');
+    });
+
+    test('executes the default repository update path by ID', async () => {
+        const { db } = await import('@services/dbService');
+        const existing = {
+            id: 'existing-uuid', slug: 'welcome', lang: 'eng', languageName: 'English',
+            text: 'Old', codepage: 'UTF-8', direction: 'ltr', description: null,
+            createdAt: new Date(), updatedAt: new Date(),
+        };
+        const updated = { ...existing, text: 'New' };
+
+        vi.mocked(db.select).mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([existing]) }),
+            }),
+        } as any);
+        vi.mocked(db.update).mockReturnValue({
+            set: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([updated]) }),
+            }),
+        } as any);
+
+        const res = createMockRes();
+        await PUT(createMockReq({ id: 'existing-uuid', slug: 'welcome', lang: 'eng', text: 'New' }), res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({ id: 'existing-uuid', text: 'New', value: 'New' });
+    });
+
+    test('returns 500 on unexpected errors in handler', async () => {
+        (mockRepo.findBySlugAndLang as any).mockRejectedValueOnce(new Error('crash'));
+
+        const req = createMockReq({
+            slug: 'welcome',
+            lang: 'eng',
+            text: 'Welcome',
+        });
+        const res = createMockRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toBe('INTERNAL_ERROR');
+    });
 });

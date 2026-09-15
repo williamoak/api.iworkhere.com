@@ -146,6 +146,30 @@ describe("DELETE /v1/warframe/warframes", () => {
         expect(res.body.data.name).toBe("Excalibur")
     })
 
+    test("deletes a warframe when warframe_id is supplied as an array", async () => {
+        ;(db.delete as any).mockReturnValueOnce({
+            where: () => ({
+                returning: async () => [
+                    {
+                        warframeId: "1",
+                        name: "Excalibur",
+                    },
+                ],
+            }),
+        })
+
+        const req = createReq({
+            warframe_id: ["1", "2"],
+        })
+        const res = createRes()
+
+        await DELETE(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+        expect(res.body.data.name).toBe("Excalibur")
+    })
+
     test("succeeds with null data when no matching warframe exists", async () => {
         ;(db.delete as any).mockReturnValueOnce({
             where: () => ({

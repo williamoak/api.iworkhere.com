@@ -219,4 +219,134 @@ describe('PUT /v1/warframe/modules', () => {
         expect(res.body.success).toBe(false)
         expect(res.body.error).toContain('Multiple modules')
     })
+
+    test('updates module when name resolves to exactly one match', async () => {
+        ;(db.select as any).mockReturnValueOnce({
+            from: () => ({
+                where: async () => [{ modId: '1', name: 'Vitality' }],
+            }),
+        })
+        ;(db.update as any).mockReturnValueOnce({
+            set: () => ({
+                where: () => ({
+                    returning: async () => [{ modId: '1', name: 'Vitality', description: 'Updated' }],
+                }),
+            }),
+        })
+
+        const req = createReq({
+            name: 'Vitality',
+            description: 'Updated',
+        })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(db.select).toHaveBeenCalledOnce()
+        expect(db.update).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+    })
+
+    test('returns 400 when updating by mod_id but write payload is empty', async () => {
+        const { toModuleWrite } = await import('@src/db/mappers/moduleWrite')
+        vi.mocked(toModuleWrite).mockReturnValueOnce({} as any)
+
+        const req = createReq({ mod_id: '1' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(400)
+        expect(res.body.error).toBe('No fields provided to update')
+    })
+
+    test('returns 400 when updating by name (1 match) but write payload is empty', async () => {
+        ;(db.select as any).mockReturnValueOnce({
+            from: () => ({
+                where: async () => [{ modId: '1', name: 'Vitality' }],
+            }),
+        })
+        const { toModuleWrite } = await import('@src/db/mappers/moduleWrite')
+        vi.mocked(toModuleWrite).mockReturnValueOnce({} as any)
+
+        const req = createReq({ name: 'Vitality' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(400)
+        expect(res.body.error).toBe('No fields provided to update')
+    })
+
+    test('performs fallback insert when neither mod_id nor name is provided', async () => {
+        ;(db.insert as any).mockReturnValueOnce({
+            values: () => ({
+                returning: async () => [{ modId: 'new-id', description: 'Fallback desc' }],
+            }),
+        })
+
+        const req = createReq({ description: 'Fallback desc' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(db.insert).toHaveBeenCalledOnce()
+        expect(res.statusCode).toBe(200)
+        expect(res.body.success).toBe(true)
+    })
+
+    test('handles ZodError and returns 400 with missing and empty field details', async () => {
+        const { z } = await import('zod')
+        const { moduleInsertSchema } = await import('@src/validation/module')
+        const { overlayDto } = await import('@src/dto/dtoOverlay')
+        
+        vi.mocked(overlayDto).mockReturnValueOnce({
+            merged: {
+                name: '',
+                description: null,
+                polarity: 'vazarin',
+                missingField: 'value',
+            },
+            providedFields: new Set(['name', 'description', 'polarity']),
+        } as any)
+
+        const zodErr = new z.ZodError([
+            {
+                code: 'invalid_type',
+                expected: 'string',
+                received: 'undefined',
+                path: ['name'],
+                message: 'Required',
+            },
+        ])
+        vi.mocked(moduleInsertSchema.parse).mockImplementationOnce(() => {
+            throw zodErr
+        })
+
+        const req = createReq({})
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(400)
+        expect(res.body.error).toBe('Validation failed')
+        expect(res.body.details).toBeDefined()
+        expect(res.body.missing_fields).toEqual(['missingField'])
+        expect(res.body.empty_fields).toEqual(['name', 'description'])
+    })
+
+    test('returns 500 on unexpected errors', async () => {
+        ;(db.update as any).mockImplementationOnce(() => {
+            throw new Error('Database connection failed')
+        })
+
+        const req = createReq({ mod_id: '1', name: 'Vitality' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(500)
+        expect(res.body.error).toBe('Internal server error')
+    })
 })

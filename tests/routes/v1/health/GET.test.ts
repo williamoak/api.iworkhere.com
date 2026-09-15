@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { __test__ } from "@routes/v1/health/GET";
+import handler, { __test__ } from "@routes/v1/health/GET";
 
 const {
     generateSchemaFromValue,
@@ -199,5 +199,94 @@ describe("executeChildHealth", () => {
         expect(result.status).toBe("fail");
         const data4 = result.data as any;
         expect(data4.error).toContain("boom");
+    });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Main Handler                                                               */
+/* -------------------------------------------------------------------------- */
+
+describe("health main handler", () => {
+    it("returns endpoint names when no query is provided", async () => {
+        const req = mockReq({
+            "/v1/health": {
+                children: {
+                    api: {},
+                    database: {},
+                },
+            },
+        });
+
+        const result = await handler(req);
+
+        expect(result.status).toBe("ok");
+        expect(result.name).toBe("health-index");
+        expect(result.data.endpoints).toEqual(["api", "database"]);
+    });
+
+    it("generates schemas when ?all is provided", async () => {
+        const req = mockReq(
+            {
+                "/v1/health": {
+                    children: {
+                        api: {
+                            handlers: {
+                                GET: async () => ({
+                                    status: "ok",
+                                    name: "api",
+                                    data: { uptime: 123, alive: true },
+                                }),
+                            },
+                        },
+                    },
+                },
+            },
+            { all: "true" }
+        );
+
+        const result = await handler(req);
+
+        expect(result.status).toBe("ok");
+        expect(result.data.endpoints).toEqual([
+            {
+                name: "api",
+                responseSchema: {
+                    uptime: "number",
+                    alive: "boolean",
+                },
+            },
+        ]);
+    });
+
+    it("returns complete health check results when ?complete is provided", async () => {
+        const req = mockReq(
+            {
+                "/v1/health": {
+                    children: {
+                        database: {
+                            handlers: {
+                                GET: async () => ({
+                                    status: "ok",
+                                    name: "database",
+                                    data: { connected: true },
+                                }),
+                            },
+                        },
+                    },
+                },
+            },
+            { complete: "true" }
+        );
+
+        const result = await handler(req);
+
+        expect(result.status).toBe("ok");
+        expect(result.data.results).toEqual({
+            database: {
+                status: "ok",
+                name: "database",
+                data: { connected: true },
+            },
+        });
     });
 });

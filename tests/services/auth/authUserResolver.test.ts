@@ -106,6 +106,17 @@ describe('resolveUserForApplication', () => {
         })
     })
 
+    test('requires email verification for pending users', async () => {
+        mockDbResult([{
+            userId: 'user-id', username: 'bill', email: 'bill@example.com',
+            status: 'pending', role: 'user', appEnabled: true,
+        }])
+
+        await expect(resolveUserForApplication('bill', applicationId)).rejects.toMatchObject({
+            code: 'USER_NOT_VERIFIED', httpStatus: 403,
+        })
+    })
+
     test('throws if application access is disabled', async () => {
         mockDbResult([
             {
@@ -123,6 +134,17 @@ describe('resolveUserForApplication', () => {
         ).rejects.toMatchObject({
             code: 'INVALID_CREDENTIALS',
             httpStatus: 401,
+        })
+    })
+
+    test('rejects an active user without an email address', async () => {
+        mockDbResult([{
+            userId: 'user-id', username: 'bill', email: null,
+            status: 'active', role: 'user', appEnabled: true,
+        }])
+
+        await expect(resolveUserForApplication('bill', applicationId)).rejects.toMatchObject({
+            code: 'USER_EMAIL_MISSING', httpStatus: 500,
         })
     })
 

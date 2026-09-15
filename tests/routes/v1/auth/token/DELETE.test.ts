@@ -37,18 +37,6 @@ vi.mock('@services/dbService', async () => {
     return createDbServiceMock();
 })
 
-vi.mock('@services/auth/authContext', () => ({
-    AuthError: class AuthError extends Error {
-        constructor(
-            public code: string,
-            public message: string,
-            public httpStatus: number
-        ) {
-            super(message)
-        }
-    },
-}))
-
 /**
  * ------------------------------------------------------------
  * IMPORTS (AFTER MOCKS)
@@ -163,6 +151,56 @@ describe('DELETE /v1/auth/token', () => {
         expect(revokeToken).toHaveBeenCalledWith('some-token')
     })
 
+    test('handles logout when no token is present', async () => {
+        const req = createReq({});
+        (req as any).body = {};
+        const res = createRes();
+        (res as any).locals = {};
+
+        await DELETE(req, res);
+
+        expect(res.statusCode).toBe(204);
+        expect(revokeToken).not.toHaveBeenCalled();
+    });
+
+    test('accepts token from req.body and performs pre-emptive user lookup', async () => {
+        ;(revokeToken as any).mockResolvedValue(undefined);
+        ;(db.select as any).mockReturnValue({
+            from: () => ({
+                where: () => ({
+                    limit: () => Promise.resolve([{ userId: 'user-from-token' }]),
+                }),
+            }),
+        });
+
+        const req = createReq({});
+        (req as any).body = { token: 'body-token-123' };
+        const res = createRes();
+        (res as any).locals = {};
+
+        await DELETE(req, res);
+
+        expect(res.statusCode).toBe(204);
+        expect(res.locals.visitUserId).toBe('user-from-token');
+        expect(revokeToken).toHaveBeenCalledWith('body-token-123');
+    });
+
+    test('handles pre-emptive user lookup exception gracefully', async () => {
+        ;(revokeToken as any).mockResolvedValue(undefined);
+        ;(db.select as any).mockImplementation(() => {
+            throw new Error('DB error');
+        });
+
+        const req = createReq({ auth_token: 'valid-token' });
+        const res = createRes();
+        (res as any).locals = {};
+
+        await DELETE(req, res);
+
+        expect(res.statusCode).toBe(204);
+        expect(revokeToken).toHaveBeenCalledWith('valid-token');
+    });
+
     test('translates AuthError to HTTP response', async () => {
         ;(revokeToken as any).mockRejectedValue(
             new AuthError('INVALID_TOKEN', 'Token is invalid', 401)
@@ -174,23 +212,41 @@ describe('DELETE /v1/auth/token', () => {
                 }),
             }),
         });
-        ;(db.delete as any).mockReturnValue({
-            where: () => Promise.resolve(),
-        });
-        ;(db.transaction as any).mockImplementation(async (cb: any) => await cb(db));
 
         const req = createReq({ auth_token: 'bad-token' });
         (req as any).auth = { userId: 'user-id' };
         const res = createRes();
-        // Mock res.locals explicitly for the test
         (res as any).locals = {};
 
         await DELETE(req, res);
 
-        expect(res.statusCode).toBe(401)
+        expect(res.statusCode).toBe(401);
         expect(res.body).toEqual({
             error: 'INVALID_TOKEN',
             message: 'Token is invalid',
-        })
-    })
+        });
+    });
+
+    test('handles unexpected generic errors with 500 INTERNAL_ERROR', async () => {
+        ;(revokeToken as any).mockRejectedValue(new Error('Unexpected crash'));
+        ;(db.select as any).mockReturnValue({
+            from: () => ({
+                where: () => ({
+                    limit: () => Promise.resolve([]),
+                }),
+            }),
+        });
+
+        const req = createReq({ auth_token: 'some-token' });
+        const res = createRes();
+        (res as any).locals = {};
+
+        await DELETE(req, res);
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body).toEqual({
+            error: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred',
+        });
+    });
 })
