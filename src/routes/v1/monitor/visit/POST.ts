@@ -63,8 +63,8 @@ export default async function handler(
         body: req.body,
         query: req.query
     };
-    console.log('[Visit Endpoint] Request JSON:\n' + JSON.stringify(requestJson, null, 2));
-    logger.warn(`[Visit Endpoint] Incoming request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestJson));
+    logger.log('[Visit Endpoint] Request JSON:\n' + JSON.stringify(requestJson, null, 2));
+    logger.log(`[Visit Endpoint] Incoming request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestJson));
 
     const { device_id, user_id, request_method, page_name, note, latitude, longitude, location_source, city } = req.body || {};
     
@@ -165,6 +165,6 @@ export default async function handler(
     }
 
     const responseJson = { ok: true as const };
-    console.log('[Visit Endpoint] Response JSON:\n' + JSON.stringify(responseJson, null, 2));
+    logger.log('[Visit Endpoint] Response JSON:\n' + JSON.stringify(responseJson, null, 2));
     return res.json(responseJson);
 }

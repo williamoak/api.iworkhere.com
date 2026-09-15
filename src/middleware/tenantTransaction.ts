@@ -16,12 +16,13 @@
  * @requestExample none
  * @response none
  * @requires {
- *   "dependencies": ["drizzle-orm", "@services/dbService"]
+ *   "dependencies": ["drizzle-orm", "@services/dbService", "@helpers/logger"]
  * }
  */
 import type { Request, Response, NextFunction } from 'express';
 import { dbStorage, pool, schema } from '@services/dbService';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { logger } from '@helpers/logger';
 
 export function tenantTransaction() {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -38,13 +39,13 @@ export function tenantTransaction() {
             released = true;
             
             // Wait for logging to finish if it's running
-            console.log(`[DEBUG] [TENANT_TRANSACTION] Waiting for loggingPromise: ${!!(res.locals as any).loggingPromise}`);
+            logger.log(`[DEBUG] [TENANT_TRANSACTION] Waiting for loggingPromise: ${!!(res.locals as any).loggingPromise}`);
             if ((res.locals as any).loggingPromise) {
                 await (res.locals as any).loggingPromise;
             }
             
             try {
-                console.log(`[DEBUG] [TENANT_TRANSACTION] Resetting search_path`);
+                logger.log(`[DEBUG] [TENANT_TRANSACTION] Resetting search_path`);
                 await client.query('RESET search_path');
             } catch (e) {
                 // Ignore errors during reset
@@ -57,12 +58,12 @@ export function tenantTransaction() {
         res.once('close', release);
 
         // Set the search_path for this client
-        console.log(`[DEBUG] [TENANT_TRANSACTION] Setting search_path to ${tenant}, public for tenant ${tenant}`);
+        logger.log(`[DEBUG] [TENANT_TRANSACTION] Setting search_path to ${tenant}, public for tenant ${tenant}`);
         await client.query(`SET search_path TO ${tenant}, public`);
         
         // Verify search_path
         const check = await client.query('SHOW search_path');
-        console.log(`[DEBUG] [TENANT_TRANSACTION] search_path set to: ${JSON.stringify(check.rows)}`);
+        logger.log(`[DEBUG] [TENANT_TRANSACTION] search_path set to: ${JSON.stringify(check.rows)}`);
         
         // Create a scoped Drizzle instance wrapping this client
         const scopedDb = drizzle(client, { schema: schema as any });

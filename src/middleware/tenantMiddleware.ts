@@ -44,8 +44,8 @@ export function tenantMiddleware() {
                              req.headers.referer || 
                              '';
         
-        logger.warn(`[DEBUG] [TENANT_RESOLVER] Request headers for tenant check: Host=${req.hostname}, Origin=${req.headers.origin}, Referer=${req.headers.referer}, ACAO=${req.headers['access-control-allow-origin'] || req.headers['access-control-allow_origin']}`);
-        logger.warn(`[DEBUG] [TENANT_RESOLVER] All headers: ${JSON.stringify(req.headers)}`);
+        logger.log(`[DEBUG] [TENANT_RESOLVER] Request headers for tenant check: Host=${req.hostname}, Origin=${req.headers.origin}, Referer=${req.headers.referer}, ACAO=${req.headers['access-control-allow-origin'] || req.headers['access-control-allow_origin']}`);
+        logger.log(`[DEBUG] [TENANT_RESOLVER] All headers: ${JSON.stringify(req.headers)}`);
 
         if (originHeader) {
             // Robust extraction: find the part between "https://" or "http://" and the first "."
@@ -86,7 +86,7 @@ export function tenantMiddleware() {
 
     // 3. Final safety: if it's still generic or the main domain, default to 'localhost'
     if (tenant === 'api' || tenant === 'public' || tenant === 'iworkhere') {
-        logger.warn(`[DEBUG] [TENANT_RESOLVER] Tenant defaulted to localhost. Hostname: ${req.hostname}, Headers: Origin=${req.headers.origin}, Referer=${req.headers.referer}`);
+        logger.log(`[DEBUG] [TENANT_RESOLVER] Tenant defaulted to localhost. Hostname: ${req.hostname}, Headers: Origin=${req.headers.origin}, Referer=${req.headers.referer}`);
         tenant = 'localhost';
     }
     

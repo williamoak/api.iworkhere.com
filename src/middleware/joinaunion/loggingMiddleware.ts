@@ -96,7 +96,7 @@ function parseCity(val: any): string | null {
 }
 
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
-    logger.warn(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
+    logger.log(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
 
     if (isExemptFromVisitLogging(req)) {
         res.locals.visitLogged = true;
@@ -106,7 +106,7 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
     }
 
     const doLogging = async () => {
-        logger.warn(`[DEBUG] [JOINAUNION] Starting doLogging for ${req.path}`);
+        logger.log(`[DEBUG] [JOINAUNION] Starting doLogging for ${req.path}`);
         if (res.locals.visitLogged || isExemptFromVisitLogging(req)) {
             logger.log(`[DEBUG] [JOINAUNION] Already logged or exempt endpoint (${req.path}), skipping.`);
             res.locals.visitLogged = true;
@@ -114,7 +114,7 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
         }
         
         try {
-            logger.warn(`[DEBUG] [JOINAUNION] Attempting DB insert for ${req.path}`);
+            logger.log(`[DEBUG] [JOINAUNION] Attempting DB insert for ${req.path}`);
             
             // Use the scoped DB from res.locals.db which was set by tenantTransaction, or fallback to the proxy
             const dbInstance = (res.locals as any).db || db;
@@ -127,12 +127,12 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 const pathRes = await dbInstance.execute(sql`SHOW search_path`);
                 const userRes = await dbInstance.execute(sql`SELECT current_user`);
                 
-                logger.warn(`[DEBUG] [JOINAUNION] INSERT_DIAGNOSTICS for ${req.path}:`);
-                logger.warn(`  Table: visit_info`);
-                logger.warn(`  Schema: ${JSON.stringify(schemaRes.rows)}`);
-                logger.warn(`  Search Path: ${JSON.stringify(pathRes.rows)}`);
-                logger.warn(`  User: ${JSON.stringify(userRes.rows)}`);
-                logger.warn(`  Database Instance Source: ${ (res.locals as any).db ? 'res.locals.db (scoped)' : 'db proxy (global)' }`);
+                logger.log(`[DEBUG] [JOINAUNION] INSERT_DIAGNOSTICS for ${req.path}:`);
+                logger.log(`  Table: visit_info`);
+                logger.log(`  Schema: ${JSON.stringify(schemaRes.rows)}`);
+                logger.log(`  Search Path: ${JSON.stringify(pathRes.rows)}`);
+                logger.log(`  User: ${JSON.stringify(userRes.rows)}`);
+                logger.log(`  Database Instance Source: ${ (res.locals as any).db ? 'res.locals.db (scoped)' : 'db proxy (global)' }`);
             } catch (e) {
                 logger.error(`[DEBUG] [JOINAUNION] Error gathering INSERT_DIAGNOSTICS:`, e);
             }
@@ -214,10 +214,10 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                     visitUserId: res.locals.visitUserId,
                 }
             };
-            console.log(`[LoggingMiddleware] [JOINAUNION] Request JSON for ${req.method} ${req.originalUrl || req.path}:\n` + JSON.stringify(requestLogPayload, null, 2));
-            logger.warn(`[DEBUG] [JOINAUNION] Request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestLogPayload));
+            logger.log(`[LoggingMiddleware] [JOINAUNION] Request JSON for ${req.method} ${req.originalUrl || req.path}:\n` + JSON.stringify(requestLogPayload, null, 2));
+            logger.log(`[DEBUG] [JOINAUNION] Request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestLogPayload));
 
-            logger.warn(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, locationSource=${locationSource}, city=${city}, note=${note}`);
+            logger.log(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, locationSource=${locationSource}, city=${city}, note=${note}`);
             const values = {
                 deviceId: deviceId as string,
                 userId: userId,
@@ -229,10 +229,10 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 city: city,
                 note: note as string
             };
-            logger.warn(`[DEBUG] [JOINAUNION] Values:`, JSON.stringify(values));
+            logger.log(`[DEBUG] [JOINAUNION] Values:`, JSON.stringify(values));
 
             await dbInstance.insert(visitInfo).values(values);
-            logger.warn(`[DEBUG] [JOINAUNION] Successfully inserted visit for ${req.path}`);
+            logger.log(`[DEBUG] [JOINAUNION] Successfully inserted visit for ${req.path}`);
             res.locals.visitLogged = true;
         } catch (e) {
             logger.error("[DEBUG] [JOINAUNION] Failed to process request logging for joinaunion:", e);

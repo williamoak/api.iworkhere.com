@@ -20,9 +20,21 @@ import { configGet } from '@helpers/config';
 const DEBUG = configGet('DEBUG') === 'true';
 
 export const logger = {
-    log: (...args: any[]) => {
-        if (DEBUG) {
-            console.log(...args);
+    log: (message?: any, forceLog: boolean = false, ...optionalParams: any[]) => {
+        const isForceLogBoolean = typeof forceLog === 'boolean';
+        const shouldForce = isForceLogBoolean ? forceLog : false;
+        if (DEBUG || shouldForce) {
+            if (isForceLogBoolean) {
+                if (optionalParams.length > 0) {
+                    console.log(message, ...optionalParams);
+                } else if (message !== undefined) {
+                    console.log(message);
+                } else {
+                    console.log();
+                }
+            } else {
+                console.log(message, forceLog, ...optionalParams);
+            }
         }
     },
     error: (...args: any[]) => {

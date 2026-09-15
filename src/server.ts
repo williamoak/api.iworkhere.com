@@ -37,6 +37,7 @@ import { startCleanupJob } from "@jobs/cleanupExpiredTokens";
 // ---------------------------------------------------------------------------
 // Bootstrap server (HTTP-only; TLS handled by nginx)
 // ---------------------------------------------------------------------------
+const forceLog = true;
 
 async function bootstrap() {
     // Ensure CockroachDB is reachable before starting API
@@ -74,5 +75,5 @@ async function bootstrap() {
         }
     });
 }
-console.log("server bootup complete");
+logger.log("server bootup complete",forceLog);
 export { bootstrap };
