@@ -101,8 +101,7 @@ All versioned routes currently live under `/v1`.
 
 - <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Resume (September 2026)</a>
 - <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Cover Letter (September 2026)</a>
-
-The checked-in <a href="./swagger.json" target="_blank" rel="noopener noreferrer"><code>swagger.json</code></a> is the machine-readable contract. <a href="https://api.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
+- <a href="https://api.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
 
 ## Authentication design
 
