@@ -12,3 +12,49 @@ also, the login attempt caused no text to appear in the server console.
 ...
 can we verify that the email auth token is actually saved into the email_verification_tokens table?
 
+.....
+api console error on trying to translate large text blocks.
+
+[DeepL] Translation request failed: [TypeError: fetch failed] {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted address: api-free.deepl.com:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1981:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1962:11)
+      at process.processImmediate (node:internal/timers:504:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[DeepL] Translation request failed: [TypeError: fetch failed] {
+  [cause]: ConnectTimeoutError: Connect Timeout Error (attempted address: api-free.deepl.com:443, timeout: 10000ms)
+      at onConnectTimeout (node:internal/deps/undici/undici:1981:23)
+      at Immediate._onImmediate (node:internal/deps/undici/undici:1962:11)
+      at process.processImmediate (node:internal/timers:504:21) {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):
+[DeepL] API error (429 Too Many Requests):

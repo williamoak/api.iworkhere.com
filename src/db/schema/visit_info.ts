@@ -1,6 +1,8 @@
-import { pgTable, uuid, timestamp, text, doublePrecision, varchar, index } from 'drizzle-orm/pg-core';
+import { uuid, timestamp, text, doublePrecision, varchar, index, pgSchema } from 'drizzle-orm/pg-core';
 
-export const visitInfo = pgTable('visit_info', {
+const joinaunion = pgSchema('joinaunion');
+
+export const visitInfo = joinaunion.table('visit_info', {
     id: uuid('id').primaryKey().defaultRandom(),
     deviceId: uuid('device_id').notNull(),
     userId: uuid('user_id'),

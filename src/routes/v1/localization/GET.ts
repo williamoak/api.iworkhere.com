@@ -1,5 +1,5 @@
 /**
- * @myDocBlock v2.3
+ * @myDocBlock v2.4
  * @file GET.ts
  * @external
  * @module routes/v1/localization
@@ -7,18 +7,28 @@
  * @version 1.1.1
  * @author william.r.oak@gmail.com
  * @path /v1/localization
- * @summary Fetch localization records or resolve localized text.
+ * @summary Fetch localization records, list available translations, or resolve localized text.
  *
  * @description
- * Deterministic, identifier-based retrieval and dynamic language fallback resolution
- * of localization strings with in-memory caching of supported languages and slugnames.
+ * Deterministic, identifier-based retrieval, translation metadata listing, and dynamic
+ * language fallback resolution of localization strings with in-memory caching of supported
+ * languages and slugnames.
  *
  * Resolution order:
  *   1) id — fetch exact record by UUID
  *   2) slug + lang — resolve localized text with dynamic language candidate fallback
  *   3) slug only — return slug with comma-delimited list of supported language codes
  *   4) lang only — return language code with comma-delimited list of supported slugnames
- *   5) no query params — returns 400 error (must provide either slug or lang as a minimum)
+ *   5) list — return all non-English translation metadata grouped by slug
+ *   6) slug + all — return all non-English records for the requested slug
+ *   7) no query params — returns 400 error (must provide either slug or lang as a minimum)
+ *
+ * List behavior:
+ *   - /v1/localization?list returns all non-English translations.
+ *   - /v1/localization?list&slug=username limits the response to that slug.
+ *   - The list always includes every non-English language with a record,
+ *     regardless of the selected language in the request.
+ *   - English values are never included because they are provided by LocalizedText.
  *
  * @query
  * {
@@ -36,6 +46,16 @@
  *     "type": "string",
  *     "required": false,
  *     "description": "Language code or tag (e.g. en_ca, can_fr, en_us, eng, fr)"
+ *   },
+ *   "list": {
+ *     "type": "boolean",
+ *     "required": false,
+ *     "description": "Return non-English translation metadata grouped by slug"
+ *   },
+ *   "all": {
+ *     "type": "boolean",
+ *     "required": false,
+ *     "description": "Return all non-English records for the requested slug"
  *   }
  * }
  *
@@ -54,6 +74,48 @@
  *   "createdAt": "ISO-8601",
  *   "updatedAt": "ISO-8601"
  * }
+ *
+ * @listResponse
+ * [
+ *   {
+ *     "slug": "username",
+ *     "langs": [
+ *       {
+ *         "id": "uuid",
+ *         "slug": "username",
+ *         "lang": "fr",
+ *         "language_name": "French",
+ *         "text": "Entrez votre nom d'utilisateur",
+ *         "codepage": "UTF-8",
+ *         "direction": "ltr",
+ *         "description": "Prompt asking user to enter their username"
+ *       }
+ *     ]
+ *   }
+ * ]
+ *
+ * @allResponse
+ * [
+ *   {
+ *     "slug": "username",
+ *     "langs": [
+ *       {
+ *         "id": "uuid",
+ *         "slug": "username",
+ *         "lang": "fr",
+ *         "languageName": "French",
+ *         "text": "Entrez votre nom d'utilisateur",
+ *         "value": "Entrez votre nom d'utilisateur",
+ *         "codepage": "UTF-8",
+ *         "direction": "ltr",
+ *         "description": "Prompt asking user to enter their username",
+ *         "createdAt": "ISO-8601",
+ *         "updatedAt": "ISO-8601",
+ *         "requestedLang": "fr"
+ *       }
+ *     ]
+ *   }
+ * ]
  *
  * @requires
  * {
@@ -99,6 +161,11 @@ function normalize(param: unknown): string | undefined {
     if (typeof param !== 'string') return undefined;
     const trimmed = param.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isEnglishLanguage(lang: string): boolean {
+    const normalized = lang.toLowerCase().replace(/-/g, '_');
+    return normalized === 'eng' || normalized === 'en' || normalized.startsWith('en_');
 }
 
 export function cleanLanguageCode(raw: unknown): string | undefined {
@@ -404,6 +471,97 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
                 : [];
             const lang = extractLanguage(req);
 
+            if (Object.prototype.hasOwnProperty.call(req.query ?? {}, 'list')) {
+                const records = await repo.getAll();
+                const fallbackMap = new Map<string, string>();
+                for (const record of records) {
+                    if (isEnglishLanguage(record.lang)) {
+                        fallbackMap.set(record.slug, record.text);
+                    }
+                }
+
+                const grouped = new Map<
+                    string,
+                    { slug: string; fallback: string; langs: Array<Record<string, string | null>> }
+                >();
+
+                for (const record of records) {
+                    if (slugs.length > 0 && !slugs.includes(record.slug)) {
+                        continue;
+                    }
+                    if (isEnglishLanguage(record.lang)) continue;
+
+                    const group = grouped.get(record.slug) ?? {
+                        slug: record.slug,
+                        fallback: fallbackMap.get(record.slug) || "default english text here so we can translate to new languages if we need to",
+                        langs: [],
+                    };
+                    group.langs.push({
+                        id: record.id,
+                        slug: record.slug,
+                        lang: record.lang,
+                        language_name: record.languageName ?? null,
+                        text: record.text ?? null,
+                        codepage: record.codepage ?? null,
+                        direction: record.direction ?? null,
+                        description: record.description ?? null,
+                    });
+                    grouped.set(record.slug, group);
+                }
+
+                if (slugs.length > 0) {
+                    for (const s of slugs) {
+                        if (!grouped.has(s)) {
+                            grouped.set(s, {
+                                slug: s,
+                                fallback: fallbackMap.get(s) || "default english text here so we can translate to new languages if we need to",
+                                langs: [],
+                            });
+                        }
+                    }
+                }
+
+                return res.status(200).json(Array.from(grouped.values()));
+            }
+
+            const allFlag = normalize(req.query?.all);
+            const hasAllFlag = Object.prototype.hasOwnProperty.call(
+                req.query ?? {},
+                'all',
+            );
+            const slugAllRequested =
+                slugs.length > 0 &&
+                (req.query?.all === '' ||
+                    allFlag === 'true' ||
+                    allFlag === '1');
+
+            if (slugAllRequested) {
+                const slug = slugs[0];
+                const records = await repo.findBySlug(slug);
+                if (!records || records.length === 0) {
+                    return res.status(404).json({
+                        error: 'NOT_FOUND',
+                        message: `Localization not found for slug '${slug}'`,
+                    });
+                }
+
+                const englishRecord = records.find((r) => isEnglishLanguage(r.lang));
+                const fallback = englishRecord ? englishRecord.text : "default english text here so we can translate to new languages if we need to";
+
+                return res.status(200).json([
+                    {
+                        slug,
+                        fallback,
+                        langs: records
+                            .filter((record) => !isEnglishLanguage(record.lang))
+                            .map((record) => ({
+                                ...record,
+                                requestedLang: record.lang,
+                            })),
+                    },
+                ]);
+            }
+
             // 1. Guard rails
             if (id && (slugs.length > 0 || lang)) {
                 return res.status(400).json({
@@ -412,7 +570,20 @@ export function makeGetLocalizationHandler(repo: LocalizationRepository) {
                 });
             }
 
-            // Must provide either slug or lang as a minimum (if no id)
+            if (
+                allFlag === 'true' ||
+                allFlag === '1' ||
+                (hasAllFlag && req.query?.all === '') ||
+                req.query?.lang === 'all'
+            ) {
+                const records = await repo.getAll();
+                return res.status(200).json({
+                    records,
+                    count: records.length,
+                });
+            }
+
+            // Must provide either slug, lang, or all as a minimum (if no id)
             if (!id && slugs.length === 0 && !lang) {
                 return res.status(400).json({
                     error: 'INVALID_REQUEST',

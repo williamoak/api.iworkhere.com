@@ -23,6 +23,7 @@
     "userclean": "npx tsx src/db/cleanup.ts"
   },
   "dependencies": {
+    "@countrystatecity/countries": "^1.0.9",
     "@getbrevo/brevo": "^5.0.4",
     "@types/cookie-parser": "^1.4.10",
     "bcryptjs": "^3.0.3",

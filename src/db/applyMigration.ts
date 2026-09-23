@@ -41,7 +41,7 @@ async function applyMigration() {
     // 4. Move renamed table
     await pool.query(`ALTER TABLE IF EXISTS public.warframe_modules SET SCHEMA michael;`);
 
-    // 5. Create/Update visit_info table in joinaunion and public (as fallback)
+    // 5. Create/Update JoinAUnion visit_info only in the tenant schema
     const createTableQuery = (schema: string) => `
         CREATE TABLE IF NOT EXISTS ${schema}.visit_info (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -74,10 +74,26 @@ async function applyMigration() {
     `;
 
     await pool.query(createTableQuery('joinaunion'));
-    await pool.query(createTableQuery('public'));
 
     // 6. Add city column only to joinaunion.visit_info
     await pool.query(`ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS city VARCHAR(128);`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS joinaunion.user_devices (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        account_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+        device_id UUID NOT NULL,
+        first_seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        linked_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        revoked_at TIMESTAMP WITH TIME ZONE,
+        linkage_source TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS user_devices_account_id_device_id_idx ON joinaunion.user_devices (account_id, device_id);
+      CREATE INDEX IF NOT EXISTS user_devices_account_id_active_idx ON joinaunion.user_devices (account_id, revoked_at);
+      CREATE INDEX IF NOT EXISTS user_devices_device_id_idx ON joinaunion.user_devices (device_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS user_devices_active_device_unique ON joinaunion.user_devices (device_id) WHERE revoked_at IS NULL;
+    `);
 
     logger.log("Migration applied successfully!");
   } catch (error) {

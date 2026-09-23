@@ -1,0 +1,59 @@
+I need to generate a script to generate visit_info journeys
+I need each journey to be a drunkard's walk through the joinaunion site
+
+here is a sitemap of pages:
+graph TD
+    subgraph Global Persistent Header & Footer
+        HeaderBrand["Header Branding (-> Home Top)"]
+        Topbar["Topbar: Your Rights | Why Unions? | Resources"]
+        Footer["Footer: Sample | About | Contact | Privacy"]
+    end
+
+    HeaderBrand ==> Home["Home Page"]
+    Topbar ==> YourRights["Your Rights Page"]
+    Topbar ==> WhyUnions["Why Unions? Page"]
+    Topbar ==> Resources["Resources Page"]
+
+    Footer ==> Sample["Sample Client"]
+    Footer ==> About["About Page"]
+    Footer ==> Contact["Contact Page"]
+    Footer ==> Privacy["Privacy Page"]
+
+    %% Cross-navigation between pages via global menus
+    Home -.-> Topbar
+    Home -.-> Footer
+    YourRights -.-> Topbar
+    YourRights -.-> Footer
+    WhyUnions -.-> Topbar
+    WhyUnions -.-> Footer
+    Resources -.-> Topbar
+    Resources -.-> Footer
+...
+I want an endpoint, I think in POST: /v1/config/data/joinaunion/visit_info
+
+I want to use the following parameters:
+num_recs -> number of records to make (int) -> default to 1000
+loc_src -> location_source -> required ... this is the key to cleanup, default to "generated"
+geo_reach -> default to "Canada", allow "all" to be canada, allow province name(s) or abbreviations as a comma-delimited list
+
+targets
+=> I want the script to create generated values for all the required fields
+=> I want to create a cache of device_id's and reuse device_ids 0% of the time until there are 20% of the num_recs
+=> Once there are enough device_iods, then reuse device_ids for 70% of the remaining records
+=> Add each new device_id to the cache
+=> I want to randomly generate initial touch_times for the 1st record of each journey
+=> I want each journey to start at the home page, and then do a drunkard's walk through the site
+=> For each node of the walk, I need to add a record into the visit_info table
+=> I need each step of the drunard's walk to have a duration between 1 and 30 seconds
+=> Once that duration has passed I need a 10% +5% per step for the walk to end.
+=> I need to add a record into the visit_info table for each step of the walk (ie: every page traveled to)
+=> I need a random time from 1 to 9000 secs between each journey (I do not mean wait for that time to pass:
+  I mean for you to add that amount of time to the next journey's start time)
+=>To start thescrip I need to make sure ALL records in joinaunion.visit_info that contains:
+  location_source == loc_src are deleted so that each use of the script will have a clean slate.
+=> throw an error if the loc_src is not specified
+=> throw an error if the geo_reach is not "all", "Canada", "Can", or a province name or a province abbreviation
+=> throw an error if the num_recs is not an integer
+=> throw an error if the num_recs is greater than 10,000
+
+

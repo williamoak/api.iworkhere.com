@@ -137,13 +137,8 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 logger.error(`[DEBUG] [JOINAUNION] Error gathering INSERT_DIAGNOSTICS:`, e);
             }
             
-            let userId = (req as any).auth?.userId || res.locals.visitUserId || null;
-
-            // If user is not known, calculate deterministic UUID7 for "guest"
-            if (!userId) {
-                const guestHash = crypto.createHash('sha256').update("guest").digest('hex');
-                userId = formatToUUID7(guestHash);
-            }
+            // Anonymous requests remain unattributed; only verified auth context may set userId.
+            const userId = (req as any).auth?.userId || null;
 
             let deviceId = res.locals.visitDeviceId || req.headers['x-device-id'] as string;
 

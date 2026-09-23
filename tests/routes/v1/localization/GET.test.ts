@@ -256,6 +256,232 @@ describe('GET /v1/localization', () => {
         );
     });
 
+    test('returns non-English language metadata grouped by slug for list requests', async () => {
+        const req = createReq({ list: '' });
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual([
+            {
+                slug: 'username',
+                fallback: 'Enter your username',
+                langs: [
+                    {
+                        id: '22222222-2222-2222-2222-222222222222',
+                        slug: 'username',
+                        lang: 'fr',
+                        language_name: 'French',
+                        text: "nom d'utilisateur",
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: "Invite demandant à l'utilisateur",
+                    },
+                ],
+            },
+        ]);
+    });
+
+    test('uses only the selected non-English language for list requests', async () => {
+        const req = createReq({ list: '', lang: 'fr' });
+        const res = createRes();
+
+        await handler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual([
+            {
+                slug: 'username',
+                fallback: 'Enter your username',
+                langs: [
+                    {
+                        id: '22222222-2222-2222-2222-222222222222',
+                        slug: 'username',
+                        lang: 'fr',
+                        language_name: 'French',
+                        text: "nom d'utilisateur",
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: "Invite demandant à l'utilisateur",
+                    },
+                ],
+            },
+        ]);
+    });
+
+    test('limits list requests to the requested slug', async () => {
+        const listHandler = makeGetLocalizationHandler({
+            ...createMockRepo(),
+            getAll: vi.fn(async () => [
+                mockRecords[0],
+                mockRecords[1],
+                {
+                    ...mockRecords[1],
+                    id: '55555555-5555-5555-5555-555555555555',
+                    slug: 'about_content_p1',
+                    lang: 'es',
+                    languageName: 'Spanish',
+                },
+            ]),
+        });
+        const req = createReq({ list: '', slug: 'about_content_p1' });
+        const res = createRes();
+
+        await listHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual([
+            {
+                slug: 'about_content_p1',
+                fallback: 'default english text here so we can translate to new languages if we need to',
+                langs: [
+                    {
+                        id: '55555555-5555-5555-5555-555555555555',
+                        slug: 'about_content_p1',
+                        lang: 'es',
+                        language_name: 'Spanish',
+                        text: mockRecords[1].text,
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: mockRecords[1].description,
+                    },
+                ],
+            },
+        ]);
+    });
+
+    test('returns all non-English records for a slug when all is requested', async () => {
+        const slugRecords: LocalizationRecord[] = [
+            {
+                ...mockRecords[0],
+                slug: 'about_content_p1',
+            },
+            {
+                ...mockRecords[1],
+                id: '44444444-4444-4444-4444-444444444444',
+                slug: 'about_content_p1',
+                lang: 'fr_CA',
+                languageName: 'French (CA)',
+                text: 'Texte français',
+                value: 'Texte français',
+            },
+            {
+                ...mockRecords[1],
+                id: '55555555-5555-5555-5555-555555555555',
+                slug: 'about_content_p1',
+                lang: 'es',
+                languageName: 'Spanish',
+                text: 'Texto español',
+                value: 'Texto español',
+            },
+        ];
+        const allHandler = makeGetLocalizationHandler({
+            ...createMockRepo(),
+            findBySlug: vi.fn(async (slug: string) =>
+                slugRecords.filter((record) => record.slug === slug),
+            ),
+        });
+        const req = createReq({ slug: 'about_content_p1', all: '' });
+        const res = createRes();
+
+        await allHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual([
+            {
+                slug: 'about_content_p1',
+                fallback: 'Enter your username',
+                langs: [
+                    { ...slugRecords[1], requestedLang: 'fr_CA' },
+                    { ...slugRecords[2], requestedLang: 'es' },
+                ],
+            },
+        ]);
+        expect(res.body[0].langs).not.toContainEqual(
+            expect.objectContaining({ lang: 'eng' }),
+        );
+        expect(res.body[0].langs[0]).not.toHaveProperty('slugs');
+        expect(res.body[0].langs[0]).not.toHaveProperty('slugnames');
+    });
+
+    test('groups every non-English language for each slug without legacy fields', async () => {
+        const handlerWithAllLanguages = makeGetLocalizationHandler({
+            ...createMockRepo(),
+            getAll: vi.fn(async () => [
+                mockRecords[0],
+                mockRecords[1],
+                {
+                    ...mockRecords[1],
+                    id: '44444444-4444-4444-4444-444444444444',
+                    lang: 'es',
+                    languageName: 'Spanish',
+                },
+                {
+                    ...mockRecords[1],
+                    id: '55555555-5555-5555-5555-555555555555',
+                    slug: 'welcome_title',
+                    lang: 'fr_CA',
+                    languageName: 'French (CA)',
+                },
+            ]),
+        });
+        const req = createReq({ list: '', lang: 'fr' });
+        const res = createRes();
+
+        await handlerWithAllLanguages(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual([
+            {
+                slug: 'username',
+                fallback: 'Enter your username',
+                langs: [
+                    {
+                        id: '22222222-2222-2222-2222-222222222222',
+                        slug: 'username',
+                        lang: 'fr',
+                        language_name: 'French',
+                        text: "nom d'utilisateur",
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: "Invite demandant à l'utilisateur",
+                    },
+                    {
+                        id: '44444444-4444-4444-4444-444444444444',
+                        slug: 'username',
+                        lang: 'es',
+                        language_name: 'Spanish',
+                        text: "nom d'utilisateur",
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: "Invite demandant à l'utilisateur",
+                    },
+                ],
+            },
+            {
+                slug: 'welcome_title',
+                fallback: 'default english text here so we can translate to new languages if we need to',
+                langs: [
+                    {
+                        id: '55555555-5555-5555-5555-555555555555',
+                        slug: 'welcome_title',
+                        lang: 'fr_CA',
+                        language_name: 'French (CA)',
+                        text: "nom d'utilisateur",
+                        codepage: 'UTF-8',
+                        direction: 'ltr',
+                        description: "Invite demandant à l'utilisateur",
+                    },
+                ],
+            },
+        ]);
+        expect(res.body).not.toHaveProperty('slugs');
+        expect(res.body).not.toHaveProperty('slugnames');
+        expect(res.body[0]).not.toHaveProperty('slugs');
+        expect(res.body[0]).not.toHaveProperty('slugnames');
+    });
+
     test('fetches exact record by id', async () => {
         const req = createReq({ id: '11111111-1111-1111-1111-111111111111' });
         const res = createRes();
