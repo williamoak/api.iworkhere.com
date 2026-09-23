@@ -36,6 +36,9 @@
       "name": "config"
     },
     {
+      "name": "api"
+    },
+    {
       "name": "health"
     },
     {
@@ -537,6 +540,30 @@
         }
       }
     },
+    "/v1/config/data/joinaunion/visit_info": {
+      "post": {
+        "summary": "Generate a clean, synthetic visit-history dataset for Joinaunion.",
+        "description": "This administrative endpoint creates plausible browsing journeys for the\nJoinaunion site and stores one visit_info row for every page reached. It is\nintended for development, demonstrations, analytics testing, and other\ncontrolled data-generation workflows; it does not represent real users or\nreal traffic. Every generated journey starts at the home page and follows\na randomized walk through the site's pages, including your rights, why\nunions, resources, about, contact, and privacy pages.\n\nBefore inserting data, the endpoint deletes every existing visit_info row\nwhose location_source matches loc_src. Reusing the same loc_src therefore\nreplaces the previous generated dataset and keeps repeated runs clean.\nThe endpoint requires authentication and writes GET-style visits with a\ngenerated device_id, timestamp, geographic coordinates, province/territory\ncity, location_source, and page note. user_id is null for generated visits.\n\nJourney behavior:\n- The requested number of rows is generated exactly, including when the\n  final journey is shorter than a complete walk.\n- The first 20% of rows use new device IDs. After that, devices are reused\n  with 70% probability while newly created IDs are added to the cache.\n- The first journey begins at a randomized point within the previous 30\n  days. Later journeys begin after the prior journey plus a random gap of\n  1 to 9,000 seconds; this advances timestamps without waiting in real time.\n- Each page visit advances by 1 to 30 seconds. After each step, the journey\n  ends with a probability of 10% plus 5% for every completed step.\n- Places are selected from the offline `@countrystatecity/countries`\n  dataset. Cities provide generated names and base coordinates, with a\n  random offset of up to 0.25 degrees in each direction for realistic-looking visits.",
+        "tags": [
+          "api"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "summary": "Health index, schema enumerator, and aggregator using in-memory route metadata.",
@@ -704,8 +731,8 @@
         }
       },
       "get": {
-        "summary": "Fetch localization records or resolve localized text.",
-        "description": "Deterministic, identifier-based retrieval and dynamic language fallback resolution\nof localization strings with in-memory caching of supported languages and slugnames.\n\nResolution order:\n  1) id — fetch exact record by UUID\n  2) slug + lang — resolve localized text with dynamic language candidate fallback\n  3) slug only — return slug with comma-delimited list of supported language codes\n  4) lang only — return language code with comma-delimited list of supported slugnames\n  5) no query params — returns 400 error (must provide either slug or lang as a minimum)",
+        "summary": "Fetch localization records, list available translations, or resolve localized text.",
+        "description": "Deterministic, identifier-based retrieval, translation metadata listing, and dynamic\nlanguage fallback resolution of localization strings with in-memory caching of supported\nlanguages and slugnames.\n\nResolution order:\n  1) id — fetch exact record by UUID\n  2) slug + lang — resolve localized text with dynamic language candidate fallback\n  3) slug only — return slug with comma-delimited list of supported language codes\n  4) lang only — return language code with comma-delimited list of supported slugnames\n  5) list — return all non-English translation metadata grouped by slug\n  6) slug + all — return all non-English records for the requested slug\n  7) no query params — returns 400 error (must provide either slug or lang as a minimum)\n\nList behavior:\n  - /v1/localization?list returns all non-English translations.\n  - /v1/localization?list&slug=username limits the response to that slug.\n  - The list always includes every non-English language with a record,\n    regardless of the selected language in the request.\n  - English values are never included because they are provided by LocalizedText.",
         "tags": [
           "localization"
         ],
@@ -735,6 +762,24 @@
             "description": "Language code or tag (e.g. en_ca, can_fr, en_us, eng, fr)",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "list",
+            "in": "query",
+            "required": false,
+            "description": "Return non-English translation metadata grouped by slug",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "Return all non-English records for the requested slug",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
