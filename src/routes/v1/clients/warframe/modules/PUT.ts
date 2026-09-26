@@ -60,9 +60,9 @@ import {
     moduleInsertSchema,
     moduleUpdateSchema,
     moduleUpdateByNameSchema,
-} from "@src/validation/module";
+} from "@validation/module";
 
-import { toModuleWrite } from "@src/db/mappers/moduleWrite";
+import { toModuleWrite } from "@db/mappers/moduleWrite";
 import { toModuleDTO, emptyModule } from "@src/dto/module";
 import { overlayDto } from "@src/dto/dtoOverlay";
 

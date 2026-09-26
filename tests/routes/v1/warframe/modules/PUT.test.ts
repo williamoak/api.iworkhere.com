@@ -94,7 +94,7 @@ vi.mock('@src/dto/dtoOverlay', () => ({
  */
 
 import { db } from '@services/dbService'
-import PUT from '@routes/v1/warframe/modules/PUT'
+import PUT from '@routes/v1/clients/warframe/modules/PUT'
 
 /**
  * ------------------------------------------------------------

@@ -13,6 +13,8 @@ describe('VisitInfo Schema', () => {
     expect(visitInfo.longitude).toBeDefined();
     expect(visitInfo.locationSource).toBeDefined();
     expect(visitInfo.city).toBeDefined();
+    expect(visitInfo.country).toBeDefined();
+    expect(visitInfo.region).toBeDefined();
     expect(visitInfo.note).toBeDefined();
   });
 

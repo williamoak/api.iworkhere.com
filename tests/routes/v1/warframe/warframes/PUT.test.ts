@@ -92,7 +92,7 @@ vi.mock("@src/dto/dtoOverlay", () => ({
  * ------------------------------------------------------------
  */
 
-import PUT from "@routes/v1/warframe/warframes/PUT"
+import PUT from "@routes/v1/clients/warframe/warframes/PUT"
 import { db } from "@services/dbService"
 
 /**

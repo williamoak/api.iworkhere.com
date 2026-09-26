@@ -27,6 +27,8 @@ export default defineConfig({
         'tests/',
         '**/*.test.ts',
         'src/services/dbService.ts',
+        // Re-export-only compatibility shim; behavior is covered through the central cache module.
+        'src/routes/v1/localization/localizationCache.ts',
       ],
       // Enforce minimum global coverage thresholds. If your project is
       // currently below these numbers, adjust thresholds temporarily and

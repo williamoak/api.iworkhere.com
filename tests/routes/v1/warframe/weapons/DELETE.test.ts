@@ -25,7 +25,7 @@ vi.mock("@services/dbService", async () => {
  * ------------------------------------------------------------
  */
 
-import DELETE from "@routes/v1/warframe/weapons/DELETE"
+import DELETE from "@routes/v1/clients/warframe/weapons/DELETE"
 import { db } from "@services/dbService"
 
 /**

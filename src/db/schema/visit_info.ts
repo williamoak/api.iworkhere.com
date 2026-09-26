@@ -12,6 +12,8 @@ export const visitInfo = joinaunion.table('visit_info', {
     longitude: doublePrecision('longitude'),
     locationSource: varchar('location_source', { length: 32 }),
     city: varchar('city', { length: 128 }),
+    country: varchar('country', { length: 128 }),
+    region: varchar('region', { length: 128 }),
     note: text('note'),
 }, (table) => {
     return {

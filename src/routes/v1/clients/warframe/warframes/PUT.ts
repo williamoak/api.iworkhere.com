@@ -60,11 +60,11 @@ import {
     warframeInsertSchema,
     warframeUpdateSchema,
     warframeUpdateByNameSchema,
-} from "@src/validation/warframe";
+} from "@validation/warframe";
 
 import { toWarframeDTO, emptyWarframe } from "@src/dto/warframe";
 import { overlayDto } from "@src/dto/dtoOverlay";
-import { toWarframeWrite } from "@src/db/mappers/warframeWrite";
+import { toWarframeWrite } from "@db/mappers/warframeWrite";
 
 export default async function PUT(req: Request, res: Response) {
     const body = req.body ?? {};

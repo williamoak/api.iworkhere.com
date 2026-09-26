@@ -25,17 +25,19 @@ describe('POST /v1/monitor/visit', () => {
         } as any);
     });
 
-    test('successfully records visit with payload including location_source and city', async () => {
+    test('successfully records visit with payload including location_source, city, country, and region', async () => {
         const req = {
             body: {
                 user_id: '11111111-1111-1111-1111-111111111111',
                 device_id: '22222222-2222-2222-2222-222222222222',
-                page_name: 'home',
+                page_name: 'Home',
                 request_method: 'GET',
                 latitude: 41.8781,
                 longitude: -87.6298,
                 location_source: 'ip_centroid',
                 city: 'Chicago',
+                country: 'US',
+                region: 'Illinois',
             },
             headers: {},
             path: '/v1/monitor/visit',
@@ -51,9 +53,11 @@ describe('POST /v1/monitor/visit', () => {
         expect(res.json).toHaveBeenCalledWith({ ok: true });
         expect(res.locals.visitLocationSource).toBe('ip_centroid');
         expect(res.locals.visitCity).toBe('Chicago');
+        expect(res.locals.visitCountry).toBe('US');
+        expect(res.locals.visitRegion).toBe('Illinois');
         expect(res.locals.visitLatitude).toBe(41.8781);
         expect(res.locals.visitLongitude).toBe(-87.6298);
-        expect(res.locals.visitNote).toBe('visit: home');
+        expect(res.locals.visitNote).toBe('visit: Home');
         expect(res.locals.visitLogged).toBe(true);
 
         expect(mockValues).not.toBeNull();
@@ -64,10 +68,12 @@ describe('POST /v1/monitor/visit', () => {
         expect(mockValues.longitude).toBe(-87.6298);
         expect(mockValues.locationSource).toBe('ip_centroid');
         expect(mockValues.city).toBe('Chicago');
-        expect(mockValues.note).toBe('visit: home');
+        expect(mockValues.country).toBe('US');
+        expect(mockValues.region).toBe('Illinois');
+        expect(mockValues.note).toBe('visit: Home');
     });
 
-    test('falls back to X-City and X-Location-Source headers when payload omits them', async () => {
+    test('falls back to X-City, X-Country, X-Region, and X-Location-Source headers when payload omits them', async () => {
         const req = {
             body: {
                 page_name: 'settings',
@@ -77,6 +83,8 @@ describe('POST /v1/monitor/visit', () => {
             headers: {
                 'x-location-source': 'gps_precise',
                 'x-city': 'San Francisco',
+                'x-country': 'US',
+                'x-region': 'California',
                 'x-device-id': '33333333-3333-3333-3333-333333333333',
             },
             path: '/v1/monitor/visit',
@@ -93,6 +101,8 @@ describe('POST /v1/monitor/visit', () => {
         expect(mockValues).not.toBeNull();
         expect(mockValues.locationSource).toBe('gps_precise');
         expect(mockValues.city).toBe('San Francisco');
+        expect(mockValues.country).toBe('US');
+        expect(mockValues.region).toBe('California');
         expect(mockValues.latitude).toBe(37.7749);
         expect(mockValues.longitude).toBe(-122.4194);
     });

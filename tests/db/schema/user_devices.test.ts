@@ -7,9 +7,14 @@ describe('UserDevices Schema', () => {
     const config = getTableConfig(userDevices);
     expect(config.name).toBe('user_devices');
     expect(config.schema).toBe('joinaunion');
+    expect(userDevices.id).toBeDefined();
     expect(userDevices.accountId).toBeDefined();
     expect(userDevices.deviceId).toBeDefined();
+    expect(userDevices.firstSeenAt).toBeDefined();
+    expect(userDevices.lastSeenAt).toBeDefined();
+    expect(userDevices.linkedAt).toBeDefined();
     expect(userDevices.revokedAt).toBeDefined();
+    expect(userDevices.linkageSource).toBeDefined();
   });
 
   it('defines ownership lookup indexes', () => {
@@ -19,5 +24,15 @@ describe('UserDevices Schema', () => {
     expect(indexNames).toContain('user_devices_account_id_active_idx');
     expect(indexNames).toContain('user_devices_device_id_idx');
     expect(config.indexes.map((index: any) => index.config?.name || index.name)).toContain('user_devices_active_device_unique');
+  });
+
+  it('defines the account foreign key with cascade deletion', () => {
+    const config = getTableConfig(userDevices);
+    const accountForeignKey = config.foreignKeys.find((foreignKey: any) =>
+      foreignKey.getName() === 'user_devices_account_id_users_id_fk',
+    ) as any;
+
+    expect(accountForeignKey).toBeDefined();
+    expect(accountForeignKey.onDelete).toBe('cascade');
   });
 });

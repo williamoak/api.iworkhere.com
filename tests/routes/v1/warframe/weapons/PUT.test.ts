@@ -58,7 +58,7 @@ vi.mock("@src/dto/dtoOverlay", () => ({
  * ------------------------------------------------------------
  */
 
-import PUT from "@routes/v1/warframe/weapons/PUT"
+import PUT from "@routes/v1/clients/warframe/weapons/PUT"
 import { db } from "@services/dbService"
 import { weaponUpdateSchema, weaponInsertSchema } from "@src/validation/weapon"
 import { toWeaponWrite } from "@src/db/mappers/weaponWrite"

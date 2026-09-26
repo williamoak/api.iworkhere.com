@@ -52,6 +52,9 @@ async function applyMigration() {
             latitude DOUBLE PRECISION,
             longitude DOUBLE PRECISION,
             location_source VARCHAR(32),
+            city VARCHAR(128),
+            country VARCHAR(128),
+            region VARCHAR(128),
             note TEXT
         );
 
@@ -61,6 +64,9 @@ async function applyMigration() {
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
         ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS location_source VARCHAR(32);
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS city VARCHAR(128);
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS country VARCHAR(128);
+        ALTER TABLE IF EXISTS ${schema}.visit_info ADD COLUMN IF NOT EXISTS region VARCHAR(128);
 
         -- Create indexes
         CREATE INDEX IF NOT EXISTS visit_info_${schema}_id_idx ON ${schema}.visit_info (id);
@@ -75,8 +81,32 @@ async function applyMigration() {
 
     await pool.query(createTableQuery('joinaunion'));
 
-    // 6. Add city column only to joinaunion.visit_info
+    // 6. Add city, country, region columns to joinaunion.visit_info
     await pool.query(`ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS city VARCHAR(128);`);
+    await pool.query(`ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS country VARCHAR(128);`);
+    await pool.query(`ALTER TABLE IF EXISTS joinaunion.visit_info ADD COLUMN IF NOT EXISTS region VARCHAR(128);`);
+
+    // 7. Backfill country, region, and city for existing visit_info records
+    await pool.query(`
+      UPDATE joinaunion.visit_info
+      SET country = 'CA', region = 'British Columbia'
+      WHERE city = 'Vancouver' AND (country IS NULL OR region IS NULL);
+    `);
+    await pool.query(`
+      UPDATE joinaunion.visit_info
+      SET country = 'CA', region = 'Alberta'
+      WHERE city = 'Edmonton' AND (country IS NULL OR region IS NULL);
+    `);
+    await pool.query(`
+      UPDATE joinaunion.visit_info
+      SET city = 'Edmonton', country = 'CA', region = 'Alberta'
+      WHERE latitude > 53 AND latitude < 54 AND longitude > -114 AND longitude < -113 AND (city IS NULL OR country IS NULL OR region IS NULL);
+    `);
+    await pool.query(`
+      UPDATE joinaunion.visit_info
+      SET city = 'Vancouver', country = 'CA', region = 'British Columbia'
+      WHERE latitude > 49 AND latitude < 50 AND longitude > -124 AND longitude < -123 AND (city IS NULL OR country IS NULL OR region IS NULL);
+    `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS joinaunion.user_devices (

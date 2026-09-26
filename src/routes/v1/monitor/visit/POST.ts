@@ -4,7 +4,7 @@
  * @external
  * @module monitor-visit
  * @tag monitor, visit
- * @version 1.0.0
+ * @version 1.1.0
  * @author william.r.oak@gmail.com
  * @path /v1/monitor/visit
  * @summary Explicit visit reporting endpoint.
@@ -14,8 +14,8 @@
  *   or other significant user interactions that do not naturally trigger
  *   a backend request.
  *
- *   The request is captured by the global logging middleware and recorded
- *   in the visit_info table.
+ *   The request is captured and recorded in the visit_info table with full
+ *   geographic metadata (city, country, region, coordinates, location source).
  *
  * @body
  *   {
@@ -26,11 +26,14 @@
  *     "latitude": "number",
  *     "longitude": "number",
  *     "location_source": "string",
+ *     "city": "string",
+ *     "country": "string",
+ *     "region": "string",
  *     "note": "string"
  *   }
  *
  * @requestExample
- *   { "method": "POST", "url": "/v1/monitor/visit", "body": { "user_id": "optional-uuid", "device_id": "optional-uuid", "page_name": "home", "request_method": "GET", "latitude": 41.8781, "longitude": -87.6298, "location_source": "ip_centroid" } }
+ *   { "method": "POST", "url": "/v1/monitor/visit", "body": { "user_id": "optional-uuid", "device_id": "optional-uuid", "page_name": "Home", "request_method": "GET", "latitude": 49.2827, "longitude": -123.1207, "location_source": "ip_centroid", "city": "Vancouver", "country": "CA", "region": "British Columbia" } }
  *
  * @response
  *   { "ok": true }
@@ -66,51 +69,91 @@ export default async function handler(
     logger.log('[Visit Endpoint] Request JSON:\n' + JSON.stringify(requestJson, null, 2));
     logger.log(`[Visit Endpoint] Incoming request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestJson));
 
-    const { device_id, user_id, request_method, page_name, note, latitude, longitude, location_source, city } = req.body || {};
+    const {
+        device_id,
+        deviceId: altDeviceId,
+        user_id,
+        userId: altUserId,
+        request_method,
+        requestMethod: altRequestMethod,
+        page_name,
+        pageName: altPageName,
+        note,
+        latitude,
+        lat,
+        longitude,
+        long,
+        lng,
+        location_source,
+        locationSource: altLocationSource,
+        city,
+        country,
+        region,
+    } = req.body || {};
+
+    const rawDeviceId = device_id ?? altDeviceId;
+    const rawUserId = user_id ?? altUserId;
+    const rawRequestMethod = request_method ?? altRequestMethod;
+    const rawPageName = page_name ?? altPageName;
+    const rawNote = note;
+    const rawLatitude = latitude ?? lat;
+    const rawLongitude = longitude ?? long ?? lng;
+    const rawLocationSource = location_source ?? altLocationSource;
+    const rawCity = city;
+    const rawCountry = country;
+    const rawRegion = region;
     
-    if (device_id) {
-        res.locals.visitDeviceId = device_id;
+    if (rawDeviceId) {
+        res.locals.visitDeviceId = rawDeviceId;
     }
 
-    if (user_id) {
-        res.locals.visitUserId = user_id;
+    if (rawUserId) {
+        res.locals.visitUserId = rawUserId;
     }
 
-    if (request_method) {
-        res.locals.visitRequestMethod = request_method;
+    if (rawRequestMethod) {
+        res.locals.visitRequestMethod = rawRequestMethod;
     }
 
-    if (note) {
-        res.locals.visitNote = note;
-    } else if (page_name) {
-        res.locals.visitNote = `visit: ${page_name}`;
+    if (rawNote) {
+        res.locals.visitNote = rawNote;
+    } else if (rawPageName) {
+        res.locals.visitNote = `visit: ${rawPageName}`;
     }
 
-    if (latitude !== undefined) {
-        res.locals.visitLatitude = latitude;
+    if (rawLatitude !== undefined) {
+        res.locals.visitLatitude = rawLatitude;
     }
 
-    if (longitude !== undefined) {
-        res.locals.visitLongitude = longitude;
+    if (rawLongitude !== undefined) {
+        res.locals.visitLongitude = rawLongitude;
     }
 
-    if (location_source !== undefined) {
-        res.locals.visitLocationSource = location_source;
+    if (rawLocationSource !== undefined) {
+        res.locals.visitLocationSource = rawLocationSource;
     }
 
-    if (city !== undefined) {
-        res.locals.visitCity = city;
+    if (rawCity !== undefined) {
+        res.locals.visitCity = rawCity;
+    }
+
+    if (rawCountry !== undefined) {
+        res.locals.visitCountry = rawCountry;
+    }
+
+    if (rawRegion !== undefined) {
+        res.locals.visitRegion = rawRegion;
     }
 
     try {
         // Calculate user and device IDs with fallbacks, matching logging middleware logic
-        let finalUserId = user_id || (req as any).auth?.userId || null;
+        let finalUserId = rawUserId || (req as any).auth?.userId || null;
         if (!finalUserId) {
             const guestHash = crypto.createHash('sha256').update("guest").digest('hex');
             finalUserId = formatToUUID7(guestHash);
         }
 
-        let finalDeviceId = device_id || req.headers['x-device-id'] as string;
+        let finalDeviceId = rawDeviceId || (req.headers['x-device-id'] as string) || (req.headers['x-client-device-id'] as string);
         if (!finalDeviceId) {
             const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
             const ua = req.headers['user-agent'] || 'unknown';
@@ -118,10 +161,10 @@ export default async function handler(
             finalDeviceId = formatToUUID7(hash);
         }
 
-        const finalNote = note || (page_name ? `visit: ${page_name}` : `visit: ${req.path}`);
-        const finalMethod = request_method || req.method || 'GET';
+        const finalNote = rawNote || (rawPageName ? `visit: ${rawPageName}` : `visit: ${req.path}`);
+        const finalMethod = rawRequestMethod || req.method || 'GET';
 
-        const parseCoord = (val: any) => {
+        const parseCoord = (val: any): number | null => {
             if (val === undefined || val === null || val === '') return null;
             const num = typeof val === 'number' ? val : parseFloat(String(val));
             return Number.isFinite(num) ? num : null;
@@ -133,16 +176,59 @@ export default async function handler(
             return str.length > 0 ? str.slice(0, 32) : null;
         };
 
-        const parseCityVal = (val: any): string | null => {
+        const parseStringVal = (val: any, maxLen: number = 128): string | null => {
             if (val === undefined || val === null || val === '') return null;
             const str = String(val).trim();
-            return str.length > 0 ? str.slice(0, 128) : null;
+            return str.length > 0 ? str.slice(0, maxLen) : null;
         };
 
-        const finalLat = parseCoord(latitude ?? req.headers['x-latitude'] ?? req.headers['x-lat']);
-        const finalLng = parseCoord(longitude ?? req.headers['x-longitude'] ?? req.headers['x-long'] ?? req.headers['x-lng']);
-        const finalLocationSource = parseSource(location_source ?? req.headers['x-location-source']);
-        const finalCity = parseCityVal(city ?? req.headers['x-city'] ?? req.headers['x-client-city']);
+        const finalLat = parseCoord(
+            rawLatitude ??
+            req.headers['x-latitude'] ??
+            req.headers['x-lat'] ??
+            req.query?.latitude ??
+            req.query?.lat
+        );
+
+        const finalLng = parseCoord(
+            rawLongitude ??
+            req.headers['x-longitude'] ??
+            req.headers['x-long'] ??
+            req.headers['x-lng'] ??
+            req.query?.longitude ??
+            req.query?.long ??
+            req.query?.lng
+        );
+
+        const finalLocationSource = parseSource(
+            rawLocationSource ??
+            req.headers['x-location-source'] ??
+            req.headers['x-loc-source'] ??
+            req.headers['x-client-location-source'] ??
+            req.query?.location_source ??
+            req.query?.locationSource
+        );
+
+        const finalCity = parseStringVal(
+            rawCity ??
+            req.headers['x-city'] ??
+            req.headers['x-client-city'] ??
+            req.query?.city
+        );
+
+        const finalCountry = parseStringVal(
+            rawCountry ??
+            req.headers['x-country'] ??
+            req.headers['x-client-country'] ??
+            req.query?.country
+        );
+
+        const finalRegion = parseStringVal(
+            rawRegion ??
+            req.headers['x-region'] ??
+            req.headers['x-client-region'] ??
+            req.query?.region
+        );
 
         // Using ORM for insertion. The tenant schema is handled by the search_path 
         // set in the tenantTransaction middleware.
@@ -155,6 +241,8 @@ export default async function handler(
             longitude: finalLng,
             locationSource: finalLocationSource,
             city: finalCity,
+            country: finalCountry,
+            region: finalRegion,
             note: finalNote
         });
         

@@ -218,7 +218,7 @@ describe("adminApp", () => {
 
     describe("welcomePage client template", () => {
         it("renders authenticated and unauthenticated welcome pages", async () => {
-            const { welcomePage } = await import("@src/admin/client/welcomePage");
+            const { renderWelcomePage, welcomePage } = await import("@src/admin/client");
             const authed = welcomePage(true);
             expect(authed).toContain("You are logged in");
             expect(authed).toContain("Go to Admin Dashboard");
@@ -227,7 +227,7 @@ describe("adminApp", () => {
             expect(unauthed).toContain('form action="/admin/login"');
             expect(unauthed).toContain("Username:");
 
-            await import("@src/admin/client/index");
+            expect(renderWelcomePage(false)).toContain('form action="/admin/login"');
         });
     });
 });

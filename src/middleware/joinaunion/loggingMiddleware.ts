@@ -95,6 +95,24 @@ function parseCity(val: any): string | null {
     return str.length > 0 ? str.slice(0, 128) : null;
 }
 
+/**
+ * Safely parses country value to a sanitized string (max 128 chars) or null.
+ */
+function parseCountry(val: any): string | null {
+    if (val === undefined || val === null || val === '') return null;
+    const str = String(val).trim();
+    return str.length > 0 ? str.slice(0, 128) : null;
+}
+
+/**
+ * Safely parses region value to a sanitized string (max 128 chars) or null.
+ */
+function parseRegion(val: any): string | null {
+    if (val === undefined || val === null || val === '') return null;
+    const str = String(val).trim();
+    return str.length > 0 ? str.slice(0, 128) : null;
+}
+
 export default async function loggingMiddleware(req: Request, res: Response, next: NextFunction) {
     logger.log(`[DEBUG] [JOINAUNION] loggingMiddleware ENTRY for ${req.path}`);
 
@@ -193,6 +211,22 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 req.query?.city
             );
 
+            const country = parseCountry(
+                res.locals.visitCountry ??
+                req.headers['x-country'] ??
+                req.headers['x-client-country'] ??
+                (req.body as any)?.country ??
+                req.query?.country
+            );
+
+            const region = parseRegion(
+                res.locals.visitRegion ??
+                req.headers['x-region'] ??
+                req.headers['x-client-region'] ??
+                (req.body as any)?.region ??
+                req.query?.region
+            );
+
             const requestLogPayload = {
                 method: req.method,
                 url: req.originalUrl || req.path,
@@ -202,6 +236,8 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 resLocals: {
                     visitLocationSource: res.locals.visitLocationSource,
                     visitCity: res.locals.visitCity,
+                    visitCountry: res.locals.visitCountry,
+                    visitRegion: res.locals.visitRegion,
                     visitLatitude: res.locals.visitLatitude,
                     visitLongitude: res.locals.visitLongitude,
                     visitNote: res.locals.visitNote,
@@ -212,7 +248,7 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
             logger.log(`[LoggingMiddleware] [JOINAUNION] Request JSON for ${req.method} ${req.originalUrl || req.path}:\n` + JSON.stringify(requestLogPayload, null, 2));
             logger.log(`[DEBUG] [JOINAUNION] Request shape for ${req.method} ${req.originalUrl || req.path}:`, JSON.stringify(requestLogPayload));
 
-            logger.log(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, locationSource=${locationSource}, city=${city}, note=${note}`);
+            logger.log(`[DEBUG] [JOINAUNION] Preparing insert data for ${req.path}: deviceId=${deviceId}, userId=${userId}, method=${method}, latitude=${latitude}, longitude=${longitude}, locationSource=${locationSource}, city=${city}, country=${country}, region=${region}, note=${note}`);
             const values = {
                 deviceId: deviceId as string,
                 userId: userId,
@@ -222,6 +258,8 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 longitude: longitude,
                 locationSource: locationSource,
                 city: city,
+                country: country,
+                region: region,
                 note: note as string
             };
             logger.log(`[DEBUG] [JOINAUNION] Values:`, JSON.stringify(values));

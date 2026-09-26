@@ -126,9 +126,9 @@ import {
     weaponInsertSchema,
     weaponUpdateSchema,
     weaponUpdateByNameSchema,
-} from "@src/validation/weapon"
+} from "@validation/weapon"
 
-import { toWeaponWrite } from "@src/db/mappers/weaponWrite"
+import { toWeaponWrite } from "@db/mappers/weaponWrite"
 import { toWeaponDTO, emptyWeapon } from "@src/dto/weapon"
 import { overlayDto } from "@src/dto/dtoOverlay"
 

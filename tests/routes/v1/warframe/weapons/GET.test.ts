@@ -83,7 +83,7 @@ vi.mock("@src/dto/weapon", () => ({
  * ------------------------------------------------------------
  */
 
-import GET from "@routes/v1/warframe/weapons/GET"
+import GET from "@routes/v1/clients/warframe/weapons/GET"
 import { db } from "@services/dbService"
 import { emptyWeapon, toWeaponDTO } from "@src/dto/weapon"
 

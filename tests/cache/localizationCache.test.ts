@@ -125,6 +125,23 @@ describe('LocalizationCache in @cache', () => {
         const slugs = await getSupportedSlugs();
         expect(slugs).toEqual(['username', 'submit_btn']);
         expect(isCacheDirty()).toBe(false);
+
+        const cachedSlugs = await getSupportedSlugs();
+        expect(cachedSlugs).toEqual(slugs);
+        expect(mockSelectResult).toHaveBeenCalledTimes(1);
+    });
+
+    test('returns the existing cache when refreshing fails', async () => {
+        setCachedSupportedLanguages(['eng']);
+        setCachedSupportedSlugs(['welcome']);
+        dirtyCache();
+        mockSelectResult.mockRejectedValueOnce(new Error('database unavailable'));
+
+        await expect(refreshCache()).resolves.toEqual({
+            languages: ['eng'],
+            slugs: ['welcome'],
+        });
+        expect(isCacheDirty()).toBe(true);
     });
 
     test('invalidateCache and reset work as expected', () => {
@@ -166,5 +183,38 @@ describe('LocalizationCache in @cache', () => {
         // Canadian French query against available languages
         const canFrCandidates = getLanguageCandidates('can_fr', available);
         expect(canFrCandidates).toContain('fr-CA');
+    });
+
+    test('uses English defaults for missing or blank language input', () => {
+        const available = ['en-US', 'fr', 'eng'];
+
+        expect(getLanguageCandidates(undefined, available)).toEqual(
+            expect.arrayContaining(['eng', 'en', 'en-US', 'fr']),
+        );
+        expect(getLanguageCandidates('   ', available)).toEqual(
+            expect.arrayContaining(['eng', 'en', 'en-US', 'fr']),
+        );
+    });
+
+    test('resolves ISO and region equivalences for language tags', () => {
+        const frenchCandidates = getLanguageCandidates('fra-ca', ['fr-CA', 'fre_CA']);
+        const englishCandidates = getLanguageCandidates('eng-gbr', ['en-GB', 'eng_GB']);
+
+        expect(frenchCandidates).toEqual(expect.arrayContaining(['fr', 'fra', 'fre', 'ca_fr', 'fr-ca']));
+        expect(englishCandidates).toEqual(expect.arrayContaining(['en', 'eng', 'eng-gb', 'en-GB']));
+    });
+
+    test('applies family fallbacks and available-language matching', () => {
+        const english = getLanguageCandidates('en.custom', ['en_US', 'eng-GB']);
+        const french = getLanguageCandidates('FRA', ['fra', 'fr-CA']);
+        const custom = getLanguageCandidates('pt-BR', ['pt-BR', 'pt_BR']);
+
+        expect(english).toEqual(expect.arrayContaining(['eng', 'en', 'en-US', 'en_US']));
+        expect(french).toEqual(expect.arrayContaining(['fr', 'fra', 'fre', 'fr-CA', 'fr_CA']));
+        expect(custom).toEqual(expect.arrayContaining(['pt-BR', 'pt_BR', 'por']));
+    });
+
+    test('resolves single-code ISO equivalents', () => {
+        expect(getLanguageCandidates('de')).toEqual(expect.arrayContaining(['de', 'deu', 'ger']));
     });
 });

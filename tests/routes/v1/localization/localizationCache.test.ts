@@ -52,11 +52,19 @@ import {
     getLanguageCandidates,
     resetLocalizationCache,
 } from '@routes/v1/localization/localizationCache';
+import * as routeLocalizationCache from '@routes/v1/localization/localizationCache';
+import * as centralLocalizationCache from '@cache/localizationCache';
 
 describe('localizationCache', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         resetLocalizationCache();
+    });
+
+    test('forwards the central cache exports', () => {
+        expect(routeLocalizationCache.getLanguageCandidates).toBe(centralLocalizationCache.getLanguageCandidates);
+        expect(routeLocalizationCache.refreshCache).toBe(centralLocalizationCache.refreshCache);
+        expect(routeLocalizationCache.localizationCache).toBe(centralLocalizationCache.localizationCache);
     });
 
     test('initial state is dirty', () => {
