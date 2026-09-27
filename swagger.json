@@ -39,6 +39,9 @@
       "name": "clients, joinaunion, visit_info, manage"
     },
     {
+      "name": "joinaunion, widget"
+    },
+    {
       "name": "warframe.modules"
     },
     {
@@ -459,6 +462,76 @@
             "schema": {
               "type": "string",
               "default": "generated"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/clients/joinaunion/widget": {
+      "put": {
+        "summary": "Submit an inquiry or contact message via the JoinAUnion widget.",
+        "description": "Processes incoming widget submissions from workers inquiring about union representation\nor workplace organizing. Validates the recipient, sender email, message content, province,\nand industry sector, records the inquiry in joinaunion.widget_answers, and delivers the formatted inquiry notification.",
+        "tags": [
+          "joinaunion, widget"
+        ],
+        "parameters": [
+          {
+            "name": "recipient",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "message",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "province",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "description": "",
+            "schema": {
+              "type": "string"
             }
           }
         ],

@@ -239,6 +239,13 @@
       "when": 1782000011000,
       "tag": "0033_add_location_source_index_to_visit_info",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1782000012000,
+      "tag": "0034_create_joinaunion_widget_answers",
+      "breakpoints": true
     }
   ]
 }

@@ -107,7 +107,6 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
         expect(res.body).toHaveLength(1);
         expect(res.body[0]).toMatchObject({
             deviceId: '11111111-1111-1111-1111-111111111111',
-            city: 'Toronto',
             journeys: [
                 {
                     city: 'Toronto',
@@ -122,7 +121,7 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                             touchTime: '2026-09-01T10:00:00.000Z',
                             duration: '00:20',
                             durationSeconds: 20,
-                            city: 'Toronto',
+                            touched: 1,
                         },
                         {
                             page: 'Your Rights',
@@ -130,7 +129,7 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                             touchTime: '2026-09-01T10:00:20.000Z',
                             duration: '00:25',
                             durationSeconds: 25,
-                            city: 'Toronto',
+                            touched: 1,
                         },
                         {
                             page: 'Contact',
@@ -138,7 +137,7 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                             touchTime: '2026-09-01T10:00:45.000Z',
                             duration: '00:23',
                             durationSeconds: 23,
-                            city: 'Toronto',
+                            touched: 1,
                         },
                     ],
                 },
@@ -342,8 +341,9 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
 
             expect(result).toHaveLength(1);
             expect(result[0].deviceId).toBe('dev-1');
-            expect(result[0].city).toBe('Ottawa');
             expect(result[0].journeys).toHaveLength(2);
+            expect(result[0].journeys[0].city).toBe('Ottawa');
+            expect(result[0].journeys[1].city).toBe('Ottawa');
 
             // Journey 1
             expect(result[0].journeys[0].pages).toHaveLength(2);
@@ -398,9 +398,9 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
 
             expect(result).toHaveLength(2);
             expect(result[0].deviceId).toBe('dev-a');
-            expect(result[0].city).toBe('Vancouver');
+            expect(result[0].journeys[0].city).toBe('Vancouver');
             expect(result[1].deviceId).toBe('dev-b');
-            expect(result[1].city).toBeNull();
+            expect(result[1].journeys[0].city).toBeNull();
         });
 
         test('aggregates duplicate visits to the same page within a single journey', () => {
@@ -455,21 +455,18 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                 duration: '00:40',
                 durationSeconds: 40,
                 touched: 3,
-                city: 'Edmonton',
             });
             expect(journey.pages[1]).toMatchObject({
                 page: 'About',
                 duration: '00:15',
                 durationSeconds: 15,
                 touched: 1,
-                city: 'Edmonton',
             });
             expect(journey.pages[2]).toMatchObject({
                 page: 'Contact',
                 duration: '00:20',
                 durationSeconds: 20,
                 touched: 1,
-                city: 'Edmonton',
             });
             expect(journey.totalDurationSeconds).toBe(75);
             expect(journey.totalDuration).toBe('01:15.00');
@@ -574,7 +571,7 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             expect(result[0].journeys[0].totalDuration).toBe('00:00.00');
         });
 
-        test('populates country, region, latitude, longitude, and userId across device, journey, and pages', () => {
+        test('populates userId on device level, and country, region, latitude, longitude, city on journey level', () => {
             const rows = [
                 {
                     deviceId: 'dev-geo',
@@ -603,28 +600,40 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             const result = buildDeviceJourneys(rows);
 
             expect(result).toHaveLength(1);
-            expect(result[0]).toMatchObject({
+            expect(result[0]).toEqual({
                 deviceId: 'dev-geo',
                 userId: 'usr-1234',
-                city: 'Vancouver',
-                country: 'CA',
-                region: 'British Columbia',
-            });
-            expect(result[0].journeys[0]).toMatchObject({
-                userId: 'usr-1234',
-                city: 'Vancouver',
-                country: 'CA',
-                region: 'British Columbia',
-                latitude: 49.2827,
-                longitude: -123.1207,
-            });
-            expect(result[0].journeys[0].pages[0]).toMatchObject({
-                userId: 'usr-1234',
-                city: 'Vancouver',
-                country: 'CA',
-                region: 'British Columbia',
-                latitude: 49.2827,
-                longitude: -123.1207,
+                journeys: [
+                    {
+                        city: 'Vancouver',
+                        country: 'CA',
+                        region: 'British Columbia',
+                        latitude: 49.2827,
+                        longitude: -123.1207,
+                        startTime: '2026-09-01T10:00:00.000Z',
+                        endTime: '2026-09-01T10:00:20.000Z',
+                        totalDurationSeconds: 40,
+                        totalDuration: '00:40.00',
+                        pages: [
+                            {
+                                page: 'Home',
+                                note: 'visit: Home',
+                                touchTime: '2026-09-01T10:00:00.000Z',
+                                duration: '00:20',
+                                durationSeconds: 20,
+                                touched: 1,
+                            },
+                            {
+                                page: 'Resources',
+                                note: 'visit: Resources',
+                                touchTime: '2026-09-01T10:00:20.000Z',
+                                duration: '00:20',
+                                durationSeconds: 20,
+                                touched: 1,
+                            },
+                        ],
+                    },
+                ],
             });
         });
     });
@@ -644,7 +653,7 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
 
         expect(result).toHaveLength(1);
         expect(result[0].deviceId).toBe('aaaa-1111');
-        expect(result[0].city).toBe('Calgary');
+        expect(result[0].journeys[0].city).toBe('Calgary');
         expect(result[0].journeys).toHaveLength(1);
     });
 });

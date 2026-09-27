@@ -124,6 +124,20 @@ async function applyMigration() {
       CREATE INDEX IF NOT EXISTS user_devices_device_id_idx ON joinaunion.user_devices (device_id);
       CREATE UNIQUE INDEX IF NOT EXISTS user_devices_active_device_unique ON joinaunion.user_devices (device_id) WHERE revoked_at IS NULL;
       CREATE INDEX IF NOT EXISTS location_source_device_touch_idx ON joinaunion.visit_info (location_source, device_id, touch_time);
+
+      CREATE TABLE IF NOT EXISTS joinaunion.widget_answers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        recipient VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        province VARCHAR(128) NOT NULL,
+        industry VARCHAR(128) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS widget_answers_recipient_created_at_idx ON joinaunion.widget_answers (recipient, created_at);
+      CREATE INDEX IF NOT EXISTS widget_answers_email_idx ON joinaunion.widget_answers (email);
+      CREATE INDEX IF NOT EXISTS widget_answers_province_industry_idx ON joinaunion.widget_answers (province, industry);
+      CREATE INDEX IF NOT EXISTS widget_answers_created_at_idx ON joinaunion.widget_answers (created_at);
     `);
 
     logger.log("Migration applied successfully!");

@@ -24,3 +24,4 @@ export * from "@db/schema/modules";
 export * from "@db/schema/weapons";
 export * from "@db/schema/visit_info";
 export * from "@db/schema/user_devices";
+export * from "@db/schema/widget_answers";

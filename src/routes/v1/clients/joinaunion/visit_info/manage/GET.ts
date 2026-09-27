@@ -37,12 +37,8 @@
  *   {
  *     "deviceId": "00000000-0000-0000-0000-000000000000",
  *     "userId": "00000000-0000-0000-0000-000000000001",
- *     "city": "Toronto",
- *     "country": "CA",
- *     "region": "Ontario",
  *     "journeys": [
  *       {
- *         "userId": "00000000-0000-0000-0000-000000000001",
  *         "city": "Toronto",
  *         "country": "CA",
  *         "region": "Ontario",
@@ -59,13 +55,7 @@
  *             "touchTime": "2026-09-01T10:00:00.000Z",
  *             "duration": "00:20",
  *             "durationSeconds": 20,
- *             "touched": 1,
- *             "city": "Toronto",
- *             "country": "CA",
- *             "region": "Ontario",
- *             "latitude": 43.6532,
- *             "longitude": -79.3832,
- *             "userId": "00000000-0000-0000-0000-000000000001"
+ *             "touched": 1
  *           }
  *         ]
  *       }
@@ -98,16 +88,9 @@ export interface PageVisit {
     duration: string;
     durationSeconds: number;
     touched: number;
-    city: string | null;
-    country: string | null;
-    region: string | null;
-    latitude: number | null;
-    longitude: number | null;
-    userId: string | null;
 }
 
 export interface Journey {
-    userId: string | null;
     city: string | null;
     country: string | null;
     region: string | null;
@@ -123,9 +106,6 @@ export interface Journey {
 export interface DeviceJourneys {
     deviceId: string;
     userId: string | null;
-    city: string | null;
-    country: string | null;
-    region: string | null;
     journeys: Journey[];
 }
 
@@ -251,9 +231,6 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
             rawJourneys.push(currentJourney);
         }
 
-        let deviceCity: string | null = null;
-        let deviceCountry: string | null = null;
-        let deviceRegion: string | null = null;
         let deviceUserId: string | null = null;
 
         const journeys: Journey[] = rawJourneys.map((journeyRecords) => {
@@ -262,7 +239,6 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
             let journeyRegion: string | null = null;
             let journeyLatitude: number | null = null;
             let journeyLongitude: number | null = null;
-            let journeyUserId: string | null = null;
 
             for (const r of journeyRecords) {
                 if (!journeyCity && r.city) journeyCity = r.city;
@@ -270,11 +246,7 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
                 if (!journeyRegion && r.region) journeyRegion = r.region;
                 if (journeyLatitude === null && r.latitude !== null && r.latitude !== undefined) journeyLatitude = r.latitude;
                 if (journeyLongitude === null && r.longitude !== null && r.longitude !== undefined) journeyLongitude = r.longitude;
-                if (!journeyUserId && r.userId) journeyUserId = r.userId;
 
-                if (!deviceCity && r.city) deviceCity = r.city;
-                if (!deviceCountry && r.country) deviceCountry = r.country;
-                if (!deviceRegion && r.region) deviceRegion = r.region;
                 if (!deviceUserId && r.userId) deviceUserId = r.userId;
             }
 
@@ -309,12 +281,6 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
                     existing.touched += 1;
                     existing.durationSeconds += durationSec;
                     existing.duration = formatDuration(existing.durationSeconds, false);
-                    if (!existing.city && current.city) existing.city = current.city;
-                    if (!existing.country && current.country) existing.country = current.country;
-                    if (!existing.region && current.region) existing.region = current.region;
-                    if (existing.latitude === null && current.latitude !== null && current.latitude !== undefined) existing.latitude = current.latitude;
-                    if (existing.longitude === null && current.longitude !== null && current.longitude !== undefined) existing.longitude = current.longitude;
-                    if (!existing.userId && current.userId) existing.userId = current.userId;
                     if (!existing.note && current.note) existing.note = current.note;
                 } else {
                     aggregatedPagesMap.set(pageName, {
@@ -324,12 +290,6 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
                         duration: formatDuration(durationSec, false),
                         durationSeconds: durationSec,
                         touched: 1,
-                        city: current.city ?? journeyCity,
-                        country: current.country ?? journeyCountry,
-                        region: current.region ?? journeyRegion,
-                        latitude: current.latitude ?? journeyLatitude,
-                        longitude: current.longitude ?? journeyLongitude,
-                        userId: current.userId ?? journeyUserId,
                     });
                 }
             }
@@ -341,7 +301,6 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
             const totalDuration = formatDuration(totalDurationSeconds);
 
             return {
-                userId: journeyUserId,
                 city: journeyCity,
                 country: journeyCountry,
                 region: journeyRegion,
@@ -358,9 +317,6 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
         results.push({
             deviceId,
             userId: deviceUserId,
-            city: deviceCity,
-            country: deviceCountry,
-            region: deviceRegion,
             journeys,
         });
     }
