@@ -716,4 +716,82 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
             expect(getJourneyEndProbability(-1)).toBe(0);
         });
     });
+
+    describe('production safety, user mapping, and cache invalidation', () => {
+        test('assigns consistent 1-to-1 userId per deviceId across multiple journeys', async () => {
+            const places = await resolveCountryRegion('Canada', 'all');
+            const generated = await generateVisitJourneys({
+                numRecs: 20,
+                locationSource: 'test_user_device_mapping',
+                country: 'Canada',
+                region: 'all',
+                places: places!,
+                now: new Date('2026-09-26T12:00:00.000Z'),
+            });
+
+            const deviceToUserMap = new Map<string, string>();
+            for (const record of generated.records) {
+                if (deviceToUserMap.has(record.deviceId)) {
+                    expect(record.userId).toBe(deviceToUserMap.get(record.deviceId));
+                } else {
+                    deviceToUserMap.set(record.deviceId, record.userId);
+                }
+            }
+            expect(deviceToUserMap.size).toBeGreaterThan(0);
+        });
+
+        test('requires confirm_delete: true in production environment', async () => {
+            const prevEnv = process.env.NODE_ENV;
+            try {
+                process.env.NODE_ENV = 'production';
+                const req = {
+                    body: {
+                        num_recs: 1,
+                        loc_src: 'prod_test',
+                    },
+                } as Request;
+                const res = response();
+
+                await handler(req, res);
+
+                expect(res.status).toHaveBeenCalledWith(400);
+                expect(res.json).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        error: 'INVALID_REQUEST',
+                        message: expect.stringContaining('Mass deletion in production requires confirm_delete: true'),
+                    })
+                );
+
+                const reqAllowed = {
+                    body: {
+                        num_recs: 1,
+                        loc_src: 'prod_test',
+                        confirm_delete: true,
+                    },
+                } as Request;
+                const resAllowed = response();
+
+                await handler(reqAllowed, resAllowed);
+                expect(resAllowed.status).toHaveBeenCalledWith(200);
+            } finally {
+                process.env.NODE_ENV = prevEnv;
+            }
+        });
+
+        test('invalidates manage endpoint cache on successful generation', async () => {
+            const delWhereSpy = vi.spyOn(cacheStore, 'delWhere').mockResolvedValue(undefined);
+            const req = {
+                body: {
+                    num_recs: 1,
+                    loc_src: 'cache_inv_test',
+                },
+            } as Request;
+            const res = response();
+
+            await handler(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(delWhereSpy).toHaveBeenCalled();
+        });
+    });
 });

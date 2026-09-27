@@ -123,6 +123,7 @@ async function applyMigration() {
       CREATE INDEX IF NOT EXISTS user_devices_account_id_active_idx ON joinaunion.user_devices (account_id, revoked_at);
       CREATE INDEX IF NOT EXISTS user_devices_device_id_idx ON joinaunion.user_devices (device_id);
       CREATE UNIQUE INDEX IF NOT EXISTS user_devices_active_device_unique ON joinaunion.user_devices (device_id) WHERE revoked_at IS NULL;
+      CREATE INDEX IF NOT EXISTS location_source_device_touch_idx ON joinaunion.visit_info (location_source, device_id, touch_time);
     `);
 
     logger.log("Migration applied successfully!");

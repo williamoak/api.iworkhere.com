@@ -21,5 +21,6 @@ export const visitInfo = joinaunion.table('visit_info', {
         deviceIdTouchTimeIdx: index('device_id_touch_time_idx').on(table.deviceId, table.touchTime),
         userIdIdx: index('user_id_idx').on(table.userId),
         userIdRequestMethodIdx: index('user_id_request_method_idx').on(table.userId, table.requestMethod),
+        locationSourceDeviceTouchIdx: index('location_source_device_touch_idx').on(table.locationSource, table.deviceId, table.touchTime),
     };
 });

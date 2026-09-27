@@ -147,18 +147,18 @@ export default async function handler(
 
     try {
         // Calculate user and device IDs with fallbacks, matching logging middleware logic
-        let finalUserId = rawUserId || (req as any).auth?.userId || null;
-        if (!finalUserId) {
-            const guestHash = crypto.createHash('sha256').update("guest").digest('hex');
-            finalUserId = formatToUUID7(guestHash);
-        }
-
         let finalDeviceId = rawDeviceId || (req.headers['x-device-id'] as string) || (req.headers['x-client-device-id'] as string);
         if (!finalDeviceId) {
             const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
             const ua = req.headers['user-agent'] || 'unknown';
             const hash = crypto.createHash('sha256').update(`${ip}-${ua}`).digest('hex');
             finalDeviceId = formatToUUID7(hash);
+        }
+
+        let finalUserId = rawUserId || (req as any).auth?.userId || null;
+        if (!finalUserId) {
+            const userHash = crypto.createHash('sha256').update(`user-${finalDeviceId}`).digest('hex');
+            finalUserId = formatToUUID7(userHash);
         }
 
         const finalNote = rawNote || (rawPageName ? `visit: ${rawPageName}` : `visit: ${req.path}`);

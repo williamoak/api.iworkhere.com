@@ -155,9 +155,6 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 logger.error(`[DEBUG] [JOINAUNION] Error gathering INSERT_DIAGNOSTICS:`, e);
             }
             
-            // Anonymous requests remain unattributed; only verified auth context may set userId.
-            const userId = (req as any).auth?.userId || null;
-
             let deviceId = res.locals.visitDeviceId || req.headers['x-device-id'] as string;
 
             if (!deviceId) {
@@ -165,6 +162,12 @@ export default async function loggingMiddleware(req: Request, res: Response, nex
                 const ua = req.headers['user-agent'] || 'unknown';
                 const hash = crypto.createHash('sha256').update(`${ip}-${ua}`).digest('hex');
                 deviceId = formatToUUID7(hash);
+            }
+
+            let userId = (req as any).auth?.userId || res.locals.visitUserId || null;
+            if (!userId) {
+                const userHash = crypto.createHash('sha256').update(`user-${deviceId}`).digest('hex');
+                userId = formatToUUID7(userHash);
             }
 
             const note = (res.locals.visitNote as string) || `visit: ${req.path}`;

@@ -26,5 +26,6 @@ describe('VisitInfo Schema', () => {
     expect(indexNames).toContain('device_id_touch_time_idx');
     expect(indexNames).toContain('user_id_idx');
     expect(indexNames).toContain('user_id_request_method_idx');
+    expect(indexNames).toContain('location_source_device_touch_idx');
   });
 });

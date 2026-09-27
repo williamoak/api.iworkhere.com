@@ -184,6 +184,8 @@ export const DEFAULT_FALLBACK_PAGES = [
 ] as const;
 
 let localPageCache: string[] | null = null;
+let localPageCacheExpiresAt = 0;
+const PAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function extractUniquePages(notes: (string | null | undefined)[]): string[] {
     const pageSet = new Set<string>();
@@ -205,10 +207,11 @@ export function extractUniquePages(notes: (string | null | undefined)[]): string
 
 export function resetLocalPageCache(): void {
     localPageCache = null;
+    localPageCacheExpiresAt = 0;
 }
 
 export async function getDynamicPages(): Promise<string[]> {
-    if (localPageCache && localPageCache.length > 0) {
+    if (localPageCache && localPageCache.length > 0 && Date.now() < localPageCacheExpiresAt) {
         return localPageCache;
     }
 
@@ -216,6 +219,7 @@ export async function getDynamicPages(): Promise<string[]> {
         const cached = await cacheStore.get<string[]>(REDIS_PAGES_KEY);
         if (Array.isArray(cached) && cached.length > 0) {
             localPageCache = cached;
+            localPageCacheExpiresAt = Date.now() + PAGE_CACHE_TTL_MS;
             return localPageCache;
         }
     } catch {
@@ -232,9 +236,10 @@ export async function getDynamicPages(): Promise<string[]> {
         const extracted = extractUniquePages(rawNotes);
 
         localPageCache = extracted.length > 1 ? extracted : [...DEFAULT_FALLBACK_PAGES];
+        localPageCacheExpiresAt = Date.now() + PAGE_CACHE_TTL_MS;
 
         try {
-            await cacheStore.set(REDIS_PAGES_KEY, localPageCache, 24 * 60 * 60 * 1000);
+            await cacheStore.set(REDIS_PAGES_KEY, localPageCache, PAGE_CACHE_TTL_MS);
         } catch {
             // Ignore Redis write failure
         }
@@ -242,6 +247,7 @@ export async function getDynamicPages(): Promise<string[]> {
         return localPageCache;
     } catch {
         localPageCache = [...DEFAULT_FALLBACK_PAGES];
+        localPageCacheExpiresAt = Date.now() + PAGE_CACHE_TTL_MS;
         return localPageCache;
     }
 }
@@ -381,6 +387,7 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
 
     const records: VisitRecord[] = [];
     const devices: string[] = [];
+    const deviceToUserMap = new Map<string, string>();
     let journeys = 0;
 
     if (options.numRecs <= 0) {
@@ -409,7 +416,11 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
         const firstTwentyPercent = journeys < options.numRecs * 0.2;
         const reuseDevice = !firstTwentyPercent && random() < 0.7;
         const deviceId = nextDevice(devices, reuseDevice, random, createDeviceId);
-        const userId = createUserId();
+        let userId = deviceToUserMap.get(deviceId);
+        if (!userId) {
+            userId = createUserId();
+            deviceToUserMap.set(deviceId, userId);
+        }
         const point = randomPoint(places, random);
         let page = pages.includes('Home') ? 'Home' : pages[0];
         let step = 0;
@@ -517,6 +528,24 @@ export default async function POST(req: Request, res: Response): Promise<Respons
         return badRequest(res, err?.message ?? 'Invalid date range');
     }
 
+    const isProduction = process.env.NODE_ENV === 'production';
+    const confirmDelete = Boolean(
+        body.confirm_delete ??
+        body.allow_delete ??
+        body.force ??
+        query.confirm_delete ??
+        query.allow_delete ??
+        query.force ??
+        process.env.ALLOW_MASS_DELETE === 'true'
+    );
+
+    if (isProduction && !confirmDelete) {
+        return badRequest(
+            res,
+            'Mass deletion in production requires confirm_delete: true in body or query'
+        );
+    }
+
     try {
         const places = await resolveCountryRegion(country, region);
         if (!places) {
@@ -537,6 +566,13 @@ export default async function POST(req: Request, res: Response): Promise<Respons
 
         await db.delete(visitInfo).where(eq(visitInfo.locationSource, locationSource));
         if (generated.records.length > 0) await db.insert(visitInfo).values(generated.records);
+
+        try {
+            await cacheStore.delWhere((key) => key.includes('visit_info/manage'));
+        } catch {
+            // Ignore cache invalidation failure
+        }
+        resetLocalPageCache();
 
         return res.status(200).json({
             ok: true,

@@ -37,9 +37,14 @@ function createMockResponse() {
 
 function mockQueryChain(results: Array<{
     deviceId: string;
+    userId?: string | null;
     touchTime: Date | string;
+    latitude?: number | null;
+    longitude?: number | null;
     note: string | null;
     city: string | null;
+    country?: string | null;
+    region?: string | null;
 }>) {
     const fromMock = vi.fn();
     const whereMock = vi.fn();
@@ -108,8 +113,8 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                     city: 'Toronto',
                     startTime: '2026-09-01T10:00:00.000Z',
                     endTime: '2026-09-01T10:00:45.000Z',
-                    totalDurationSeconds: 45,
-                    totalDuration: '00:45.00',
+                    totalDurationSeconds: 68,
+                    totalDuration: '01:08.00',
                     pages: [
                         {
                             page: 'Home',
@@ -131,8 +136,8 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                             page: 'Contact',
                             note: 'visit: Contact',
                             touchTime: '2026-09-01T10:00:45.000Z',
-                            duration: '00:00',
-                            durationSeconds: 0,
+                            duration: '00:23',
+                            durationSeconds: 23,
                             city: 'Toronto',
                         },
                     ],
@@ -350,11 +355,11 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             });
             expect(result[0].journeys[0].pages[1]).toMatchObject({
                 page: 'Resources',
-                duration: '00:00',
-                durationSeconds: 0,
+                duration: '00:30',
+                durationSeconds: 30,
                 touched: 1,
             });
-            expect(result[0].journeys[0].totalDurationSeconds).toBe(30);
+            expect(result[0].journeys[0].totalDurationSeconds).toBe(60);
 
             // Journey 2
             expect(result[0].journeys[1].pages).toHaveLength(2);
@@ -366,11 +371,11 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             });
             expect(result[0].journeys[1].pages[1]).toMatchObject({
                 page: 'About',
-                duration: '00:00',
-                durationSeconds: 0,
+                duration: '00:30',
+                durationSeconds: 30,
                 touched: 1,
             });
-            expect(result[0].journeys[1].totalDurationSeconds).toBe(30);
+            expect(result[0].journeys[1].totalDurationSeconds).toBe(60);
         });
 
         test('handles multiple devices sorted by deviceId', () => {
@@ -439,7 +444,7 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             expect(result[0].journeys).toHaveLength(1);
 
             const journey = result[0].journeys[0];
-            // home: (10s) + (15s) + (0s) = 25s
+            // home: (10s) + (15s) + (15s avg last page) = 40s
             // about: (15s)
             // contact: (20s)
             // total distinct pages: 3 (home, about, contact)
@@ -447,8 +452,8 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
 
             expect(journey.pages[0]).toMatchObject({
                 page: 'Home',
-                duration: '00:25',
-                durationSeconds: 25,
+                duration: '00:40',
+                durationSeconds: 40,
                 touched: 3,
                 city: 'Edmonton',
             });
@@ -466,8 +471,8 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
                 touched: 1,
                 city: 'Edmonton',
             });
-            expect(journey.totalDurationSeconds).toBe(60);
-            expect(journey.totalDuration).toBe('01:00.00');
+            expect(journey.totalDurationSeconds).toBe(75);
+            expect(journey.totalDuration).toBe('01:15.00');
         });
 
         test('calculates accurate duration and formatting with fractional seconds', () => {
@@ -503,12 +508,15 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             expect(result).toHaveLength(1);
             expect(result[0].journeys).toHaveLength(1);
             const journey = result[0].journeys[0];
-            // 18:41:53.162 - 18:28:28.486 = 804.676s
-            expect(journey.totalDuration).toBe('13:24.68');
+            // 18:41:53.162 - 18:28:28.486 = 804.676s -> prior total = 256 + 256 + 293 = 805s
+            // average for last page = Math.round(805 / 3) = 268s
+            // home: 256 + 268 = 524s ('08:44')
+            // totalDurationSeconds = 524 + 256 + 293 = 1073s ('17:53.00')
+            expect(journey.totalDuration).toBe('17:53.00');
             expect(journey.pages[0]).toMatchObject({
                 page: 'Home',
-                duration: '04:16',
-                durationSeconds: 256,
+                duration: '08:44',
+                durationSeconds: 524,
             });
             expect(journey.pages[1]).toMatchObject({
                 page: 'Sample Client',
@@ -543,8 +551,81 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
             expect(result).toHaveLength(1);
             expect(result[0].journeys[0].pages[0].duration).toBe('00:15');
             expect(result[0].journeys[0].pages[0].durationSeconds).toBe(15);
-            expect(result[0].journeys[0].pages[1].duration).toBe('00:00');
-            expect(result[0].journeys[0].pages[1].durationSeconds).toBe(0);
+            expect(result[0].journeys[0].pages[1].duration).toBe('00:15');
+            expect(result[0].journeys[0].pages[1].durationSeconds).toBe(15);
+        });
+
+        test('handles single page journey with 0 duration', () => {
+            const rows = [
+                {
+                    deviceId: 'dev-single',
+                    touchTime: '2026-09-01T10:00:00.000Z',
+                    note: 'visit: Home',
+                    city: 'Montreal',
+                },
+            ];
+
+            const result = buildDeviceJourneys(rows);
+
+            expect(result).toHaveLength(1);
+            expect(result[0].journeys[0].pages[0].duration).toBe('00:00');
+            expect(result[0].journeys[0].pages[0].durationSeconds).toBe(0);
+            expect(result[0].journeys[0].totalDurationSeconds).toBe(0);
+            expect(result[0].journeys[0].totalDuration).toBe('00:00.00');
+        });
+
+        test('populates country, region, latitude, longitude, and userId across device, journey, and pages', () => {
+            const rows = [
+                {
+                    deviceId: 'dev-geo',
+                    userId: 'usr-1234',
+                    touchTime: '2026-09-01T10:00:00.000Z',
+                    note: 'visit: Home',
+                    city: 'Vancouver',
+                    country: 'CA',
+                    region: 'British Columbia',
+                    latitude: 49.2827,
+                    longitude: -123.1207,
+                },
+                {
+                    deviceId: 'dev-geo',
+                    userId: 'usr-1234',
+                    touchTime: '2026-09-01T10:00:20.000Z',
+                    note: 'visit: Resources',
+                    city: 'Vancouver',
+                    country: 'CA',
+                    region: 'British Columbia',
+                    latitude: 49.2827,
+                    longitude: -123.1207,
+                },
+            ];
+
+            const result = buildDeviceJourneys(rows);
+
+            expect(result).toHaveLength(1);
+            expect(result[0]).toMatchObject({
+                deviceId: 'dev-geo',
+                userId: 'usr-1234',
+                city: 'Vancouver',
+                country: 'CA',
+                region: 'British Columbia',
+            });
+            expect(result[0].journeys[0]).toMatchObject({
+                userId: 'usr-1234',
+                city: 'Vancouver',
+                country: 'CA',
+                region: 'British Columbia',
+                latitude: 49.2827,
+                longitude: -123.1207,
+            });
+            expect(result[0].journeys[0].pages[0]).toMatchObject({
+                userId: 'usr-1234',
+                city: 'Vancouver',
+                country: 'CA',
+                region: 'British Columbia',
+                latitude: 49.2827,
+                longitude: -123.1207,
+            });
         });
     });
 

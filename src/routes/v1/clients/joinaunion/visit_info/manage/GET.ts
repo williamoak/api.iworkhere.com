@@ -36,14 +36,22 @@
  * [
  *   {
  *     "deviceId": "00000000-0000-0000-0000-000000000000",
+ *     "userId": "00000000-0000-0000-0000-000000000001",
  *     "city": "Toronto",
+ *     "country": "CA",
+ *     "region": "Ontario",
  *     "journeys": [
  *       {
+ *         "userId": "00000000-0000-0000-0000-000000000001",
  *         "city": "Toronto",
+ *         "country": "CA",
+ *         "region": "Ontario",
+ *         "latitude": 43.6532,
+ *         "longitude": -79.3832,
  *         "startTime": "2026-09-01T10:00:00.000Z",
  *         "endTime": "2026-09-01T10:00:45.000Z",
- *         "totalDurationSeconds": 45,
- *         "totalDuration": "00:45.00",
+ *         "totalDurationSeconds": 65,
+ *         "totalDuration": "01:05.00",
  *         "pages": [
  *           {
  *             "page": "Home",
@@ -52,7 +60,12 @@
  *             "duration": "00:20",
  *             "durationSeconds": 20,
  *             "touched": 1,
- *             "city": "Toronto"
+ *             "city": "Toronto",
+ *             "country": "CA",
+ *             "region": "Ontario",
+ *             "latitude": 43.6532,
+ *             "longitude": -79.3832,
+ *             "userId": "00000000-0000-0000-0000-000000000001"
  *           }
  *         ]
  *       }
@@ -86,10 +99,20 @@ export interface PageVisit {
     durationSeconds: number;
     touched: number;
     city: string | null;
+    country: string | null;
+    region: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    userId: string | null;
 }
 
 export interface Journey {
+    userId: string | null;
     city: string | null;
+    country: string | null;
+    region: string | null;
+    latitude: number | null;
+    longitude: number | null;
     startTime: string;
     endTime: string;
     totalDurationSeconds: number;
@@ -99,15 +122,23 @@ export interface Journey {
 
 export interface DeviceJourneys {
     deviceId: string;
+    userId: string | null;
     city: string | null;
+    country: string | null;
+    region: string | null;
     journeys: Journey[];
 }
 
 export interface VisitRow {
     deviceId: string;
+    userId?: string | null;
     touchTime: Date | string;
+    latitude?: number | null;
+    longitude?: number | null;
     note: string | null;
     city: string | null;
+    country?: string | null;
+    region?: string | null;
 }
 
 function badRequest(res: Response, message: string): Response {
@@ -165,8 +196,13 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
         string,
         Array<{
             touchTime: Date;
+            userId: string | null;
+            latitude: number | null;
+            longitude: number | null;
             note: string | null;
             city: string | null;
+            country: string | null;
+            region: string | null;
         }>
     >();
 
@@ -177,8 +213,13 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
         const touchTime = row.touchTime instanceof Date ? row.touchTime : new Date(row.touchTime);
         deviceMap.get(row.deviceId)!.push({
             touchTime,
+            userId: row.userId ?? null,
+            latitude: row.latitude ?? null,
+            longitude: row.longitude ?? null,
             note: row.note,
-            city: row.city,
+            city: row.city ?? null,
+            country: row.country ?? null,
+            region: row.region ?? null,
         });
     }
 
@@ -211,38 +252,70 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
         }
 
         let deviceCity: string | null = null;
+        let deviceCountry: string | null = null;
+        let deviceRegion: string | null = null;
+        let deviceUserId: string | null = null;
+
         const journeys: Journey[] = rawJourneys.map((journeyRecords) => {
             let journeyCity: string | null = null;
+            let journeyCountry: string | null = null;
+            let journeyRegion: string | null = null;
+            let journeyLatitude: number | null = null;
+            let journeyLongitude: number | null = null;
+            let journeyUserId: string | null = null;
+
+            for (const r of journeyRecords) {
+                if (!journeyCity && r.city) journeyCity = r.city;
+                if (!journeyCountry && r.country) journeyCountry = r.country;
+                if (!journeyRegion && r.region) journeyRegion = r.region;
+                if (journeyLatitude === null && r.latitude !== null && r.latitude !== undefined) journeyLatitude = r.latitude;
+                if (journeyLongitude === null && r.longitude !== null && r.longitude !== undefined) journeyLongitude = r.longitude;
+                if (!journeyUserId && r.userId) journeyUserId = r.userId;
+
+                if (!deviceCity && r.city) deviceCity = r.city;
+                if (!deviceCountry && r.country) deviceCountry = r.country;
+                if (!deviceRegion && r.region) deviceRegion = r.region;
+                if (!deviceUserId && r.userId) deviceUserId = r.userId;
+            }
+
+            const k = journeyRecords.length;
+            const stepDurations: number[] = [];
+            let totalPriorDurationSecs = 0;
+
+            for (let j = 0; j < k - 1; j++) {
+                const cur = journeyRecords[j];
+                const next = journeyRecords[j + 1];
+                const diffMs = next.touchTime.getTime() - cur.touchTime.getTime();
+                const dur = Math.max(0, Math.round(diffMs / 1000));
+                stepDurations.push(dur);
+                totalPriorDurationSecs += dur;
+            }
+
+            let lastPageDurationSec = 0;
+            if (k > 1) {
+                lastPageDurationSec = Math.round(totalPriorDurationSecs / (k - 1));
+            }
+            stepDurations.push(lastPageDurationSec);
+
             const aggregatedPagesMap = new Map<string, PageVisit>();
 
-            for (let j = 0; j < journeyRecords.length; j++) {
+            for (let j = 0; j < k; j++) {
                 const current = journeyRecords[j];
-                if (!journeyCity && current.city) {
-                    journeyCity = current.city;
-                }
-                if (!deviceCity && current.city) {
-                    deviceCity = current.city;
-                }
-
-                let durationSec = 0;
-                if (j < journeyRecords.length - 1) {
-                    const next = journeyRecords[j + 1];
-                    const diffMs = next.touchTime.getTime() - current.touchTime.getTime();
-                    durationSec = Math.max(0, Math.round(diffMs / 1000));
-                }
-
+                const durationSec = stepDurations[j];
                 const pageName = extractPageName(current.note);
+
                 const existing = aggregatedPagesMap.get(pageName);
                 if (existing) {
                     existing.touched += 1;
                     existing.durationSeconds += durationSec;
                     existing.duration = formatDuration(existing.durationSeconds, false);
-                    if (!existing.city && current.city) {
-                        existing.city = current.city;
-                    }
-                    if (!existing.note && current.note) {
-                        existing.note = current.note;
-                    }
+                    if (!existing.city && current.city) existing.city = current.city;
+                    if (!existing.country && current.country) existing.country = current.country;
+                    if (!existing.region && current.region) existing.region = current.region;
+                    if (existing.latitude === null && current.latitude !== null && current.latitude !== undefined) existing.latitude = current.latitude;
+                    if (existing.longitude === null && current.longitude !== null && current.longitude !== undefined) existing.longitude = current.longitude;
+                    if (!existing.userId && current.userId) existing.userId = current.userId;
+                    if (!existing.note && current.note) existing.note = current.note;
                 } else {
                     aggregatedPagesMap.set(pageName, {
                         page: pageName,
@@ -251,23 +324,29 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
                         duration: formatDuration(durationSec, false),
                         durationSeconds: durationSec,
                         touched: 1,
-                        city: current.city,
+                        city: current.city ?? journeyCity,
+                        country: current.country ?? journeyCountry,
+                        region: current.region ?? journeyRegion,
+                        latitude: current.latitude ?? journeyLatitude,
+                        longitude: current.longitude ?? journeyLongitude,
+                        userId: current.userId ?? journeyUserId,
                     });
                 }
             }
 
             const pages = Array.from(aggregatedPagesMap.values());
-            const startMs = journeyRecords[0].touchTime.getTime();
-            const endMs = journeyRecords[journeyRecords.length - 1].touchTime.getTime();
             const startTime = journeyRecords[0].touchTime.toISOString();
             const endTime = journeyRecords[journeyRecords.length - 1].touchTime.toISOString();
-            const exactDiffSecs = Math.max(0, (endMs - startMs) / 1000);
             const totalDurationSeconds = pages.reduce((sum, p) => sum + p.durationSeconds, 0);
-            const durationForFormat = exactDiffSecs > 0 ? exactDiffSecs : totalDurationSeconds;
-            const totalDuration = formatDuration(durationForFormat);
+            const totalDuration = formatDuration(totalDurationSeconds);
 
             return {
+                userId: journeyUserId,
                 city: journeyCity,
+                country: journeyCountry,
+                region: journeyRegion,
+                latitude: journeyLatitude,
+                longitude: journeyLongitude,
                 startTime,
                 endTime,
                 totalDurationSeconds,
@@ -278,7 +357,10 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
 
         results.push({
             deviceId,
+            userId: deviceUserId,
             city: deviceCity,
+            country: deviceCountry,
+            region: deviceRegion,
             journeys,
         });
     }
@@ -292,9 +374,14 @@ export async function getDeviceJourneysBySource(source: string): Promise<DeviceJ
     const rows = await db
         .select({
             deviceId: visitInfo.deviceId,
+            userId: visitInfo.userId,
             touchTime: visitInfo.touchTime,
+            latitude: visitInfo.latitude,
+            longitude: visitInfo.longitude,
             note: visitInfo.note,
             city: visitInfo.city,
+            country: visitInfo.country,
+            region: visitInfo.region,
         })
         .from(visitInfo)
         .where(eq(visitInfo.locationSource, source))

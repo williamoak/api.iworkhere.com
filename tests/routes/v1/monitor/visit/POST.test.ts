@@ -131,6 +131,36 @@ describe('POST /v1/monitor/visit', () => {
         expect(mockValues.note).toBe('custom note');
     });
 
+    test('derives user_id deterministically from device_id when user_id is omitted', async () => {
+        const req1 = {
+            body: {
+                device_id: '33333333-3333-3333-3333-333333333333',
+            },
+            headers: {},
+            path: '/v1/monitor/visit',
+        } as unknown as Request;
+
+        const res1 = { locals: {}, json: vi.fn() } as unknown as Response;
+        await handler(req1, res1);
+        const user1 = mockValues.userId;
+
+        const req2 = {
+            body: {
+                device_id: '44444444-4444-4444-4444-444444444444',
+            },
+            headers: {},
+            path: '/v1/monitor/visit',
+        } as unknown as Request;
+
+        const res2 = { locals: {}, json: vi.fn() } as unknown as Response;
+        await handler(req2, res2);
+        const user2 = mockValues.userId;
+
+        expect(user1).toBeDefined();
+        expect(user2).toBeDefined();
+        expect(user1).not.toBe(user2);
+    });
+
     test('returns { ok: true } and does not throw when database insert fails', async () => {
         vi.mocked(db.insert).mockReturnValue({
             values: vi.fn().mockRejectedValue(new Error('DB connection failed')),
