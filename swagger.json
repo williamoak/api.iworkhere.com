@@ -33,6 +33,9 @@
       "name": "auth, upgrade"
     },
     {
+      "name": "clients, joinaunion, visit_info, config"
+    },
+    {
       "name": "clients, joinaunion, visit_info, generate"
     },
     {
@@ -406,6 +409,40 @@
           "auth, upgrade"
         ],
         "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/clients/joinaunion/visit_info/config": {
+      "get": {
+        "summary": "Retrieve unique column values from joinaunion.visit_info table.",
+        "description": "Queries the joinaunion.visit_info table for distinct, non-null values of a specified column.\nRequires authentication and returns the requested column name, unique values list, and query timestamp.",
+        "tags": [
+          "clients, joinaunion, visit_info, config"
+        ],
+        "parameters": [
+          {
+            "name": "column",
+            "in": "query",
+            "required": true,
+            "description": "Column name from joinaunion.visit_info (e.g., city, country, region, location_source, device_id, user_id, request_method, note)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response"
