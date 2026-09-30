@@ -516,6 +516,28 @@
             "description": "Internal server error"
           }
         }
+      },
+      "post": {
+        "summary": "Query and aggregate joinaunion.visit_info records with dynamic output shape.",
+        "description": "Queries joinaunion.visit_info table, filtering by dataset/location_source, date range,\nsector, region, and custom column filters. Dynamically formats output based on the\nrequested output_shape object/fields, supporting column selection and a curated list of\naggregate functions (such as record count per group for heatmaps).",
+        "tags": [
+          "clients, joinaunion, visit_info, manage"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
       }
     },
     "/v1/clients/joinaunion/widget": {

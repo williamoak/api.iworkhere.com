@@ -398,14 +398,25 @@ function bindExpress(args: {
             });
 
             if (!res.headersSent) {
-              const shaped = validator.response(result);
-              dbg({
-                phase: 'handler_wrapper.autorespond',
-                reqId,
-                ...baseDebug,
-                shapedResponse: ROUTE_LOADER_DEBUG ? shaped : undefined,
-              });
-              return res.json(shaped);
+              if (
+                result !== undefined &&
+                result !== res &&
+                result !== req &&
+                !(
+                  result &&
+                  typeof result === 'object' &&
+                  ('_httpMessage' in result || ('socket' in result && 'req' in result))
+                )
+              ) {
+                const shaped = validator.response(result);
+                dbg({
+                  phase: 'handler_wrapper.autorespond',
+                  reqId,
+                  ...baseDebug,
+                  shapedResponse: ROUTE_LOADER_DEBUG ? shaped : undefined,
+                });
+                return res.json(shaped);
+              }
             }
           } catch (err) {
             dbg({

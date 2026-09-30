@@ -467,6 +467,32 @@ describe("routeLoader", () => {
                 supportedMethods: ["GET"],
             });
 
+            // Test handler returning res directly without circular JSON crash
+            const appResHandler = express();
+            const resRouteTree: RouteTree = {
+                "/v1/direct-res": {
+                    path: "/v1/direct-res",
+                    file: "/tmp/direct/POST.ts",
+                    handlers: {
+                        POST: async (_req: any, res: any) => {
+                            return res.status(200).json({ custom: true });
+                        },
+                    },
+                    schemas: {},
+                    children: {},
+                    authRequiredByMethod: { POST: false },
+                },
+            };
+            __test__.bindExpress({
+                app: appResHandler as any,
+                routeTree: resRouteTree,
+                maxConcurrentRequests: 10,
+                apiVersion: "v1",
+            });
+            const directRes = await testRequest(appResHandler, "/v1/direct-res", { method: "POST" });
+            expect(directRes.status).toBe(200);
+            expect(directRes.json).toEqual({ custom: true });
+
             // Test register405 when method is allowed
             const req = { method: "GET" } as any;
             const res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as any;

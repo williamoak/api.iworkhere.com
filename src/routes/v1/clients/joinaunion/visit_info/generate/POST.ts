@@ -156,6 +156,8 @@ export type GeneratorOptions = {
     country: string;
     region: string;
     pages?: string[];
+    enableWidget?: boolean;
+    enable_widget?: boolean;
     random?: () => number;
     deviceId?: () => string;
     userId?: () => string;
@@ -171,6 +173,54 @@ export type GeneratorOptions = {
 };
 
 type GeneratedJourneys = { records: VisitRecord[]; journeys: number; devices: number };
+
+export const WIDGET_CLICK_PROBABILITY = 0.8;
+
+export const WIDGET_PROVINCES = [
+    'British Columbia',
+    'Alberta',
+    'Saskatchewan',
+    'Manitoba',
+    'Ontario',
+    'Quebec',
+    'New Brunswick',
+    'Nova Scotia',
+    'Prince Edward Island',
+    'Newfoundland and Labrador',
+    'Yukon',
+    'Northwest Territories',
+    'Nunavut',
+] as const;
+
+export const WIDGET_INDUSTRIES = [
+    'Healthcare',
+    'Education',
+    'Construction',
+    'Retail',
+    'Technology',
+    'Manufacturing',
+    'Transportation',
+    'Hospitality',
+    'Agriculture',
+    'Other',
+] as const;
+
+export const WIDGET_MODES = ['anon', 'rep'] as const;
+
+export function getWidgetAbandonProbability(step: number): number {
+    switch (step) {
+        case 1:
+            return 0.10;
+        case 2:
+            return 0.20;
+        case 3:
+            return 0.30;
+        case 4:
+            return 0.40;
+        default:
+            return 0;
+    }
+}
 
 export const REDIS_PAGES_KEY = 'joinaunion:dynamic_pages';
 export const DEFAULT_FALLBACK_PAGES = [
@@ -196,7 +246,7 @@ export function extractUniquePages(notes: (string | null | undefined)[]): string
         if (!/^visit:\s*/i.test(trimmed)) continue;
         const pageName = trimmed.replace(/^visit:\s*/i, '').trim();
 
-        if (pageName && !pageName.startsWith('/') && pageName.length <= 64) {
+        if (pageName && !pageName.startsWith('/') && !pageName.includes('#') && pageName.length <= 64) {
             pageSet.add(pageName);
         }
     }
@@ -422,19 +472,193 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
             deviceToUserMap.set(deviceId, userId);
         }
         const point = randomPoint(places, random);
-        let page = pages.includes('Home') ? 'Home' : pages[0];
-        let step = 0;
         let touchTime = initialTouchTime;
-        const visitedPages = new Set<string>();
-        const pageDwellTimes = new Map<string, number>();
 
         const journeyMaxMs = Math.min(
             endMs,
             journeys === options.numRecs - 1 ? endMs : Math.max(initialTouchTime.getTime() + 10_000, slotEnd)
         );
 
+        // Record initial Home visit
+        records.push({
+            deviceId,
+            userId,
+            requestMethod: 'GET',
+            touchTime,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            locationSource: options.locationSource,
+            city: point.city,
+            country: point.countryCode,
+            region: point.regionName,
+            note: 'visit: Home',
+        });
+
+        const durationSeconds = 1 + Math.floor(random() * 30);
+        let nextTouchMs = touchTime.getTime() + durationSeconds * 1000;
+        if (nextTouchMs > endMs || nextTouchMs > nowMs || nextTouchMs > journeyMaxMs) {
+            journeys += 1;
+            if (nextTouchMs > endMs || nextTouchMs > nowMs) {
+                break;
+            }
+            continue;
+        }
+
+        const enableWidget = options.enableWidget ?? options.enable_widget ?? (options.pages && options.pages.length > 0 ? false : true);
+        const entersWidget = enableWidget && random() < WIDGET_CLICK_PROBABILITY;
+
+        if (entersWidget) {
+            const province = (point.regionName && (WIDGET_PROVINCES as readonly string[]).includes(point.regionName))
+                ? point.regionName
+                : WIDGET_PROVINCES[Math.min(WIDGET_PROVINCES.length - 1, Math.floor(random() * WIDGET_PROVINCES.length))];
+            const industry = WIDGET_INDUSTRIES[Math.min(WIDGET_INDUSTRIES.length - 1, Math.floor(random() * WIDGET_INDUSTRIES.length))];
+            const mode = WIDGET_MODES[Math.min(WIDGET_MODES.length - 1, Math.floor(random() * WIDGET_MODES.length))];
+
+            // Step 1: Province / location
+            touchTime = new Date(nextTouchMs);
+            records.push({
+                deviceId,
+                userId,
+                requestMethod: 'GET',
+                touchTime,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                locationSource: options.locationSource,
+                city: point.city,
+                country: point.countryCode,
+                region: point.regionName,
+                note: `visit: Home#step1:${province}`,
+            });
+
+            // 10% chance to abandon after step 1
+            if (random() < getWidgetAbandonProbability(1)) {
+                journeys += 1;
+                continue;
+            }
+
+            // Step 2: Industry
+            const dur1 = 1 + Math.floor(random() * 30);
+            nextTouchMs = touchTime.getTime() + dur1 * 1000;
+            if (nextTouchMs > endMs || nextTouchMs > nowMs || nextTouchMs > journeyMaxMs) {
+                journeys += 1;
+                if (nextTouchMs > endMs || nextTouchMs > nowMs) break;
+                continue;
+            }
+
+            touchTime = new Date(nextTouchMs);
+            records.push({
+                deviceId,
+                userId,
+                requestMethod: 'GET',
+                touchTime,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                locationSource: options.locationSource,
+                city: point.city,
+                country: point.countryCode,
+                region: point.regionName,
+                note: `visit: Home#step2:${industry}`,
+            });
+
+            // 20% chance to abandon after step 2
+            if (random() < getWidgetAbandonProbability(2)) {
+                journeys += 1;
+                continue;
+            }
+
+            // Step 3: Situation
+            const dur2 = 1 + Math.floor(random() * 30);
+            nextTouchMs = touchTime.getTime() + dur2 * 1000;
+            if (nextTouchMs > endMs || nextTouchMs > nowMs || nextTouchMs > journeyMaxMs) {
+                journeys += 1;
+                if (nextTouchMs > endMs || nextTouchMs > nowMs) break;
+                continue;
+            }
+
+            touchTime = new Date(nextTouchMs);
+            records.push({
+                deviceId,
+                userId,
+                requestMethod: 'GET',
+                touchTime,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                locationSource: options.locationSource,
+                city: point.city,
+                country: point.countryCode,
+                region: point.regionName,
+                note: 'visit: Home#step3',
+            });
+
+            // 30% chance to abandon after step 3
+            if (random() < getWidgetAbandonProbability(3)) {
+                journeys += 1;
+                continue;
+            }
+
+            // Step 4: Contact choice
+            const dur3 = 1 + Math.floor(random() * 30);
+            nextTouchMs = touchTime.getTime() + dur3 * 1000;
+            if (nextTouchMs > endMs || nextTouchMs > nowMs || nextTouchMs > journeyMaxMs) {
+                journeys += 1;
+                if (nextTouchMs > endMs || nextTouchMs > nowMs) break;
+                continue;
+            }
+
+            touchTime = new Date(nextTouchMs);
+            records.push({
+                deviceId,
+                userId,
+                requestMethod: 'GET',
+                touchTime,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                locationSource: options.locationSource,
+                city: point.city,
+                country: point.countryCode,
+                region: point.regionName,
+                note: `visit: Home#step4:${mode}`,
+            });
+
+            // 40% chance to abandon after step 4
+            if (random() < getWidgetAbandonProbability(4)) {
+                journeys += 1;
+                continue;
+            }
+
+            // Widget Completed -> proceed to Union Guide
+            const dur4 = 1 + Math.floor(random() * 30);
+            nextTouchMs = touchTime.getTime() + dur4 * 1000;
+            if (nextTouchMs <= endMs && nextTouchMs <= nowMs && nextTouchMs <= journeyMaxMs) {
+                touchTime = new Date(nextTouchMs);
+                records.push({
+                    deviceId,
+                    userId,
+                    requestMethod: 'GET',
+                    touchTime,
+                    latitude: point.latitude,
+                    longitude: point.longitude,
+                    locationSource: options.locationSource,
+                    city: point.city,
+                    country: point.countryCode,
+                    region: point.regionName,
+                    note: 'visit: Union Guide',
+                });
+            }
+
+            journeys += 1;
+            continue;
+        }
+
+        // Standard page walk for non-widget journeys
+        let page = nextPage('Home', pages, random);
+        let step = 0;
+        const visitedPages = new Set<string>(['Home']);
+        const pageDwellTimes = new Map<string, number>();
         let terminated = false;
+
         while (true) {
+            touchTime = new Date(nextTouchMs);
             records.push({
                 deviceId,
                 userId,
@@ -455,8 +679,8 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
             }
 
             step += 1;
-            const durationSeconds = 1 + Math.floor(random() * 30);
-            const nextTouchMs = touchTime.getTime() + durationSeconds * 1000;
+            const dur = 1 + Math.floor(random() * 30);
+            nextTouchMs = touchTime.getTime() + dur * 1000;
             if (nextTouchMs > endMs || nextTouchMs > nowMs) {
                 terminated = true;
                 break;
@@ -470,13 +694,12 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
                 break;
             }
 
-            const currentPageTime = (pageDwellTimes.get(page) ?? 0) + durationSeconds * 1000;
+            const currentPageTime = (pageDwellTimes.get(page) ?? 0) + dur * 1000;
             pageDwellTimes.set(page, currentPageTime);
             if (currentPageTime >= 10 * 60 * 1000) {
                 break;
             }
 
-            touchTime = new Date(nextTouchMs);
             if (random() < getJourneyEndProbability(step)) break;
             page = nextPage(page, pages, random);
         }
@@ -494,22 +717,61 @@ function badRequest(res: Response, message: string): Response {
     return res.status(400).json({ error: 'INVALID_REQUEST', message });
 }
 
+export const INSERT_BATCH_SIZE = 1000;
+
 export default async function POST(req: Request, res: Response): Promise<Response> {
     const body = req.body ?? {};
     const query = req.query ?? {};
 
-    const rawNumRecs = body.num_recs ?? (query.num_recs !== undefined ? Number(query.num_recs) : 1000);
-    const locationSource = typeof body.loc_src === 'string'
-        ? body.loc_src.trim()
-        : typeof query.loc_src === 'string'
-        ? query.loc_src.trim()
-        : '';
+    const rawNumRecs = body.num_recs ??
+        body.numRecs ??
+        body.numrecs ??
+        (query.num_recs !== undefined
+            ? Number(query.num_recs)
+            : query.numRecs !== undefined
+            ? Number(query.numRecs)
+            : query.numrecs !== undefined
+            ? Number(query.numrecs)
+            : 1000);
+
+    const rawLocSrc = body.loc_src ??
+        body.locSrc ??
+        body.locsrc ??
+        body.location_source ??
+        body.locationSource ??
+        query.loc_src ??
+        query.locSrc ??
+        query.locsrc ??
+        query.location_source ??
+        query.locationSource;
+
+    const locationSource = typeof rawLocSrc === 'string' ? rawLocSrc.trim() : '';
     const country = body.country ?? query.country;
     const region = body.region ?? query.region ?? DEFAULT_REGION;
 
-    const rawStartAt = body.start_at ?? body.startat ?? query.start_at ?? query.startat;
-    const rawEndAt = body.end_at ?? body.endat ?? query.end_at ?? query.endat;
+    const rawStartAt = body.start_at ??
+        body.startat ??
+        body.startAt ??
+        query.start_at ??
+        query.startat ??
+        query.startAt;
+
+    const rawEndAt = body.end_at ??
+        body.endat ??
+        body.endAt ??
+        query.end_at ??
+        query.endat ??
+        query.endAt;
+
     const rawDuration = body.duration ?? query.duration;
+
+    const rawEnableWidget = body.enable_widget ??
+        body.enableWidget ??
+        query.enable_widget ??
+        query.enableWidget;
+    const enableWidget = rawEnableWidget !== undefined
+        ? (rawEnableWidget === true || rawEnableWidget === 'true')
+        : undefined;
 
     if (!locationSource) return badRequest(res, 'loc_src is required');
     if (!Number.isInteger(rawNumRecs)) return badRequest(res, 'num_recs must be an integer');
@@ -531,10 +793,14 @@ export default async function POST(req: Request, res: Response): Promise<Respons
     const isProduction = process.env.NODE_ENV === 'production';
     const confirmDelete = Boolean(
         body.confirm_delete ??
+        body.confirmDelete ??
         body.allow_delete ??
+        body.allowDelete ??
         body.force ??
         query.confirm_delete ??
+        query.confirmDelete ??
         query.allow_delete ??
+        query.allowDelete ??
         query.force ??
         process.env.ALLOW_MASS_DELETE === 'true'
     );
@@ -560,12 +826,18 @@ export default async function POST(req: Request, res: Response): Promise<Respons
             country: String(country),
             region: String(region),
             places,
+            enableWidget,
             startAt: resolvedRange.startAt,
             endAt: resolvedRange.endAt,
         });
 
         await db.delete(visitInfo).where(eq(visitInfo.locationSource, locationSource));
-        if (generated.records.length > 0) await db.insert(visitInfo).values(generated.records);
+        if (generated.records.length > 0) {
+            for (let i = 0; i < generated.records.length; i += INSERT_BATCH_SIZE) {
+                const batch = generated.records.slice(i, i + INSERT_BATCH_SIZE);
+                await db.insert(visitInfo).values(batch);
+            }
+        }
 
         try {
             await cacheStore.delWhere((key) => key.includes('visit_info/manage'));
@@ -585,7 +857,8 @@ export default async function POST(req: Request, res: Response): Promise<Respons
             end_date: resolvedRange.endDate,
             duration: resolvedRange.duration,
         });
-    } catch {
+    } catch (err) {
+        console.error('Failed to generate visit_info journeys:', err);
         return res.status(500).json({
             error: 'INTERNAL_ERROR',
             message: 'Failed to generate visit_info journeys',
@@ -601,4 +874,9 @@ export const __test__ = {
     resetLocalPageCache,
     nextPage,
     getJourneyEndProbability,
+    getWidgetAbandonProbability,
+    WIDGET_CLICK_PROBABILITY,
+    WIDGET_PROVINCES,
+    WIDGET_INDUSTRIES,
+    WIDGET_MODES,
 };

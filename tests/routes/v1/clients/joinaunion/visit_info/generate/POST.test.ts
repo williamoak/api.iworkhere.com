@@ -8,6 +8,11 @@ import handler, {
     generateVisitJourneys,
     getDynamicPages,
     getJourneyEndProbability,
+    getWidgetAbandonProbability,
+    WIDGET_CLICK_PROBABILITY,
+    WIDGET_PROVINCES,
+    WIDGET_INDUSTRIES,
+    WIDGET_MODES,
     resetLocalPageCache,
     resolveCountryRegion,
     __test__,
@@ -792,6 +797,302 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
 
             expect(res.status).toHaveBeenCalledWith(200);
             expect(delWhereSpy).toHaveBeenCalled();
+        });
+
+        test('handles large record sets with chunked database inserts and camelCase parameters', async () => {
+            const insertCalls: any[] = [];
+            vi.mocked(db.insert).mockReturnValue({
+                values: vi.fn().mockImplementation((values) => {
+                    insertCalls.push(values);
+                    return Promise.resolve();
+                }),
+            } as any);
+
+            const req = {
+                body: {
+                    num_recs: 1000,
+                    loc_src: 'testrun',
+                    country: 'CA',
+                    region: 'all',
+                    startat: 'Jan 1st 2025',
+                    endAt: 'today',
+                },
+            } as Request;
+            const res = response();
+
+            await handler(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ok: true,
+                    location_source: 'testrun',
+                    requested_records: 1000,
+                    inserted_records: expect.any(Number),
+                    journeys: 1000,
+                }),
+            );
+            // 1000 journeys typically generate ~2000-3000 records, resulting in multiple batch inserts
+            expect(insertCalls.length).toBeGreaterThanOrEqual(2);
+            for (const batch of insertCalls) {
+                expect(batch.length).toBeLessThanOrEqual(1000);
+            }
+        });
+
+        test('accepts camelCase and alias property names (numRecs, locSrc, startAt, endAt)', async () => {
+            const req = {
+                body: {
+                    numRecs: 5,
+                    locSrc: 'camel_case_test',
+                    country: 'CA',
+                    region: 'all',
+                    startAt: '2025-01-01',
+                    endAt: '2025-06-01',
+                },
+            } as Request;
+            const res = response();
+
+            await handler(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ok: true,
+                    location_source: 'camel_case_test',
+                    requested_records: 5,
+                }),
+            );
+        });
+    });
+
+    describe('widget journey flow and progressive abandonment probabilities', () => {
+        test('getWidgetAbandonProbability returns exact step abandonment rates', () => {
+            expect(getWidgetAbandonProbability(1)).toBe(0.10);
+            expect(getWidgetAbandonProbability(2)).toBe(0.20);
+            expect(getWidgetAbandonProbability(3)).toBe(0.30);
+            expect(getWidgetAbandonProbability(4)).toBe(0.40);
+            expect(getWidgetAbandonProbability(0)).toBe(0);
+            expect(getWidgetAbandonProbability(5)).toBe(0);
+        });
+
+        test('WIDGET_CLICK_PROBABILITY is 80%', () => {
+            expect(WIDGET_CLICK_PROBABILITY).toBe(0.80);
+        });
+
+        test('generates widget steps and abandons after step 1 when abandon check passes (10%)', async () => {
+            // Sequence of random values:
+            // 1. widget enter check: 0.5 (< 0.80 -> enters widget)
+            // 2. province/industry/mode index lookups: 0
+            // 3. step 1 abandon check: 0.05 (< 0.10 -> abandons after step 1)
+            let call = 0;
+            const values = [0.5, 0, 0, 0, 0.05];
+            const generated = await generateVisitJourneys({
+                numRecs: 1,
+                locationSource: 'widget_abandon_step1',
+                country: 'Canada',
+                region: 'Ontario',
+                places: [{
+                    latitude: 43.6532,
+                    longitude: -79.3832,
+                    city: 'Toronto',
+                    countryCode: 'CA',
+                    regionCode: 'ON',
+                    regionName: 'Ontario',
+                }],
+                random: () => values[call++] ?? 0.05,
+                enableWidget: true,
+            });
+
+            expect(generated.journeys).toBe(1);
+            expect(generated.records.length).toBe(2);
+            expect(generated.records[0].note).toBe('visit: Home');
+            expect(generated.records[1].note).toBe('visit: Home#step1:Ontario');
+        });
+
+        test('generates widget steps through step 2 and abandons after step 2 (20%)', async () => {
+            // Step 1 abandon: 0.15 (>= 0.10, does not abandon)
+            // Step 2 abandon: 0.15 (< 0.20, abandons after step 2)
+            let call = 0;
+            const values = [
+                0.5, // enters widget (< 0.8)
+                0, 0, 0, // province, industry, mode
+                0.15, // step 1 abandon check (>= 0.10 -> continue)
+                0.5, // step 2 duration
+                0.15, // step 2 abandon check (< 0.20 -> abandon)
+            ];
+            const generated = await generateVisitJourneys({
+                numRecs: 1,
+                locationSource: 'widget_abandon_step2',
+                country: 'Canada',
+                region: 'Ontario',
+                places: [{
+                    latitude: 43.6532,
+                    longitude: -79.3832,
+                    city: 'Toronto',
+                    countryCode: 'CA',
+                    regionCode: 'ON',
+                    regionName: 'Ontario',
+                }],
+                random: () => values[call++] ?? 0.15,
+                enableWidget: true,
+            });
+
+            expect(generated.journeys).toBe(1);
+            expect(generated.records.length).toBe(3);
+            expect(generated.records[0].note).toBe('visit: Home');
+            expect(generated.records[1].note).toBe('visit: Home#step1:Ontario');
+            expect(generated.records[2].note).toMatch(/^visit: Home#step2:/);
+        });
+
+        test('generates widget steps through step 3 and abandons after step 3 (30%)', async () => {
+            // Step 1: 0.25 (>= 0.10)
+            // Step 2: 0.25 (>= 0.20)
+            // Step 3: 0.25 (< 0.30 -> abandon)
+            let call = 0;
+            const values = [
+                0.5, // enters widget
+                0, 0, 0, // selections
+                0.25, // step 1 check (continue)
+                0.5, // duration
+                0.25, // step 2 check (continue)
+                0.5, // duration
+                0.25, // step 3 check (abandon)
+            ];
+            const generated = await generateVisitJourneys({
+                numRecs: 1,
+                locationSource: 'widget_abandon_step3',
+                country: 'Canada',
+                region: 'Ontario',
+                places: [{
+                    latitude: 43.6532,
+                    longitude: -79.3832,
+                    city: 'Toronto',
+                    countryCode: 'CA',
+                    regionCode: 'ON',
+                    regionName: 'Ontario',
+                }],
+                random: () => values[call++] ?? 0.25,
+                enableWidget: true,
+            });
+
+            expect(generated.journeys).toBe(1);
+            expect(generated.records.length).toBe(4);
+            expect(generated.records[0].note).toBe('visit: Home');
+            expect(generated.records[1].note).toBe('visit: Home#step1:Ontario');
+            expect(generated.records[2].note).toMatch(/^visit: Home#step2:/);
+            expect(generated.records[3].note).toBe('visit: Home#step3');
+        });
+
+        test('generates widget steps through step 4 and abandons after step 4 (40%)', async () => {
+            // Step 1: 0.35 (>= 0.10)
+            // Step 2: 0.35 (>= 0.20)
+            // Step 3: 0.35 (>= 0.30)
+            // Step 4: 0.35 (< 0.40 -> abandon)
+            let call = 0;
+            const values = [
+                0.5, // enters widget
+                0, 0, 0, // selections
+                0.35, // step 1 check
+                0.5, // duration
+                0.35, // step 2 check
+                0.5, // duration
+                0.35, // step 3 check
+                0.5, // duration
+                0.35, // step 4 check (abandon)
+            ];
+            const generated = await generateVisitJourneys({
+                numRecs: 1,
+                locationSource: 'widget_abandon_step4',
+                country: 'Canada',
+                region: 'Ontario',
+                places: [{
+                    latitude: 43.6532,
+                    longitude: -79.3832,
+                    city: 'Toronto',
+                    countryCode: 'CA',
+                    regionCode: 'ON',
+                    regionName: 'Ontario',
+                }],
+                random: () => values[call++] ?? 0.35,
+                enableWidget: true,
+            });
+
+            expect(generated.journeys).toBe(1);
+            expect(generated.records.length).toBe(5);
+            expect(generated.records[0].note).toBe('visit: Home');
+            expect(generated.records[1].note).toBe('visit: Home#step1:Ontario');
+            expect(generated.records[2].note).toMatch(/^visit: Home#step2:/);
+            expect(generated.records[3].note).toBe('visit: Home#step3');
+            expect(generated.records[4].note).toMatch(/^visit: Home#step4:/);
+        });
+
+        test('completes full widget flow and proceeds to Union Guide when no abandonment occurs', async () => {
+            // Step 1: 0.45 (>= 0.10)
+            // Step 2: 0.45 (>= 0.20)
+            // Step 3: 0.45 (>= 0.30)
+            // Step 4: 0.45 (>= 0.40 -> complete!)
+            let call = 0;
+            const values = [
+                0.5, // enters widget (< 0.8)
+                0, 0, 0, // selections
+                0.45, // step 1 check
+                0.5, // duration
+                0.45, // step 2 check
+                0.5, // duration
+                0.45, // step 3 check
+                0.5, // duration
+                0.45, // step 4 check (>= 0.40 -> complete!)
+                0.5, // duration to union guide
+            ];
+            const generated = await generateVisitJourneys({
+                numRecs: 1,
+                locationSource: 'widget_complete',
+                country: 'Canada',
+                region: 'Ontario',
+                places: [{
+                    latitude: 43.6532,
+                    longitude: -79.3832,
+                    city: 'Toronto',
+                    countryCode: 'CA',
+                    regionCode: 'ON',
+                    regionName: 'Ontario',
+                }],
+                random: () => values[call++] ?? 0.45,
+                enableWidget: true,
+            });
+
+            expect(generated.journeys).toBe(1);
+            expect(generated.records.length).toBe(6);
+            expect(generated.records[0].note).toBe('visit: Home');
+            expect(generated.records[1].note).toBe('visit: Home#step1:Ontario');
+            expect(generated.records[2].note).toMatch(/^visit: Home#step2:/);
+            expect(generated.records[3].note).toBe('visit: Home#step3');
+            expect(generated.records[4].note).toMatch(/^visit: Home#step4:/);
+            expect(generated.records[5].note).toBe('visit: Union Guide');
+        });
+
+        test('performs standard page walk when widget is disabled or random >= 0.80', async () => {
+            const generated = await generateVisitJourneys({
+                numRecs: 1,
+                locationSource: 'non_widget_journey',
+                country: 'Canada',
+                region: 'Ontario',
+                pages: ['Home', 'Your Rights', 'Why Unions'],
+                enableWidget: false,
+                random: () => 0.08,
+                places: [{
+                    latitude: 43.6532,
+                    longitude: -79.3832,
+                    city: 'Toronto',
+                    countryCode: 'CA',
+                    regionCode: 'ON',
+                    regionName: 'Ontario',
+                }],
+            });
+
+            expect(generated.journeys).toBe(1);
+            expect(generated.records[0].note).toBe('visit: Home');
+            expect(generated.records[1].note).toBe('visit: Your Rights');
         });
     });
 });
