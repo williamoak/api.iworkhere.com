@@ -82,6 +82,12 @@ export function cacheMiddleware(ttlMs = DEFAULT_TTL_MS) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const tenant = (req as any).tenant;
 
+    // Bypass caching for authenticated requests to prevent cross-user response collisions
+    if (req.get('authorization') || (req as any).auth) {
+      await executeTenantSpecific(tenant, 'cacheMiddleware', req, res, next);
+      return next();
+    }
+
     const method = req.method.toUpperCase();
 
     /* ----------------------------------------------------------

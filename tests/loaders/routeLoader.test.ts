@@ -8,16 +8,21 @@ import os from "os";
 const {
     authMwHandler,
     authMiddlewareFactory,
+    cacheMwHandler,
+    cacheMiddlewareFactory,
     validatorRequest,
     loggerLogSpy,
 } = vi.hoisted(() => ({
     authMwHandler: vi.fn((_req, _res, next) => next()),
     authMiddlewareFactory: vi.fn(),
+    cacheMwHandler: vi.fn((_req, _res, next) => next()),
+    cacheMiddlewareFactory: vi.fn(),
     validatorRequest: vi.fn((_req, _res, next) => next()),
     loggerLogSpy: vi.fn(),
 }));
 
 authMiddlewareFactory.mockImplementation(() => authMwHandler);
+cacheMiddlewareFactory.mockImplementation(() => cacheMwHandler);
 
 vi.mock("@middleware/authMiddleware", () => ({
     authMiddleware: authMiddlewareFactory,
@@ -44,7 +49,7 @@ vi.mock("@middleware/rateLimitMiddleware", () => ({
 }));
 
 vi.mock("@middleware/cacheMiddleware", () => ({
-    cacheMiddleware: vi.fn(() => (_req, _res, next) => next()),
+    cacheMiddleware: cacheMiddlewareFactory,
 }));
 
 vi.mock("@helpers/logger", () => ({
@@ -514,6 +519,46 @@ describe("routeLoader", () => {
             expect(register405Handler).toBeDefined();
             register405Handler(req, res, next);
             expect(next).toHaveBeenCalled();
+        });
+
+        test("omits cacheMiddleware when authRequired is true and includes it when false", async () => {
+            cacheMiddlewareFactory.mockClear();
+            authMiddlewareFactory.mockClear();
+
+            const app = createAppMock();
+            const tree: RouteTree = {
+                "/v1/auth-route": {
+                    path: "/v1/auth-route",
+                    file: "/tmp/auth/GET.ts",
+                    handlers: {
+                        GET: async () => ({ auth: true }),
+                    },
+                    schemas: {},
+                    children: {},
+                    authRequiredByMethod: { GET: true },
+                },
+                "/v1/public-route": {
+                    path: "/v1/public-route",
+                    file: "/tmp/public/GET.ts",
+                    handlers: {
+                        GET: async () => ({ public: true }),
+                    },
+                    schemas: {},
+                    children: {},
+                    authRequiredByMethod: { GET: false },
+                },
+            };
+
+            __test__.bindExpress({
+                app: app as any,
+                routeTree: tree,
+                maxConcurrentRequests: 10,
+                apiVersion: "v1",
+            });
+
+            // cacheMiddleware should only be instantiated for the public route, not the authenticated route
+            expect(cacheMiddlewareFactory).toHaveBeenCalledTimes(1);
+            expect(authMiddlewareFactory).toHaveBeenCalledTimes(1);
         });
     });
 });

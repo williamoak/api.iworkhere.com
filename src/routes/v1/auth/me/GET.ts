@@ -93,6 +93,12 @@ function sha256(input: string): string {
 }
 
 export async function GET(req: Request, res: Response): Promise<void> {
+    if (typeof (res as any).setHeader === 'function') {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+        res.setHeader('Pragma', 'no-cache')
+        res.setHeader('Vary', 'Authorization')
+    }
+
     const start = Date.now()
     const reqId =
         (req.get('x-request-id')?.trim() || '').slice(0, 128) || randomUUID()

@@ -350,9 +350,13 @@ function bindExpress(args: {
         throttleMiddleware(maxConcurrentRequests),
         tracePoint('throttle.after', baseDebug),
 
-        tracePoint('cache.before', baseDebug),
-        cacheMiddleware(),
-        tracePoint('cache.after', baseDebug),
+        ...(!authRequired
+          ? [
+              tracePoint('cache.before', baseDebug),
+              cacheMiddleware(),
+              tracePoint('cache.after', baseDebug),
+            ]
+          : []),
 
         async (req: Request, res: Response, next: NextFunction) => {
           const reqId = getReqId(req);

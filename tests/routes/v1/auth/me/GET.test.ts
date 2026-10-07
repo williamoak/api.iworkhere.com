@@ -32,6 +32,7 @@ import { getUserById } from '@services/users/getUserById';
 type ResMock = Response & {
     statusCode: number;
     body: unknown;
+    headers: Record<string, string>;
 };
 
 function createReq(options?: {
@@ -66,6 +67,11 @@ function createRes(): ResMock {
     const res = {
         statusCode: 0,
         body: undefined,
+        headers: {} as Record<string, string>,
+        setHeader(name: string, value: string) {
+            this.headers[name.toLowerCase()] = value;
+            return this;
+        },
         on(event: string, cb: () => void) {
             if (event === 'finish') finishHandler = cb;
             return this;
@@ -79,7 +85,7 @@ function createRes(): ResMock {
             if (finishHandler) finishHandler();
             return this;
         },
-    } as ResMock;
+    } as unknown as ResMock;
     return res;
 }
 
@@ -239,6 +245,29 @@ describe('GET /v1/auth/me', () => {
 
         expect(res.statusCode).toBe(500);
         expect(res.body).toEqual({ error: 'INTERNAL_SERVER_ERROR' });
+    });
+
+    it('sets anti-caching HTTP headers (Cache-Control, Pragma, Vary)', async () => {
+        vi.mocked(getUserById).mockResolvedValue({
+            id: 'user-123',
+            username: 'test-user',
+            email: 'test@example.com',
+            status: 'active',
+            eulaAccepted: true,
+        } as any);
+
+        const req = createReq({
+            authorization: 'Bearer valid-token',
+            authUserId: 'user-123',
+        });
+        const res = createRes();
+
+        await GET(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.headers['cache-control']).toBe('no-store, no-cache, must-revalidate, private');
+        expect(res.headers['pragma']).toBe('no-cache');
+        expect(res.headers['vary']).toBe('Authorization');
     });
 
     it('handles debug mode without changing the response contract', async () => {
