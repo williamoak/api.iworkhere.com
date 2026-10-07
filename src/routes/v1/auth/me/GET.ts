@@ -1,6 +1,4 @@
-import { logger } from '@helpers/logger';
-
-﻿/**
+/**
  * @file authMe
  * @external
  * @module auth
@@ -72,6 +70,7 @@ import type { Request, Response } from 'express'
 import { createHash, randomUUID } from 'node:crypto'
 import { getUserById } from '@services/users/getUserById'
 export const authRequired = true
+import { logger } from '@helpers/logger';
 
 const AUTH_ME_DEBUG = process.env.AUTH_ME_DEBUG === '1'
 

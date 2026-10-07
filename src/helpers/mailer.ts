@@ -11,13 +11,12 @@ import { logger } from '@helpers/logger';
  *   All sends are logged to the email_audit_logs table for auditing.
  */
 
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { configGet } from '@helpers/config';
 import { logEmailAudit } from '@services/auth/emailAuditService';
-;
 
 // Create a reusable transporter using SMTP settings from the environment
-let transporter: nodemailer.Transporter | null = null;
+let transporter: Transporter | null = null;
 
 
 export function resetTransporter() {
