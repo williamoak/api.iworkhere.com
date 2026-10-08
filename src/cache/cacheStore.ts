@@ -44,6 +44,15 @@ export class CacheStore {
   }
 
   /**
+   * Atomically claim a short-lived key. Used for one-time ceremony/replay
+   * markers where a read followed by a write would permit a race.
+   */
+  async consumeOnce(key: string, ttlMs: number): Promise<boolean> {
+    const result = await redis.set(key, '1', 'PX', ttlMs, 'NX');
+    return result === 'OK';
+  }
+
+  /**
    * Delete a single cache entry by key.
    */
   async del(key: string): Promise<void> {

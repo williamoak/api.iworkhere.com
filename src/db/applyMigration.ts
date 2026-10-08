@@ -22,7 +22,7 @@ import { logger } from '@helpers/logger';
  */
 import "tsconfig-paths/register";
 import { pool } from "@services/dbService";
-;
+
 
 async function applyMigration() {
   try {

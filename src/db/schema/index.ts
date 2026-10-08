@@ -14,6 +14,7 @@ export * from "@db/schema/user_auth_oauth";
 export * from "@db/schema/email_verification_tokens";
 export * from "@db/schema/email_audit_logs";
 export * from "@db/schema/password_reset_tokens";
+export * from "@db/schema/passkey_credentials";
 export * from "@db/schema/config";
 export * from "@db/schema/localizations";
 export * from "@db/schema/countries";

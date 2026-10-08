@@ -21,7 +21,7 @@ import { verifyState } from "@services/auth/oauthStateService";
 import { resolveAuthContext } from "@services/auth/authContext";
 import { issueLoginTokens } from "@services/auth/tokenService";
 import { db } from "@services/dbService";
-import { users, userAuthOauth } from "@db/schema";
+import { users, userApplications, userAuthOauth } from "@db/schema";
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -113,6 +113,21 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     if (!userRow) {
         throw new Error("Failed to resolve or create user");
     }
+
+    // OAuth users may have been created before application membership was
+    // enforced for every authentication method. Ensure the application-scoped
+    // access row exists before issuing an application-scoped token.
+    await db
+      .insert(userApplications)
+      .values({
+        userId: userRow.userId,
+        applicationId: appCtx.applicationId,
+        role: "user",
+        isEnabled: true,
+      })
+      .onConflictDoNothing({
+        target: [userApplications.userId, userApplications.applicationId],
+      });
 
     const tokens = await issueLoginTokens(userRow.userId, appCtx.applicationId);
     res.locals.visitUserId = userRow.userId; // Set for logging middleware

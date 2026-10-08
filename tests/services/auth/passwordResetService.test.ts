@@ -50,6 +50,7 @@ vi.mock('@db/schema', () => ({
     passwordResetTokens: {
         id: 'id',
         userId: 'user_id',
+        applicationId: 'application_id',
         tokenHash: 'token_hash',
         expiresAt: 'expires_at',
     },
@@ -119,13 +120,13 @@ describe('passwordResetService', () => {
     test('initiate: returns noop token when user not found', async () => {
         mockSelectOnce([])
 
-        const result = await initiatePasswordReset('missing')
+        const result = await initiatePasswordReset('missing', 'app-1')
 
         expect(result.token).toBe('noop')
     })
 
     test('initiate: rejects a blank identifier', async () => {
-        await expect(initiatePasswordReset('   ')).rejects.toMatchObject({
+        await expect(initiatePasswordReset('   ', 'app-1')).rejects.toMatchObject({
             code: 'INVALID_REQUEST', httpStatus: 400,
         })
     })
@@ -134,7 +135,7 @@ describe('passwordResetService', () => {
         mockSelectOnce([{ userId: 'u1', status: 'pending' }])
 
         await expect(
-            initiatePasswordReset('bill')
+            initiatePasswordReset('bill', 'app-1')
         ).rejects.toBeInstanceOf(AuthError)
     })
 
@@ -145,7 +146,7 @@ describe('passwordResetService', () => {
             values: () => Promise.resolve(),
         })
 
-        const result = await initiatePasswordReset('bill')
+        const result = await initiatePasswordReset('bill', 'app-1')
 
         expect(result.token).toBeTypeOf('string')
         expect(db.insert).toHaveBeenCalled()

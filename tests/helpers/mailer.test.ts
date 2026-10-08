@@ -60,7 +60,12 @@ describe('mailer', () => {
         test('sends email successfully', async () => {
             mockSendMail.mockResolvedValue({
                 messageId: 'msg-123',
+                accepted: ['user@example.com'],
+                rejected: [],
+                response: '250 OK',
             })
+
+            const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
             await sendEmail({
                 to: 'user@example.com',
@@ -78,6 +83,14 @@ describe('mailer', () => {
                     html: '<p>Test body</p>',
                 })
             )
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('SMTP send requested (to: user@example.com'),
+            )
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('SMTP accepted message (to: user@example.com'),
+            )
+
+            consoleSpy.mockRestore()
         })
 
         test('logs successful send with audit info', async () => {
@@ -164,7 +177,7 @@ describe('mailer', () => {
             })
 
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('Email sent to user@example.com')
+                expect.stringContaining('SMTP accepted message (to: user@example.com')
             )
 
             consoleSpy.mockRestore()

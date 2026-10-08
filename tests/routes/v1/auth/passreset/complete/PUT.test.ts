@@ -43,6 +43,7 @@ vi.mock('@services/auth/passwordResetService', () => ({
 }))
 
 vi.mock('@services/auth/authContext', () => ({
+    resolveAuthContext: vi.fn(),
     AuthError: class AuthError extends Error {
         constructor(
             public code: string,
@@ -62,7 +63,7 @@ vi.mock('@services/auth/authContext', () => ({
 
 import PUT, { schema } from '@routes/v1/auth/passreset/complete/PUT'
 import { completePasswordReset } from '@services/auth/passwordResetService'
-import { AuthError } from '@services/auth/authContext'
+import { AuthError, resolveAuthContext } from '@services/auth/authContext'
 
 /**
  * ------------------------------------------------------------
@@ -151,6 +152,27 @@ describe('PUT /v1/auth/passreset/complete', () => {
         expect(completePasswordReset).toHaveBeenCalledWith(
             'valid-token',
             'new-strong-password'
+        )
+    })
+
+    test('passes the application scope when app_key is supplied', async () => {
+        ;(resolveAuthContext as any).mockResolvedValue({ applicationId: 'app-id' })
+        ;(completePasswordReset as any).mockResolvedValue(undefined)
+
+        const req = createReq({
+            token: 'valid-token',
+            new_password: 'new-strong-password',
+            app_key: 'bill.iworkhere.com',
+        })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(completePasswordReset).toHaveBeenCalledWith(
+            'valid-token',
+            'new-strong-password',
+            'app-id',
         )
     })
 

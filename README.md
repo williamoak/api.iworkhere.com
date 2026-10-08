@@ -5,7 +5,7 @@
 
 A production-oriented TypeScript and Express API for the iworkhere applications. The service combines application-scoped authentication, tenant-aware persistence, generated route registration, localization, operational health endpoints, and a strongly tested domain layer around a PostgreSQL-compatible database.
 
-> **Repository status**: `npm test` currently passes **765 tests across 86 test files**. The latest coverage run reports **97.86% overall coverage**, exceeding the configured global thresholds.
+> **Repository status**: `npm test` currently passes **989 tests across 99 test files**. Run the suite locally before relying on this status line after adding new behavior.
 
 ## Why this codebase stands out
 
@@ -13,6 +13,7 @@ A production-oriented TypeScript and Express API for the iworkhere applications.
 - **Refresh-token rotation**: refresh operations revoke the predecessor and issue a replacement pair transactionally, with cache invalidation for the old token.
 - **Application-scoped identity**: authentication resolves an enabled application before user and credential work proceeds, keeping users, tokens, and origins associated with the calling application.
 - **Complete account lifecycle**: local registration and login, Google OAuth 2.0, email verification, password reset, password history enforcement, account upgrade, token revocation, and token cleanup are represented as separate domain services and route modules.
+- **Passkey authentication**: WebAuthn registration, authentication, listing, and revocation use application-bound ceremonies and issue the same bearer-token pair as password and Google OAuth login.
 - **Tenant isolation at the request boundary**: tenant resolution precedes authentication and database access; tenant transactions acquire a dedicated pooled connection, set `search_path`, bind a scoped Drizzle client through `AsyncLocalStorage`, and restore the connection before release.
 - **Composable request pipeline**: route modules declare validation schemas and whether authentication is required. The loader applies validation, auth-specific rate limits, bearer auth, concurrency throttling, caching, response shaping, and method-not-allowed handling in a deterministic order.
 - **Runtime-discovered API surface**: `src/loaders/routeLoader.ts` recursively discovers `GET.ts`, `POST.ts`, `PUT.ts`, `PATCH.ts`, and `DELETE.ts` modules, builds a route metadata tree, and binds the handlers without a monolithic router file.
@@ -92,6 +93,7 @@ All versioned routes currently live under `/v1`.
 | Google OAuth | `GET /v1/auth/oauth/google`, `GET /v1/auth/oauth/google/callback` |
 | Email ownership | `PUT /v1/auth/emailverify`, `GET /v1/auth/emailverify`, `PUT /v1/auth/emailverify/resend` |
 | Password recovery | `PUT /v1/auth/passreset/initiate`, `PUT /v1/auth/passreset/verify`, `PUT /v1/auth/passreset/complete` |
+| Passkeys | `POST /v1/auth/passkeys/register/options`, `POST /v1/auth/passkeys/register/verify`, `POST /v1/auth/passkeys/login/options`, `POST /v1/auth/passkeys/login/verify`, `GET /v1/auth/passkeys`, `DELETE /v1/auth/passkeys` |
 | EULA/localized content | `GET /v1/auth/eula` |
 
 ### Platform and product data
@@ -125,9 +127,22 @@ A valid refresh token is single-use from the lifecycle perspective: it is revoke
 
 The OAuth flow carries the application key, nonce, redirect target, and flow type inside an HMAC-SHA256-signed `state` value. The callback verifies the signature before exchanging the authorization code, resolving the user/application association, and redirecting success or failure.
 
+### Passkeys / WebAuthn
+
+Passkeys are an additional login method; password login and Google OAuth remain available as fallback and recovery methods. Registration requires an authenticated bearer session, while login options and verification require `app_key` and use generic failure responses.
+
+1. `POST /v1/auth/passkeys/register/options` creates a short-lived, signed ceremony bound to the user, application, origin, RP ID, challenge, and one-time identifier.
+2. The browser or native client completes the ceremony with its platform authenticator and sends the browser-safe credential response to `POST /v1/auth/passkeys/register/verify`.
+3. `POST /v1/auth/passkeys/login/options` and `POST /v1/auth/passkeys/login/verify` perform the corresponding login ceremony and return the normal access/refresh token pair.
+4. Authenticated users can inspect metadata with `GET /v1/auth/passkeys` and revoke a credential with `DELETE /v1/auth/passkeys`.
+
+The API stores only credential IDs, public keys, counters, transports, display names, timestamps, and revocation state in `passkey_credentials`. Private keys, raw assertions, and ceremony secrets are not stored. Redis records consumed ceremony identifiers so signed stateless ceremonies cannot be replayed.
+
+Configure `WEBAUTHN_CEREMONY_SECRET` and the optional ceremony TTL/key-rotation settings for the API deployment. WebAuthn origins and RP IDs are resolved per application from enabled `application_origins` rows: register `https://bill.iworkhere.com`, `https://michael.iworkhere.com`, or any future HTTPS client against its matching `applications.app_key`. The API's `APP_KEY=api.iworkhere.com` identifies the API service and does not restrict which registered client applications may use passkeys. Origins must be explicitly registered; never derive trust from an arbitrary request header.
+
 ### Email verification and password reset
 
-Verification and reset tokens are random, time-limited, and stored as SHA-256 hashes. Resend and reset initiation paths are intentionally non-enumerating where applicable. Completing a password reset updates the local credential, records password history, revokes existing auth tokens, and deletes the reset token.
+Verification and reset tokens are random, time-limited, and stored as SHA-256 hashes. Reset initiation is application-scoped and sends a non-enumerating, application-specific email link; verification and completion accept `app_key` to enforce that scope while retaining compatibility with legacy unscoped tokens. Completing a password reset updates the local credential, records password history, revokes existing auth tokens, and deletes the reset token.
 
 ## Request and tenancy model
 
@@ -161,7 +176,7 @@ npm ci
 cp .env.example .env.development
 ```
 
-Populate the environment file with database, Redis, token TTL, CORS, email, and OAuth values. Do not commit secrets. The configuration loader supports this precedence (later values win): `.env`, `.env.local`, `.env.<NODE_ENV>`, `.env.<NODE_ENV>.local`, then process environment variables.
+Populate the environment file with database, Redis, token TTL, CORS, email, OAuth, and WebAuthn values. For passkeys, set `WEBAUTHN_RP_ID` to the relying-party domain, `WEBAUTHN_ALLOWED_ORIGINS` to an explicit comma-separated HTTPS origin allowlist, and `WEBAUTHN_CEREMONY_SECRET` to a high-entropy signing secret. Do not commit secrets. The configuration loader supports this precedence (later values win): `.env`, `.env.local`, `.env.<NODE_ENV>`, `.env.<NODE_ENV>.local`, then process environment variables.
 
 For database tooling, `drizzle.config.ts` expects `DB_HOSTNAME`, `DB_PORT` (default `26257`), `DB_NAME`, `DB_USER`, and `DB_CERT_DIR`; the certificate directory must contain `ca.crt`, `client.<DB_USER>.crt`, and `client.<DB_USER>.key`.
 
@@ -214,9 +229,8 @@ The Vitest configuration enforces these global minimums for coverage runs:
 The repository’s latest local verification:
 
 ```text
-86 test files passed
-765 tests passed
-97.86% overall coverage
+99 test files passed
+989 tests passed
 npm run build passed
 ```
 

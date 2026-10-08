@@ -143,3 +143,23 @@ export function getGoogleOAuthConfig() {
     failureRedirectUrl: configGet('GOOGLE_OAUTH_FAILURE_REDIRECT_URL'),
   };
 }
+
+/**
+ * WebAuthn server configuration. Ceremony signing is deployment-wide; trusted
+ * origins and RP IDs are resolved from the selected application at runtime.
+ */
+export function getWebAuthnConfig() {
+  return {
+    // Kept as an optional compatibility fallback for direct service callers;
+    // HTTP routes must resolve the RP ID from application_origins.
+    rpId: config.WEBAUTHN_RP_ID?.trim() || undefined,
+    rpName: config.WEBAUTHN_RP_NAME?.trim() || 'iworkhere',
+    ceremonyTtlSeconds: configGetNumber('WEBAUTHN_CEREMONY_TTL_SECONDS', {
+      defaultValue: 300,
+      min: 30,
+      max: 900,
+    }),
+    signingSecret: configGet('WEBAUTHN_CEREMONY_SECRET'),
+    previousSigningSecret: config.WEBAUTHN_PREVIOUS_CEREMONY_SECRET?.trim() || undefined,
+  };
+}

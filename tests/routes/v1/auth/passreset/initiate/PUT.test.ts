@@ -55,6 +55,10 @@ vi.mock('@services/auth/passwordResetService', () => ({
     initiatePasswordReset: vi.fn(),
 }))
 
+vi.mock('@helpers/mailer', () => ({
+    sendEmail: vi.fn(),
+}))
+
 /**
  * ------------------------------------------------------------
  * IMPORTS (AFTER MOCKS)
@@ -64,6 +68,7 @@ vi.mock('@services/auth/passwordResetService', () => ({
 import PUT, { schema } from '@routes/v1/auth/passreset/initiate/PUT'
 import { resolveAuthContext, AuthError } from '@services/auth/authContext'
 import { initiatePasswordReset } from '@services/auth/passwordResetService'
+import { sendEmail } from '@helpers/mailer'
 
 /**
  * ------------------------------------------------------------
@@ -141,7 +146,7 @@ describe('PUT /v1/auth/passreset/initiate', () => {
             applicationKey: 'bill.iworkhere.com',
         })
 
-        ;(initiatePasswordReset as any).mockResolvedValue(undefined)
+        ;(initiatePasswordReset as any).mockResolvedValue({ token: 'reset-token' })
 
         const req = createReq({
             app_key: 'bill.iworkhere.com',
@@ -160,7 +165,32 @@ describe('PUT /v1/auth/passreset/initiate', () => {
             email:   'user@example.com',
         })
 
-        expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com')
+        expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com', 'app-id')
+        expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+            to: 'user@example.com',
+            subject: 'Reset your password',
+            auditType: 'password_reset',
+            text: expect.stringContaining('https://bill.iworkhere.com/auth/passreset?token=reset-token'),
+        }))
+    })
+
+    test('does not send email when the user is not found', async () => {
+        ;(resolveAuthContext as any).mockResolvedValue({
+            applicationId: 'app-id',
+            applicationKey: 'bill.iworkhere.com',
+        })
+        ;(initiatePasswordReset as any).mockResolvedValue({ token: 'noop' })
+
+        const req = createReq({
+            app_key: 'bill.iworkhere.com',
+            email: 'unknown@example.com',
+        })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(sendEmail).not.toHaveBeenCalled()
     })
 
     test('prefers middleware-validated body payload when present', async () => {
@@ -169,7 +199,7 @@ describe('PUT /v1/auth/passreset/initiate', () => {
             applicationKey: 'bill.iworkhere.com',
         })
 
-        ;(initiatePasswordReset as any).mockResolvedValue(undefined)
+        ;(initiatePasswordReset as any).mockResolvedValue({ token: 'reset-token' })
 
         const req = createReq({})
         ;(req as any).validated = {
@@ -192,7 +222,7 @@ describe('PUT /v1/auth/passreset/initiate', () => {
             app_key: 'bill.iworkhere.com',
             email: 'user@example.com',
         })
-        expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com')
+        expect(initiatePasswordReset).toHaveBeenCalledWith('user@example.com', 'app-id')
     })
 
     test('translates AuthError to HTTP response', async () => {

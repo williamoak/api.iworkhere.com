@@ -38,6 +38,18 @@ function getTransporter() {
     return transporter;
 }
 
+function getSmtpDiagnostics() {
+    const host = configGet('SMTP_HOST');
+    const port = Number(configGet('SMTP_PORT'));
+
+    return {
+        host: host || '(missing)',
+        port: Number.isFinite(port) ? port : '(invalid)',
+        secure: port === 465,
+        credentialsConfigured: Boolean(configGet('SMTP_USER') && configGet('SMTP_PASS')),
+    };
+}
+
 export async function sendEmail(params: {
     to: string;
     subject: string;
@@ -56,24 +68,31 @@ export async function sendEmail(params: {
         auditUserId,
         auditType,
     } = params;
-    const from = configGet('SMTP_FROM_EMAIL');
-
-    const mailOptions = {
-        from,
-        to,
-        subject,
-        text,
-        html,
-        headers: {
-            'X-Mailin-Tracking-Disable': '1'
-        }
-    };
-
-    const mailer = getTransporter();
-
     try {
+        const from = configGet('SMTP_FROM_EMAIL');
+        const mailOptions = {
+            from,
+            to,
+            subject,
+            text,
+            html,
+            headers: {
+                'X-Mailin-Tracking-Disable': '1'
+            }
+        };
+        const smtp = getSmtpDiagnostics();
+        const mailer = getTransporter();
+
+        logger.log(
+            `[mailer] SMTP send requested (to: ${to}, host: ${smtp.host}, port: ${smtp.port}, secure: ${smtp.secure}, credentialsConfigured: ${smtp.credentialsConfigured})`,
+            true,
+        );
+
         const info = await mailer.sendMail(mailOptions);
-        logger.log(`[mailer] Email sent to ${to} (messageId: ${info.messageId})`);
+        logger.log(
+            `[mailer] SMTP accepted message (to: ${to}, messageId: ${info.messageId}, accepted: ${info.accepted?.length ?? 0}, rejected: ${info.rejected?.length ?? 0}, response: ${info.response ?? 'unavailable'})`,
+            true,
+        );
 
         // If using Ethereal email for testing, this prints a URL to view the email
         if (configGet('SMTP_HOST').includes('ethereal')) {

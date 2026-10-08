@@ -155,3 +155,33 @@ export async function resolveUserForApplication(
         role: row.role,
     }
 }
+
+export async function resolveUserIdForApplication(
+    userId: string,
+    applicationId: string,
+): Promise<ResolvedUser> {
+    const rows = await db
+        .select({
+            userId: users.id,
+            username: users.username,
+            email: users.email,
+            status: users.statusCode,
+            role: userApplications.role,
+            appEnabled: userApplications.isEnabled,
+        })
+        .from(users)
+        .innerJoin(userApplications, eq(userApplications.userId, users.id))
+        .where(and(eq(users.id, userId), eq(userApplications.applicationId, applicationId)))
+        .limit(1);
+
+    if (rows.length === 0 || !rows[0].email || rows[0].status !== 'active' || !rows[0].appEnabled) {
+        throw new AuthError('UNAUTHORIZED', 'Unauthorized', 401);
+    }
+
+    return {
+        userId: rows[0].userId,
+        username: rows[0].username,
+        email: rows[0].email,
+        role: rows[0].role,
+    };
+}

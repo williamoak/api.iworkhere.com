@@ -43,6 +43,7 @@ vi.mock('@services/auth/passwordResetService', () => ({
 }))
 
 vi.mock('@services/auth/authContext', () => ({
+    resolveAuthContext: vi.fn(),
     AuthError: class AuthError extends Error {
         constructor(
             public code: string,
@@ -62,7 +63,7 @@ vi.mock('@services/auth/authContext', () => ({
 
 import PUT, { schema } from '@routes/v1/auth/passreset/verify/PUT'
 import { verifyPasswordResetToken } from '@services/auth/passwordResetService'
-import { AuthError } from '@services/auth/authContext'
+import { AuthError, resolveAuthContext } from '@services/auth/authContext'
 
 /**
  * ------------------------------------------------------------
@@ -145,6 +146,23 @@ describe('PUT /v1/auth/passreset/verify', () => {
         expect(res.statusCode).toBe(200)
         expect(res.body).toEqual({ valid: true })
         expect(verifyPasswordResetToken).toHaveBeenCalledWith('valid-token')
+    })
+
+    test('passes the application scope when app_key is supplied', async () => {
+        ;(resolveAuthContext as any).mockResolvedValue({ applicationId: 'app-id' })
+        ;(verifyPasswordResetToken as any).mockResolvedValue({ userId: 'u1' })
+
+        const req = createReq({ token: 'valid-token', app_key: 'bill.iworkhere.com' })
+        const res = createRes()
+
+        await PUT(req, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(resolveAuthContext).toHaveBeenCalledWith({
+            token: 'valid-token',
+            app_key: 'bill.iworkhere.com',
+        })
+        expect(verifyPasswordResetToken).toHaveBeenCalledWith('valid-token', 'app-id')
     })
 
     test('returns 400 for invalid request body (missing token)', async () => {

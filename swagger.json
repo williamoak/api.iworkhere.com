@@ -15,6 +15,9 @@
       "name": "auth, login"
     },
     {
+      "name": "auth, passkeys"
+    },
+    {
       "name": "auth, password, reset"
     },
     {
@@ -220,10 +223,162 @@
         }
       }
     },
+    "/v1/auth/passkeys": {
+      "delete": {
+        "summary": "Revoke one of the authenticated user's passkeys.",
+        "description": "Marks the application-scoped credential as revoked so it cannot be used for\nfuture passkey authentication. Existing bearer sessions remain unchanged.",
+        "tags": [
+          "auth, passkeys"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "List the authenticated user's passkeys.",
+        "description": "Returns non-secret metadata for active and revoked passkeys belonging to the\nauthenticated user within the resolved application. Public keys and raw\nassertions are not returned.",
+        "tags": [
+          "auth, passkeys"
+        ],
+        "parameters": [
+          {
+            "name": "app_key",
+            "in": "query",
+            "required": true,
+            "description": "Application key used to resolve scope",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passkeys/login/options": {
+      "post": {
+        "summary": "Create a short-lived passkey authentication ceremony.",
+        "description": "Creates discoverable-credential WebAuthn authentication options for the\nresolved application. The response is bound to the configured origin and RP\nID and is intentionally not cacheable.",
+        "tags": [
+          "auth, passkeys"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passkeys/login/verify": {
+      "post": {
+        "summary": "Verify a passkey assertion and issue bearer tokens.",
+        "description": "Consumes a one-time authentication ceremony and verifies the signed\nassertion, origin, RP ID, credential ownership, revocation state, and\nauthenticator counter. On success it issues the same access and refresh\ntoken shape used by password login and Google OAuth.",
+        "tags": [
+          "auth, passkeys"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passkeys/register/options": {
+      "post": {
+        "summary": "Create a short-lived passkey registration ceremony.",
+        "description": "Creates browser-safe WebAuthn registration options for the authenticated\nuser and binds the ceremony to the resolved application, origin, RP ID,\nuser, challenge, and one-time ceremony identifier.",
+        "tags": [
+          "auth, passkeys"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/v1/auth/passkeys/register/verify": {
+      "post": {
+        "summary": "Verify and store a newly registered passkey.",
+        "description": "Consumes a registration ceremony, verifies the WebAuthn attestation against\nthe authenticated user and application context, and stores only durable\ncredential metadata and the public key. Private keys and raw assertions are\nnever persisted.",
+        "tags": [
+          "auth, passkeys"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/v1/auth/passreset/complete": {
       "put": {
         "summary": "Complete a password reset.",
-        "description": "Consumes a valid password reset token and sets a new password.\nOn success, all existing auth tokens are revoked.",
+        "description": "Consumes a valid password reset token and sets a new password. When app_key\nis supplied, the token must belong to that application's scope; legacy\nunscoped tokens remain compatible when app_key is omitted.\nOn success, all existing auth tokens are revoked.",
         "tags": [
           "auth, password, reset"
         ],
@@ -247,7 +402,7 @@
     "/v1/auth/passreset/initiate": {
       "put": {
         "summary": "Initiate a password reset flow.",
-        "description": "Initiates a password reset request for a user identified by email.\nThis endpoint is intentionally non-enumerating: it always returns\na success response regardless of whether the email exists.\n\nOn success, a password reset token is issued out-of-band (e.g. email).",
+        "description": "Initiates a password reset request for a user identified by email.\nThis endpoint is intentionally non-enumerating: it always returns\na success response regardless of whether the email exists.\n\nOn success, the API sends an application-specific reset link by email. The\ntoken is never included in the API response, and mail delivery failures are\nrecorded by the mail audit path without revealing account existence.",
         "tags": [
           "auth, password-reset"
         ],
@@ -271,7 +426,7 @@
     "/v1/auth/passreset/verify": {
       "put": {
         "summary": "Verify a password reset token.",
-        "description": "Validates a password reset token without changing user state.\nUsed by clients to confirm token validity before submitting\na new password.",
+        "description": "Validates a password reset token without changing user state. When\napp_key is supplied, the token must belong to that application's scope;\nlegacy unscoped tokens remain compatible when app_key is omitted.\nUsed by clients to confirm token validity before submitting\na new password.",
         "tags": [
           "auth, password, reset"
         ],

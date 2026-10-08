@@ -5,6 +5,7 @@ const { insertBuilderMock } = vi.hoisted(() => ({
   insertBuilderMock: {
     values: vi.fn().mockReturnThis(),
     returning: vi.fn(),
+    onConflictDoNothing: vi.fn().mockReturnThis(),
   },
 }));
 
@@ -20,6 +21,10 @@ vi.mock("@db/schema", () => ({
     name: "user_auth_oauth",
     provider: "provider",
     providerAccountId: "providerAccountId",
+  },
+  userApplications: {
+    userId: "userId",
+    applicationId: "applicationId",
   },
   users: { name: "users" },
 }));
@@ -101,6 +106,10 @@ describe("GET /v1/auth/oauth/google/callback", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toHaveProperty("tokens");
+    expect(db.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "userId", applicationId: "applicationId" }),
+    );
+    expect(insertBuilderMock.onConflictDoNothing).toHaveBeenCalled();
   });
 
   it("returns HTML for popup flow", async () => {
@@ -171,7 +180,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     const res = createRes();
     await GET({ query: { code: "c", state: "s" } } as any, res);
 
-    expect(db.insert).toHaveBeenCalledTimes(2);
+    expect(db.insert).toHaveBeenCalledTimes(3);
     expect(res.statusCode).toBe(200);
   });
 
@@ -186,7 +195,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     const res = createRes();
     await GET({ query: { code: "c", state: "s" } } as any, res);
 
-    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(db.insert).toHaveBeenCalledTimes(2);
     expect(res.statusCode).toBe(200);
   });
 

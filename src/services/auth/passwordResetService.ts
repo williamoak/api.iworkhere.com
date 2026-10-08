@@ -15,7 +15,7 @@
 
 import crypto from 'crypto'
 import { v7 as uuidv7 } from 'uuid'
-import { eq, or } from 'drizzle-orm'
+import { and, eq, isNull, or } from 'drizzle-orm'
 
 import { db } from '@services/dbService'
 import { AuthError } from '@services/auth/authContext'
@@ -52,7 +52,8 @@ function generateToken(): { raw: string; hash: string } {
  * Initiate password reset
  */
 export async function initiatePasswordReset(
-    identifier: string
+    identifier: string,
+    applicationId: string,
 ): Promise<{ token: string }> {
     if (!identifier || identifier.trim() === '') {
         throw new AuthError(
@@ -100,6 +101,7 @@ export async function initiatePasswordReset(
     await db.insert(passwordResetTokens).values({
         id: uuidv7(),
         userId: user.userId,
+        applicationId,
         tokenHash: hash,
         expiresAt,
     })
@@ -111,7 +113,8 @@ export async function initiatePasswordReset(
  * Verify password reset token
  */
 export async function verifyPasswordResetToken(
-    token: string
+    token: string,
+    applicationId?: string,
 ): Promise<{ userId: string }> {
     if (!token || token.trim() === '') {
         throw new AuthError(
@@ -133,7 +136,17 @@ export async function verifyPasswordResetToken(
             expiresAt: passwordResetTokens.expiresAt,
         })
         .from(passwordResetTokens)
-        .where(eq(passwordResetTokens.tokenHash, tokenHash))
+        .where(
+            applicationId
+                ? and(
+                    eq(passwordResetTokens.tokenHash, tokenHash),
+                    or(
+                        isNull(passwordResetTokens.applicationId),
+                        eq(passwordResetTokens.applicationId, applicationId),
+                    ),
+                )
+                : eq(passwordResetTokens.tokenHash, tokenHash),
+        )
         .limit(1)
 
     if (rows.length === 0) {
@@ -162,7 +175,8 @@ export async function verifyPasswordResetToken(
  */
 export async function completePasswordReset(
     token: string,
-    newPassword: string
+    newPassword: string,
+    applicationId?: string,
 ): Promise<void> {
     if (!newPassword || newPassword.trim() === '') {
         throw new AuthError(
@@ -184,7 +198,17 @@ export async function completePasswordReset(
             expiresAt: passwordResetTokens.expiresAt,
         })
         .from(passwordResetTokens)
-        .where(eq(passwordResetTokens.tokenHash, tokenHash))
+        .where(
+            applicationId
+                ? and(
+                    eq(passwordResetTokens.tokenHash, tokenHash),
+                    or(
+                        isNull(passwordResetTokens.applicationId),
+                        eq(passwordResetTokens.applicationId, applicationId),
+                    ),
+                )
+                : eq(passwordResetTokens.tokenHash, tokenHash),
+        )
         .limit(1)
 
     if (rows.length === 0) {

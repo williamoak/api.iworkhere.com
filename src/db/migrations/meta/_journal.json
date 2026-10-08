@@ -246,6 +246,20 @@
       "when": 1782000012000,
       "tag": "0034_create_joinaunion_widget_answers",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791486209505,
+      "tag": "0035_add_application_id_to_password_reset_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791486209506,
+      "tag": "0036_create_passkey_credentials",
+      "breakpoints": true
     }
   ]
 }
