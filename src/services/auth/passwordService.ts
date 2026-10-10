@@ -150,7 +150,7 @@ export async function enforcePasswordHistory(
         if (reused) {
             throw new AuthError(
                 'PASSWORD_REUSE',
-                'Password was used previously',
+                'Password was used previously. Choose a different password.',
                 400
             )
         }

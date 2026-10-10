@@ -170,7 +170,8 @@ describe('PUT /v1/auth/passreset/initiate', () => {
             to: 'user@example.com',
             subject: 'Reset your password',
             auditType: 'password_reset',
-            text: expect.stringContaining('https://bill.iworkhere.com/auth/passreset?token=reset-token'),
+            text: expect.stringContaining('Your password reset code is: reset-token'),
+            html: expect.stringContaining('<strong>reset-token</strong>'),
         }))
     })
 

@@ -7,7 +7,7 @@
  * @version 1.0.0
  * @author william.r.oak@gmail.com
  * @path /v1/auth/emailverify/resend
- * @summary Resend an email verification token.
+ * @summary Resend a 12-character email verification code.
  * @description
  * Allows a pending user to request a new email verification token.
  * This endpoint is intentionally non-enumerating and returns success even when

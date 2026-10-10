@@ -149,6 +149,7 @@ describe('passwordResetService', () => {
         const result = await initiatePasswordReset('bill', 'app-1')
 
         expect(result.token).toBeTypeOf('string')
+        expect(result.token).toMatch(/^[A-Z2-9]{6}$/)
         expect(db.insert).toHaveBeenCalled()
     })
 

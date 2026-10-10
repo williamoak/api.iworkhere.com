@@ -9,9 +9,9 @@ import { logger } from '@helpers/logger';
  * @version 1.0.0
  * @author william.r.oak@gmail.com
  * @path /v1/auth/emailverify
- * @summary Verify email via GET (browser link).
+ * @summary Verify email via GET (legacy browser link).
  * @description
- *   Handles verification requests originating from email links.
+ *   Handles legacy verification links issued before the code-based flow.
  *   Reads the token from the query string, performs verification,
  *   and redirects the user to the application.
  */

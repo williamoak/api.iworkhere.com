@@ -7,9 +7,10 @@
  * @version 1.0.2
  * @author william.r.oak@gmail.com
  * @path /v1/auth/passreset/verify
- * @summary Verify a password reset token.
+ * @summary Verify a password reset code.
  * @description
- * Validates a password reset token without changing user state. When
+ * Validates a six-character password reset code without changing user state. Legacy
+ * long tokens remain accepted during the transition. When
  * app_key is supplied, the token must belong to that application's scope;
  * legacy unscoped tokens remain compatible when app_key is omitted.
  * Used by clients to confirm token validity before submitting

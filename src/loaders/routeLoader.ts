@@ -125,8 +125,17 @@ function getAuthRateLimitKey(req: Request): string {
       : typeof req.body?.identifier === 'string'
         ? req.body.identifier.trim().toLowerCase()
         : '';
+  const appKey =
+    typeof req.body?.app_key === 'string'
+      ? req.body.app_key.trim().toLowerCase()
+      : typeof req.query?.app_key === 'string'
+        ? req.query.app_key.trim().toLowerCase()
+        : '';
 
-  return `${req.ip}|${identifier}`;
+  // Keep independent authentication operations from consuming one another's
+  // quota. In particular, OAuth and authenticated passkey metadata requests
+  // usually have no identifier and must not share an IP-only bucket.
+  return `${req.ip}|${req.method}|${req.path}|${appKey}|${identifier}`;
 }
 
 type AuthRateLimitPolicy = {
@@ -159,6 +168,9 @@ function getAuthRateLimitPolicy(
     case 'GET /v1/auth/me':
     case 'GET /v1/auth/eula':
       return { max: 60, windowMs: 60_000 };
+
+    case 'GET /v1/auth/passkeys':
+      return { max: 30, windowMs: 60_000 };
 
     default:
       return { max: 10, windowMs: 60_000 };
@@ -483,4 +495,6 @@ function register405(
 export const __test__ = {
   scanDirectory,
   bindExpress,
+  getAuthRateLimitKey,
+  getAuthRateLimitPolicy,
 };

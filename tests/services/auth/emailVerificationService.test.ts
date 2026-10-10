@@ -197,8 +197,25 @@ describe('issueEmailVerificationToken', () => {
     })
 
     expect(result.token).toBeTypeOf('string')
-    expect(result.token.length).toBeGreaterThan(20)
+    expect(result.token).toMatch(/^[A-Z2-9]{12}$/)
     expect(db.insert).toHaveBeenCalledOnce()
+  })
+
+  test('sends a code without a clickable verification link', async () => {
+    const { sendEmail } = await import('@helpers/mailer')
+
+    const actual = await vi.importActual<typeof import('@services/auth/emailVerificationService')>('@services/auth/emailVerificationService')
+    await actual.sendVerificationEmail({
+      email: 'bill@example.com',
+      token: 'ABCD2345EFGH',
+      userId: 'user-id',
+    })
+
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
+      text: expect.stringContaining('ABCD2345EFGH'),
+      html: expect.stringContaining('ABCD2345EFGH'),
+    }))
+    expect(vi.mocked(sendEmail).mock.calls[0][0].text).not.toContain('href=')
   })
 
   test('throws if database insertion fails', async () => {

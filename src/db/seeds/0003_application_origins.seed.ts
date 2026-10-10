@@ -3,7 +3,7 @@ import { logger } from '@helpers/logger';
 import { db } from '@services/dbService';
 
 /**
- * Seed application_origins for Bill and Michael's consumers.
+ * Seed application_origins for the known web consumers.
  *
  * CockroachDB-safe
  * Fully idempotent
@@ -19,6 +19,11 @@ const CONSUMERS = [
     app_key: 'michael.iworkhere.com',
     origin: 'https://michael.iworkhere.com',
     name: 'Michael Web',
+  },
+  {
+    app_key: 'joinaunion.iworkhere.com',
+    origin: 'https://joinaunion.iworkhere.com',
+    name: 'JoinAUnion Web',
   },
   {
     app_key: 'api.iworkhere.com',
@@ -102,4 +107,4 @@ for (const consumer of CONSUMERS) {
     `);
 }
 
-logger.log('🌱 Application origins seeded for Bill and Michael')
+logger.log('🌱 Application origins seeded for known web consumers')

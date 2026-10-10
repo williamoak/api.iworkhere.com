@@ -9,13 +9,13 @@
  * @path /v1/auth/emailverify
  * @summary Verify a user email address.
  * @description
- * Verifies ownership of a user email address using a verification token.
+ * Verifies ownership of a user email address using a 12-character verification code.
  * On success, the user account is transitioned to an active state and
  * the email verification timestamp is recorded.
  *
  * @requestExample
  * {
- *   "token": "opaque-verification-token"
+ *   "token": "ABCD2345EFGH"
  * }
  *
  * @response

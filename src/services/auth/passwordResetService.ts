@@ -9,8 +9,9 @@
  * @summary Password reset domain services.
  * @description
  * Handles password reset lifecycle operations including initiation,
- * verification, and completion. All reset tokens are single-use,
- * time-limited, and stored hashed only.
+ * verification, and completion. New reset codes are six-character,
+ * single-use, time-limited, and stored hashed only. Legacy long tokens
+ * remain accepted during the transition to code-based reset.
  */
 
 import crypto from 'crypto'
@@ -39,11 +40,17 @@ if (!Number.isFinite(RESET_TOKEN_TTL_SECONDS) || RESET_TOKEN_TTL_SECONDS <= 0) {
     throw new Error('RESET_TOKEN_TTL_SECONDS must be a positive number')
 }
 
+const RESET_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const RESET_CODE_LENGTH = 6
+
 /**
- * Generate secure random token
+ * Generate a short reset code without modulo bias.
  */
 function generateToken(): { raw: string; hash: string } {
-    const raw = crypto.randomBytes(32).toString('hex')
+    let raw = ''
+    for (let index = 0; index < RESET_CODE_LENGTH; index += 1) {
+        raw += RESET_CODE_ALPHABET[crypto.randomInt(RESET_CODE_ALPHABET.length)]
+    }
     const hash = crypto.createHash('sha256').update(raw).digest('hex')
     return { raw, hash }
 }
@@ -178,6 +185,14 @@ export async function completePasswordReset(
     newPassword: string,
     applicationId?: string,
 ): Promise<void> {
+    if (!token || token.trim() === '') {
+        throw new AuthError(
+            'INVALID_TOKEN',
+            'Reset code is required',
+            400
+        )
+    }
+
     if (!newPassword || newPassword.trim() === '') {
         throw new AuthError(
             'INVALID_REQUEST',

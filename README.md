@@ -91,7 +91,7 @@ All versioned routes currently live under `/v1`.
 | Registration and login | `PUT /v1/auth/register`, `POST /v1/auth/login`, `GET /v1/auth/me`, `PUT /v1/auth/upgrade` |
 | Token lifecycle | `PUT /v1/auth/refresh`, `DELETE /v1/auth/token` |
 | Google OAuth | `GET /v1/auth/oauth/google`, `GET /v1/auth/oauth/google/callback` |
-| Email ownership | `PUT /v1/auth/emailverify`, `GET /v1/auth/emailverify`, `PUT /v1/auth/emailverify/resend` |
+| Email ownership | `PUT /v1/auth/emailverify` (12-character code), `GET /v1/auth/emailverify` (legacy links), `PUT /v1/auth/emailverify/resend` |
 | Password recovery | `PUT /v1/auth/passreset/initiate`, `PUT /v1/auth/passreset/verify`, `PUT /v1/auth/passreset/complete` |
 | Passkeys | `POST /v1/auth/passkeys/register/options`, `POST /v1/auth/passkeys/register/verify`, `POST /v1/auth/passkeys/login/options`, `POST /v1/auth/passkeys/login/verify`, `GET /v1/auth/passkeys`, `DELETE /v1/auth/passkeys` |
 | EULA/localized content | `GET /v1/auth/eula` |
@@ -142,7 +142,7 @@ Configure `WEBAUTHN_CEREMONY_SECRET` and the optional ceremony TTL/key-rotation 
 
 ### Email verification and password reset
 
-Verification and reset tokens are random, time-limited, and stored as SHA-256 hashes. Reset initiation is application-scoped and sends a non-enumerating, application-specific email link; verification and completion accept `app_key` to enforce that scope while retaining compatibility with legacy unscoped tokens. Completing a password reset updates the local credential, records password history, revokes existing auth tokens, and deletes the reset token.
+Verification and reset credentials are random, time-limited, and stored as SHA-256 hashes. Reset initiation is application-scoped and sends a non-enumerating email containing a six-character alphanumeric code, not a clickable URL; verification and completion accept `app_key` to enforce that scope while retaining compatibility with legacy long and unscoped tokens. Completing a password reset updates the local credential, records password history, revokes existing auth tokens, and deletes the reset credential.
 
 ## Request and tenancy model
 

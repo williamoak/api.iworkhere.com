@@ -7,9 +7,10 @@
  * @version 1.0.1
  * @author william.r.oak@gmail.com
  * @path /v1/auth/passreset/complete
- * @summary Complete a password reset.
+ * @summary Complete a password reset with a code.
  * @description
- * Consumes a valid password reset token and sets a new password. When app_key
+ * Consumes a valid six-character password reset code and sets a new password.
+ * Legacy long tokens remain accepted during the transition. When app_key
  * is supplied, the token must belong to that application's scope; legacy
  * unscoped tokens remain compatible when app_key is omitted.
  * On success, all existing auth tokens are revoked.
@@ -54,6 +55,20 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         const body =
             (req.validated?.body as z.infer<typeof schema.body>) ??
             req.body
+
+        if (
+            !body ||
+            typeof body.token !== 'string' ||
+            !body.token.trim() ||
+            typeof body.new_password !== 'string' ||
+            !body.new_password.trim()
+        ) {
+            res.status(400).json({
+                error: 'INVALID_REQUEST',
+                message: 'Invalid request body',
+            })
+            return
+        }
 
         const authContext = body.app_key
             ? await resolveAuthContext(body)

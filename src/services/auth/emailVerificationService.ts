@@ -69,7 +69,11 @@ export async function issueEmailVerificationToken(params: {
         )
     }
 
-    const rawToken = crypto.randomBytes(32).toString('hex')
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let rawToken = ''
+    for (let index = 0; index < 12; index += 1) {
+        rawToken += alphabet[crypto.randomInt(0, alphabet.length)]
+    }
     const tokenHash = crypto
         .createHash('sha256')
         .update(rawToken)
@@ -165,11 +169,9 @@ export async function verifyEmailToken(token: string): Promise<{
             })
             .where(eq(users.id, row.userId))
 
-        /*
         await tx
             .delete(emailVerificationTokens)
             .where(eq(emailVerificationTokens.id, row.tokenId))
-        */
     })
 
     return {
@@ -254,14 +256,12 @@ export async function sendVerificationEmail(params: {
     userId?: string;
 }): Promise<void> {
     const { email, token, userId } = params;
-    const appUrl = configGet('APP_URL');
-    const verifyUrl = `${appUrl}/v1/auth/emailverify?token=${token}`;
 
     await sendEmail({
         to: email,
         subject: 'Verify your email address',
-        text: `Please verify your email address by visiting this link: ${verifyUrl}`,
-        html: `<p>Please verify your email address by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+        text: `Your email verification code is: ${token}\n\nEnter this 12-character code in the verification dialog.`,
+        html: `<p>Your email verification code is:</p><p><strong>${token}</strong></p><p>Enter this 12-character code in the verification dialog.</p>`,
         throwOnError: false,
         auditUserId: userId,
         auditType: 'verification',

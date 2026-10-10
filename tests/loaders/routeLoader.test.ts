@@ -123,6 +123,26 @@ describe("routeLoader", () => {
         delete process.env.ROUTE_LOADER_DEBUG;
     });
 
+    test("isolates auth rate-limit buckets by endpoint and application", () => {
+        const makeRequest = (path: string, appKey: string) => ({
+            ip: "127.0.0.1",
+            method: "GET",
+            path,
+            body: {},
+            query: { app_key: appKey },
+        } as any);
+
+        const oauthKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/oauth/google", "joinaunion.iworkhere.com"));
+        const passkeyKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/passkeys", "joinaunion.iworkhere.com"));
+        const otherAppKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/passkeys", "bill.iworkhere.com"));
+
+        expect(new Set([oauthKey, passkeyKey, otherAppKey]).size).toBe(3);
+        expect(__test__.getAuthRateLimitPolicy("/v1/auth/passkeys", "GET")).toEqual({
+            max: 30,
+            windowMs: 60_000,
+        });
+    });
+
     describe("auth gating", () => {
         test("bindExpress includes auth middleware only for authRequired routes", () => {
             const app = createAppMock();

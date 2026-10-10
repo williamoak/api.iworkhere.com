@@ -32,7 +32,7 @@
  * @requires
  * {
  *   "services": ["authContext", "webauthnService"],
- *   "configuration": ["WEBAUTHN_RP_ID", "WEBAUTHN_ALLOWED_ORIGINS", "WEBAUTHN_CEREMONY_SECRET"]
+ *   "configuration": ["application_origins", "WEBAUTHN_CEREMONY_SECRET"]
  * }
  */
 
@@ -54,5 +54,5 @@ export default async function POST(req: Request, res: Response) {
         rpId: webAuthn.rpId,
     });
     res.setHeader('Cache-Control', 'no-store');
-    return res.json(result);
+    return res.json({ ceremony_token: result.ceremonyToken, publicKey: result.publicKey });
 }

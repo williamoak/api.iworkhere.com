@@ -78,8 +78,8 @@
   "paths": {
     "/v1/auth/emailverify": {
       "get": {
-        "summary": "Verify email via GET (browser link).",
-        "description": "Handles verification requests originating from email links.\n  Reads the token from the query string, performs verification,\n  and redirects the user to the application.",
+        "summary": "Verify email via GET (legacy browser link).",
+        "description": "Handles legacy verification links issued before the code-based flow.\n  Reads the token from the query string, performs verification,\n  and redirects the user to the application.",
         "tags": [
           "auth, email, verify"
         ],
@@ -101,7 +101,7 @@
       },
       "put": {
         "summary": "Verify a user email address.",
-        "description": "Verifies ownership of a user email address using a verification token.\nOn success, the user account is transitioned to an active state and\nthe email verification timestamp is recorded.",
+        "description": "Verifies ownership of a user email address using a 12-character verification code.\nOn success, the user account is transitioned to an active state and\nthe email verification timestamp is recorded.",
         "tags": [
           "auth, email, verify"
         ],
@@ -124,7 +124,7 @@
     },
     "/v1/auth/emailverify/resend": {
       "put": {
-        "summary": "Resend an email verification token.",
+        "summary": "Resend a 12-character email verification code.",
         "description": "Allows a pending user to request a new email verification token.\nThis endpoint is intentionally non-enumerating and returns success even when\nthe email is unknown or not eligible for resend.",
         "tags": [
           "auth, email, verify"
@@ -377,8 +377,8 @@
     },
     "/v1/auth/passreset/complete": {
       "put": {
-        "summary": "Complete a password reset.",
-        "description": "Consumes a valid password reset token and sets a new password. When app_key\nis supplied, the token must belong to that application's scope; legacy\nunscoped tokens remain compatible when app_key is omitted.\nOn success, all existing auth tokens are revoked.",
+        "summary": "Complete a password reset with a code.",
+        "description": "Consumes a valid six-character password reset code and sets a new password.\nLegacy long tokens remain accepted during the transition. When app_key\nis supplied, the token must belong to that application's scope; legacy\nunscoped tokens remain compatible when app_key is omitted.\nOn success, all existing auth tokens are revoked.",
         "tags": [
           "auth, password, reset"
         ],
@@ -402,7 +402,7 @@
     "/v1/auth/passreset/initiate": {
       "put": {
         "summary": "Initiate a password reset flow.",
-        "description": "Initiates a password reset request for a user identified by email.\nThis endpoint is intentionally non-enumerating: it always returns\na success response regardless of whether the email exists.\n\nOn success, the API sends an application-specific reset link by email. The\ntoken is never included in the API response, and mail delivery failures are\nrecorded by the mail audit path without revealing account existence.",
+        "description": "Initiates a password reset request for a user identified by email.\nThis endpoint is intentionally non-enumerating: it always returns\na success response regardless of whether the email exists.\n\nOn success, the API sends a short-lived reset code by email. The code is\nnever included in the API response, and mail delivery failures are recorded\nby the mail audit path without revealing account existence. No clickable URL\nis included, so email-provider click tracking cannot redirect the user to\nan unrelated landing page.",
         "tags": [
           "auth, password-reset"
         ],
@@ -425,8 +425,8 @@
     },
     "/v1/auth/passreset/verify": {
       "put": {
-        "summary": "Verify a password reset token.",
-        "description": "Validates a password reset token without changing user state. When\napp_key is supplied, the token must belong to that application's scope;\nlegacy unscoped tokens remain compatible when app_key is omitted.\nUsed by clients to confirm token validity before submitting\na new password.",
+        "summary": "Verify a password reset code.",
+        "description": "Validates a six-character password reset code without changing user state. Legacy\nlong tokens remain accepted during the transition. When\napp_key is supplied, the token must belong to that application's scope;\nlegacy unscoped tokens remain compatible when app_key is omitted.\nUsed by clients to confirm token validity before submitting\na new password.",
         "tags": [
           "auth, password, reset"
         ],

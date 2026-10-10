@@ -132,6 +132,7 @@ describe('webauthnService', () => {
         }));
         expect(mocks.generateRegistrationOptions).toHaveBeenCalledWith(expect.objectContaining({
             userName: 'bill@example.com',
+            challenge: Uint8Array.from(Buffer.from(ceremony.payload.challenge, 'base64url')),
             userDisplayName: 'bill@example.com',
             excludeCredentials: [{ id: 'existing', transports: ['usb'] }],
         }));
@@ -167,7 +168,7 @@ describe('webauthnService', () => {
         expect(mocks.createCeremony).toHaveBeenCalledWith(expect.objectContaining({ operation: 'authentication' }));
         expect(mocks.generateAuthenticationOptions).toHaveBeenCalledWith({
             rpID: ceremony.payload.rpId,
-            challenge: ceremony.payload.challenge,
+            challenge: Uint8Array.from(Buffer.from(ceremony.payload.challenge, 'base64url')),
             timeout: 60000,
             userVerification: 'preferred',
         });

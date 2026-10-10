@@ -20,6 +20,13 @@ function invalidPasskey(): never {
     throw new AuthError('INVALID_PASSKEY', 'Passkey authentication failed', 400);
 }
 
+function decodeChallenge(challenge: string): Uint8Array<ArrayBuffer> {
+    const decoded = Buffer.from(challenge, 'base64url');
+    const result: Uint8Array<ArrayBuffer> = new Uint8Array(new ArrayBuffer(decoded.byteLength));
+    result.set(decoded);
+    return result;
+}
+
 export async function resolveWebAuthnOrigin(applicationId: string, origin: unknown): Promise<{ origin: string; rpId: string }> {
     let normalizedOrigin: string | undefined;
     if (typeof origin === 'string') {
@@ -90,7 +97,7 @@ export async function createRegistrationOptions(input: {
         userName: input.username,
         userDisplayName: input.displayName || input.username,
         userID: Buffer.from(input.userId),
-        challenge: ceremony.payload.challenge,
+        challenge: decodeChallenge(ceremony.payload.challenge),
         attestationType: 'none',
         excludeCredentials: existing.map((credential) => ({
             id: credential.credentialId,
@@ -160,7 +167,7 @@ export async function createAuthenticationOptions(input: {
     });
     const publicKey = await generateAuthenticationOptions({
         rpID: ceremony.payload.rpId,
-        challenge: ceremony.payload.challenge,
+        challenge: decodeChallenge(ceremony.payload.challenge),
         timeout: 60000,
         userVerification: 'preferred',
     });

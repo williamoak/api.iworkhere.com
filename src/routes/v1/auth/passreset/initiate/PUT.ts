@@ -13,9 +13,11 @@
  * This endpoint is intentionally non-enumerating: it always returns
  * a success response regardless of whether the email exists.
  *
- * On success, the API sends an application-specific reset link by email. The
- * token is never included in the API response, and mail delivery failures are
- * recorded by the mail audit path without revealing account existence.
+ * On success, the API sends a short-lived reset code by email. The code is
+ * never included in the API response, and mail delivery failures are recorded
+ * by the mail audit path without revealing account existence. No clickable URL
+ * is included, so email-provider click tracking cannot redirect the user to
+ * an unrelated landing page.
  *
  * @requestExample
  * {
@@ -75,19 +77,11 @@ export default async function PUT(req: Request, res: Response): Promise<void> {
         // Do not send anything for unknown users. The service returns a
         // sentinel token in that case so the response remains non-enumerating.
         if (result.token !== 'noop') {
-            const applicationOrigin = authContext.applicationKey.startsWith('http://') ||
-                authContext.applicationKey.startsWith('https://')
-                ? authContext.applicationKey
-                : `https://${authContext.applicationKey}`
-            const resetUrl = new URL('/auth/passreset', applicationOrigin)
-            resetUrl.searchParams.set('token', result.token)
-            resetUrl.searchParams.set('app_key', authContext.applicationKey)
-
             await sendEmail({
                 to: body.email,
                 subject: 'Reset your password',
-                text: `Reset your password by visiting this link: ${resetUrl.toString()}`,
-                html: `<p>Reset your password by clicking the link below:</p><p><a href="${resetUrl.toString()}">${resetUrl.toString()}</a></p>`,
+                text: `Your password reset code is: ${result.token}\n\nEnter this six-character code in the password reset screen. It expires soon and can only be used once.`,
+                html: `<p>Your password reset code is:</p><p><strong>${result.token}</strong></p><p>Enter this six-character code in the password reset screen. It expires soon and can only be used once.</p>`,
                 throwOnError: false,
                 auditType: 'password_reset',
             })
