@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
 import handler, {
+    CURATED_PAGES,
     DEFAULT_FALLBACK_PAGES,
     REDIS_PAGES_KEY,
     extractUniquePages,
@@ -13,6 +14,11 @@ import handler, {
     WIDGET_PROVINCES,
     WIDGET_INDUSTRIES,
     WIDGET_MODES,
+    FAQ_ANCHORS,
+    UNION_IDS,
+    UNION_SOURCE_LINKS,
+    UNION_EMAIL_LINKS,
+    UNION_GUIDE_ANCHORS,
     resetLocalPageCache,
     resolveCountryRegion,
     __test__,
@@ -350,7 +356,7 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
             expect(db.selectDistinct).not.toHaveBeenCalled();
         });
 
-        test('getDynamicPages queries database and stores in Redis on cache miss', async () => {
+        test('getDynamicPages queries database, merges extracted pages with curated pages, and stores in Redis on cache miss', async () => {
             vi.spyOn(cacheStore, 'get').mockResolvedValue(null);
             const setSpy = vi.spyOn(cacheStore, 'set').mockResolvedValue(undefined);
 
@@ -358,14 +364,14 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
                 from: vi.fn().mockReturnValue({
                     where: vi.fn().mockResolvedValue([
                         { note: 'visit: Pricing' },
-                        { note: 'visit: FAQ' },
+                        { note: 'visit: Custom Extracted Page' },
                         { note: 'visit: /v1/status' },
                     ]),
                 }),
             } as any);
 
             const pages = await getDynamicPages();
-            expect(pages).toEqual(expect.arrayContaining(['Home', 'Pricing', 'FAQ']));
+            expect(pages).toEqual(expect.arrayContaining(['Home', 'Pricing', 'Custom Extracted Page', ...CURATED_PAGES]));
             expect(pages).not.toContain('/v1/status');
             expect(setSpy).toHaveBeenCalledWith(REDIS_PAGES_KEY, pages, 86400000);
         });
@@ -875,8 +881,8 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
             expect(getWidgetAbandonProbability(5)).toBe(0);
         });
 
-        test('WIDGET_CLICK_PROBABILITY is 80%', () => {
-            expect(WIDGET_CLICK_PROBABILITY).toBe(0.80);
+        test('WIDGET_CLICK_PROBABILITY is 95%', () => {
+            expect(WIDGET_CLICK_PROBABILITY).toBe(0.95);
         });
 
         test('generates widget steps and abandons after step 1 when abandon check passes (10%)', async () => {
@@ -1026,14 +1032,14 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
             expect(generated.records[4].note).toMatch(/^visit: Home#step4:/);
         });
 
-        test('completes full widget flow and proceeds to Union Guide when no abandonment occurs', async () => {
+        test('completes full widget flow, proceeds to Union Guide, and moves through the rest of the site when no abandonment occurs', async () => {
             // Step 1: 0.45 (>= 0.10)
             // Step 2: 0.45 (>= 0.20)
             // Step 3: 0.45 (>= 0.30)
             // Step 4: 0.45 (>= 0.40 -> complete!)
             let call = 0;
             const values = [
-                0.5, // enters widget (< 0.8)
+                0.5, // enters widget (< 0.95)
                 0, 0, 0, // selections
                 0.45, // step 1 check
                 0.5, // duration
@@ -1062,16 +1068,17 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
             });
 
             expect(generated.journeys).toBe(1);
-            expect(generated.records.length).toBe(6);
+            expect(generated.records.length).toBeGreaterThan(6);
             expect(generated.records[0].note).toBe('visit: Home');
             expect(generated.records[1].note).toBe('visit: Home#step1:Ontario');
             expect(generated.records[2].note).toMatch(/^visit: Home#step2:/);
             expect(generated.records[3].note).toBe('visit: Home#step3');
             expect(generated.records[4].note).toMatch(/^visit: Home#step4:/);
             expect(generated.records[5].note).toBe('visit: Union Guide');
+            expect(generated.records.slice(6).every((r) => r.note.startsWith('visit: '))).toBe(true);
         });
 
-        test('performs standard page walk when widget is disabled or random >= 0.80', async () => {
+        test('performs standard page walk when widget is disabled or random >= 0.95', async () => {
             const generated = await generateVisitJourneys({
                 numRecs: 1,
                 locationSource: 'non_widget_journey',
@@ -1093,6 +1100,66 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
             expect(generated.journeys).toBe(1);
             expect(generated.records[0].note).toBe('visit: Home');
             expect(generated.records[1].note).toBe('visit: Your Rights');
+        });
+
+        test('exports all expected FAQ and Union Guide interaction anchors and action lists', () => {
+            expect(FAQ_ANCHORS).toEqual([
+                'what-is-a-union',
+                'why-join-a-union',
+                'how-union-formed',
+                'collective-agreement',
+                'dues',
+                'strike',
+                'representation',
+                'province-territory',
+            ]);
+
+            expect(UNION_IDS).toEqual([
+                'cupe',
+                'unifor',
+                'ufcw',
+                'psac',
+                'usw',
+            ]);
+
+            expect(UNION_SOURCE_LINKS).toEqual([
+                'source-cupe',
+                'source-unifor',
+                'source-ufcw',
+                'source-psac',
+                'source-usw',
+            ]);
+
+            expect(UNION_EMAIL_LINKS).toEqual([
+                'email-cupe',
+                'email-ufcw',
+                'email-psac',
+            ]);
+
+            expect(UNION_GUIDE_ANCHORS).toEqual([
+                'anonymous',
+                'contact',
+                'cupe',
+                'unifor',
+                'ufcw',
+                'psac',
+                'usw',
+                'source-cupe',
+                'source-unifor',
+                'source-ufcw',
+                'source-psac',
+                'source-usw',
+                'email-cupe',
+                'email-ufcw',
+                'email-psac',
+                'submit',
+            ]);
+
+            expect(__test__.FAQ_ANCHORS).toBe(FAQ_ANCHORS);
+            expect(__test__.UNION_IDS).toBe(UNION_IDS);
+            expect(__test__.UNION_SOURCE_LINKS).toBe(UNION_SOURCE_LINKS);
+            expect(__test__.UNION_EMAIL_LINKS).toBe(UNION_EMAIL_LINKS);
+            expect(__test__.UNION_GUIDE_ANCHORS).toBe(UNION_GUIDE_ANCHORS);
         });
     });
 });

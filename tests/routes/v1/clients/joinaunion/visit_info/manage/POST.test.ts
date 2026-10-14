@@ -41,6 +41,12 @@ import POST, {
   processManageRecords,
   defaultManageQueryRepository,
   makePostManageHandler,
+  generateJourneyQueryKey,
+  JourneyQueryCache,
+  journeyQueryCache,
+  sliceAndFormatJourneys,
+  getOrReconstructJourneys,
+  normalizeFilters,
   __test__,
 } from '@routes/v1/clients/joinaunion/visit_info/manage/POST';
 
@@ -161,6 +167,7 @@ const SAMPLE_RECORDS = [
 describe('POST /v1/clients/joinaunion/visit_info/manage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    journeyQueryCache.clear();
   });
 
   it('exports authRequired as boolean', () => {
@@ -999,6 +1006,264 @@ describe('POST /v1/clients/joinaunion/visit_info/manage', () => {
     });
   });
 
+  describe('Journey Dataset and Count processing via POST', () => {
+    const journeySampleVisits = [
+      // Device 1: 2 journeys
+      {
+        id: '1',
+        deviceId: 'd1',
+        touchTime: new Date('2026-09-10T10:00:00.000Z'),
+        city: 'Toronto',
+        region: 'Ontario',
+        country: 'CA',
+        locationSource: 'all',
+        note: 'visit: Home',
+      },
+      {
+        id: '2',
+        deviceId: 'd1',
+        touchTime: new Date('2026-09-10T10:01:10.000Z'),
+        city: 'Toronto',
+        region: 'Ontario',
+        country: 'CA',
+        locationSource: 'all',
+        note: 'visit: About Us#Healthcare',
+      },
+      {
+        id: '3',
+        deviceId: 'd1',
+        touchTime: new Date('2026-09-10T10:10:00.000Z'),
+        city: 'Toronto',
+        region: 'Ontario',
+        country: 'CA',
+        locationSource: 'all',
+        note: 'visit: Home',
+      },
+      {
+        id: '4',
+        deviceId: 'd1',
+        touchTime: new Date('2026-09-10T10:11:00.000Z'),
+        city: 'Toronto',
+        region: 'Ontario',
+        country: 'CA',
+        locationSource: 'all',
+        note: 'visit: Contact#Healthcare',
+      },
+      // Device 2: 1 journey
+      {
+        id: '5',
+        deviceId: 'd2',
+        touchTime: new Date('2026-09-10T11:00:00.000Z'),
+        city: 'Calgary',
+        region: 'Alberta',
+        country: 'CA',
+        locationSource: 'all',
+        note: 'visit: Home',
+      },
+      {
+        id: '6',
+        deviceId: 'd2',
+        touchTime: new Date('2026-09-10T11:02:00.000Z'),
+        city: 'Calgary',
+        region: 'Alberta',
+        country: 'CA',
+        locationSource: 'all',
+        note: 'visit: Services',
+      },
+    ];
+
+    it('returns exact journey cardinality for countOnly POST request with output_shape: { num_recs: "count" }', async () => {
+      const mockRepo = {
+        getManageData: vi.fn(),
+        getRawRecords: vi.fn().mockResolvedValue(journeySampleVisits),
+      };
+
+      const handler = makePostManageHandler(mockRepo);
+      const req = createReq({
+        dataset: 'all',
+        startDate: '2026-09-01T00:00:00.000Z',
+        endDate: '2026-09-30T23:59:59.999Z',
+        region: 'Canada',
+        filters: {
+          city: ['Toronto', 'Calgary'],
+        },
+        output_shape: {
+          num_recs: 'count',
+        },
+      });
+      const res = createRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual([{ num_recs: 3 }]);
+    });
+
+    it('streams NDJSON journey records with full journey output shape', async () => {
+      const mockRepo = {
+        getManageData: vi.fn(),
+        getRawRecords: vi.fn().mockResolvedValue(journeySampleVisits),
+      };
+
+      const handler = makePostManageHandler(mockRepo);
+      const req = createReq({
+        dataset: 'all',
+        startDate: '2026-09-01T00:00:00.000Z',
+        endDate: '2026-09-30T23:59:59.999Z',
+        region: 'Canada',
+        filters: {
+          sector: ['Healthcare'],
+        },
+        stream: true,
+        sortColumn: 'journey_start_time',
+        sortDirection: 'asc',
+        pageStartRecord: 0,
+        pageEndRecord: 100,
+        output_shape: {
+          city: 'city',
+          country: 'country',
+          region: 'region',
+          latitude: 'latitude',
+          longitude: 'longitude',
+          locationSource: 'locationSource',
+          device_id: 'device_id',
+          userId: 'userId',
+          journey_average_time_per_page: 'journey_average_time_per_page',
+          journey_average_time_per_page_seconds: 'journey_average_time_per_page_seconds',
+          journey_duration: 'journey_duration',
+          journey_duration_seconds: 'journey_duration_seconds',
+          journey_id: 'journey_id',
+          journey_num_pages: 'journey_num_pages',
+          journey_start_time: 'journey_start_time',
+          longest_page: 'longest_page',
+          pages_viewed_percent: 'pages_viewed_percent',
+          pages: 'pages',
+        },
+      });
+      const res = createRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('application/x-ndjson; charset=utf-8');
+      expect(res.writtenChunks.length).toBe(2);
+
+      const journey1 = JSON.parse(res.writtenChunks[0]);
+      expect(journey1.journey_id).toBe('journey-1');
+      expect(journey1.device_id).toBe('d1');
+      expect(journey1.city).toBe('Toronto');
+      expect(journey1.country).toBe('CA');
+      expect(journey1.region).toBe('Ontario');
+      expect(journey1.journey_num_pages).toBe(2);
+      expect(journey1.pages).toHaveLength(2);
+      expect(journey1.pages[0].page_name).toBe('Home');
+      expect(journey1.records).toBeUndefined();
+
+      const journey2 = JSON.parse(res.writtenChunks[1]);
+      expect(journey2.journey_id).toBe('journey-2');
+      expect(journey2.device_id).toBe('d1');
+    });
+
+    it('filters out system event notes containing /v1/ when streaming journey records', async () => {
+      const visitsWithSystemEvents = [
+        {
+          id: '1',
+          deviceId: 'd-sys',
+          touchTime: new Date('2026-10-13T23:43:28.043Z'),
+          city: 'Vancouver',
+          country: 'CA',
+          region: 'British Columbia',
+          note: 'visit: Home',
+        },
+        {
+          id: '2',
+          deviceId: 'd-sys',
+          touchTime: new Date('2026-10-13T23:43:28.148Z'),
+          city: null,
+          country: null,
+          region: null,
+          note: 'visit: /v1/auth/refresh',
+        },
+        {
+          id: '3',
+          deviceId: 'd-sys',
+          touchTime: new Date('2026-10-13T23:43:28.191Z'),
+          city: null,
+          country: null,
+          region: null,
+          note: 'visit: /v1/auth/me',
+        },
+        {
+          id: '4',
+          deviceId: 'd-sys',
+          touchTime: new Date('2026-10-13T23:44:28.043Z'),
+          city: 'Vancouver',
+          country: 'CA',
+          region: 'British Columbia',
+          note: 'visit: Pricing',
+        },
+      ];
+
+      const mockRepo = {
+        getManageData: vi.fn(),
+        getRawRecords: vi.fn().mockResolvedValue(visitsWithSystemEvents),
+      };
+
+      const handler = makePostManageHandler(mockRepo);
+      const req = createReq({
+        dataset: 'all',
+        stream: true,
+        sortColumn: 'journey_start_time',
+        output_shape: {
+          journey_id: 'journey_id',
+          journey_num_pages: 'journey_num_pages',
+          pages: 'pages',
+        },
+      });
+      const res = createRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.writtenChunks.length).toBe(1);
+
+      const journey = JSON.parse(res.writtenChunks[0]);
+      expect(journey.journey_num_pages).toBe(2);
+      expect(journey.pages).toHaveLength(2);
+      expect(journey.pages.map((p: { page_name: string }) => p.page_name)).toEqual(['Home', 'Pricing']);
+      expect(journey.records).toBeUndefined();
+    });
+
+    it('recognizes all journey fields in parseOutputShape without throwing error', () => {
+      const shape = {
+        city: 'city',
+        country: 'country',
+        region: 'region',
+        latitude: 'latitude',
+        longitude: 'longitude',
+        locationSource: 'locationSource',
+        device_id: 'device_id',
+        userId: 'userId',
+        journey_average_time_per_page: 'journey_average_time_per_page',
+        journey_average_time_per_page_seconds: 'journey_average_time_per_page_seconds',
+        journey_duration: 'journey_duration',
+        journey_duration_seconds: 'journey_duration_seconds',
+        journey_id: 'journey_id',
+        journey_num_pages: 'journey_num_pages',
+        journey_start_time: 'journey_start_time',
+        longest_page: 'longest_page',
+        pages_viewed_percent: 'pages_viewed_percent',
+        pages: 'pages',
+      };
+
+      const parsed = parseOutputShape(shape);
+      expect(parsed.columns).toHaveLength(18);
+      expect(parsed.columns.map((c) => c.outputKey)).toContain('journey_average_time_per_page');
+      expect(parsed.columns.map((c) => c.outputKey)).toContain('locationSource');
+      expect(parsed.columns.map((c) => c.outputKey)).toContain('userId');
+    });
+  });
+
   describe('defaultManageQueryRepository', () => {
     it('queries visitInfo and returns processed records', async () => {
       mockFrom.mockResolvedValueOnce(SAMPLE_RECORDS);
@@ -1016,6 +1281,318 @@ describe('POST /v1/clients/joinaunion/visit_info/manage', () => {
         { city: 'Toronto', num_hits: 1 },
         { city: 'Edmonton', num_hits: 1 },
       ]);
+    });
+  });
+
+  describe('normalizeFilters & generateJourneyQueryKey', () => {
+    it('normalizes filters with consistent ordering and casing', () => {
+      const filtersA = {
+        city: ['Toronto', 'Vancouver'],
+        sector: ['Healthcare'],
+      };
+      const filtersB = {
+        sector: ['healthcare'],
+        city: ['vancouver', 'toronto'],
+      };
+      expect(normalizeFilters(filtersA)).toEqual(normalizeFilters(filtersB));
+    });
+
+    it('generates deterministic query keys regardless of filter key order', () => {
+      const key1 = generateJourneyQueryKey({
+        dataset: 'all',
+        region: 'Canada',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        filters: { sector: ['Healthcare'], city: ['Calgary', 'Toronto'] },
+        sortColumn: 'journey_start_time',
+        sortDirection: 'asc',
+      });
+
+      const key2 = generateJourneyQueryKey({
+        dataset: 'ALL',
+        region: 'canada',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        filters: { city: ['toronto', 'calgary'], sector: ['healthcare'] },
+        sortColumn: 'journey_start_time',
+        sortDirection: 'ASC',
+      });
+
+      expect(key1).toBe(key2);
+    });
+
+    it('generates distinct query keys for different filter parameters', () => {
+      const baseKey = generateJourneyQueryKey({ region: 'Ontario' });
+      const diffRegionKey = generateJourneyQueryKey({ region: 'Quebec' });
+      const diffDateKey = generateJourneyQueryKey({ region: 'Ontario', startDate: '2026-05-01' });
+      const diffSortKey = generateJourneyQueryKey({ region: 'Ontario', sortDirection: 'desc' });
+
+      expect(baseKey).not.toBe(diffRegionKey);
+      expect(baseKey).not.toBe(diffDateKey);
+      expect(baseKey).not.toBe(diffSortKey);
+    });
+  });
+
+  describe('JourneyQueryCache', () => {
+    it('stores and retrieves cached journey records', () => {
+      const cache = new JourneyQueryCache(10, 60_000);
+      const mockJourneys = [
+        {
+          city: 'Vancouver',
+          country: 'CA',
+          region: 'British Columbia',
+          latitude: 49.2827,
+          longitude: -123.1207,
+          locationSource: 'ip_centroid',
+          device_id: 'd1',
+          userId: 'u1',
+          journey_average_time_per_page: '10s',
+          journey_average_time_per_page_seconds: 10,
+          journey_duration: '20s',
+          journey_duration_seconds: 20,
+          journey_id: 'journey-1',
+          journey_num_pages: 2,
+          journey_start_time: '2026-10-13T23:43:28.043Z',
+          longest_page: 'Home',
+          pages_viewed_percent: 50,
+          pages: [],
+        },
+      ];
+
+      cache.set('test-key', mockJourneys as any);
+      expect(cache.has('test-key')).toBe(true);
+      expect(cache.get('test-key')).toEqual(mockJourneys);
+      expect(cache.size()).toBe(1);
+
+      cache.delete('test-key');
+      expect(cache.has('test-key')).toBe(false);
+      expect(cache.get('test-key')).toBeUndefined();
+    });
+
+    it('expires cached entries after TTL', () => {
+      const cache = new JourneyQueryCache(10, 50);
+      cache.set('short-lived', [{ journey_id: 'j1' }] as any, 10);
+
+      expect(cache.has('short-lived')).toBe(true);
+
+      const entry = (cache as any).cache.get('short-lived');
+      entry.expiresAt = Date.now() - 1000;
+
+      expect(cache.has('short-lived')).toBe(false);
+      expect(cache.get('short-lived')).toBeUndefined();
+      expect(cache.size()).toBe(0);
+    });
+
+    it('evicts oldest entries when exceeding max capacity (LRU)', () => {
+      const cache = new JourneyQueryCache(3, 60_000);
+
+      cache.set('k1', [{ journey_id: 'j1' }] as any);
+      cache.set('k2', [{ journey_id: 'j2' }] as any);
+      cache.set('k3', [{ journey_id: 'j3' }] as any);
+
+      // Access k1 to make it recently used: k2 is now oldest
+      cache.get('k1');
+
+      // Insert k4, should evict k2
+      cache.set('k4', [{ journey_id: 'j4' }] as any);
+
+      expect(cache.has('k1')).toBe(true);
+      expect(cache.has('k2')).toBe(false);
+      expect(cache.has('k3')).toBe(true);
+      expect(cache.has('k4')).toBe(true);
+      expect(cache.size()).toBe(3);
+    });
+  });
+
+  describe('Journey Query Caching & Sequential Fetch Optimization', () => {
+    const visitsForCacheTest = [
+      {
+        id: '1',
+        deviceId: 'd-cache-1',
+        userId: 'u1',
+        requestMethod: 'GET',
+        touchTime: new Date('2026-10-13T20:00:00.000Z'),
+        city: 'Vancouver',
+        country: 'CA',
+        region: 'British Columbia',
+        locationSource: 'ip_centroid',
+        latitude: 49.2827,
+        longitude: -123.1207,
+        note: 'visit: Home',
+      },
+      {
+        id: '2',
+        deviceId: 'd-cache-1',
+        userId: 'u1',
+        requestMethod: 'GET',
+        touchTime: new Date('2026-10-13T20:01:00.000Z'),
+        city: 'Vancouver',
+        country: 'CA',
+        region: 'British Columbia',
+        locationSource: 'ip_centroid',
+        latitude: 49.2827,
+        longitude: -123.1207,
+        note: 'visit: Union Guide',
+      },
+      {
+        id: '3',
+        deviceId: 'd-cache-2',
+        userId: 'u2',
+        requestMethod: 'GET',
+        touchTime: new Date('2026-10-13T21:00:00.000Z'),
+        city: 'Vancouver',
+        country: 'CA',
+        region: 'British Columbia',
+        locationSource: 'ip_centroid',
+        latitude: 49.2827,
+        longitude: -123.1207,
+        note: 'visit: Home',
+      },
+      {
+        id: '4',
+        deviceId: 'd-cache-2',
+        userId: 'u2',
+        requestMethod: 'GET',
+        touchTime: new Date('2026-10-13T21:01:00.000Z'),
+        city: 'Vancouver',
+        country: 'CA',
+        region: 'British Columbia',
+        locationSource: 'ip_centroid',
+        latitude: 49.2827,
+        longitude: -123.1207,
+        note: 'visit: FAQs',
+      },
+    ];
+
+    it('reuses cached journey datasets on consecutive count and page-fetch requests', async () => {
+      const getRawRecordsMock = vi.fn().mockResolvedValue(visitsForCacheTest);
+      const mockRepo = {
+        getManageData: vi.fn(),
+        getRawRecords: getRawRecordsMock,
+      };
+
+      const handler = makePostManageHandler(mockRepo);
+
+      // 1. First request: Count query (output_shape: { num_recs: "count" })
+      const countReq = createReq({
+        region: 'British Columbia',
+        dataset: 'all',
+        output_shape: { num_recs: 'count' },
+      });
+      const countRes = createRes();
+      await handler(countReq, countRes);
+
+      expect(countRes.statusCode).toBe(200);
+      expect(countRes.body).toEqual([{ num_recs: 2 }]);
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(1);
+
+      // 2. Second request: Page 0 fetch with identical filter parameters
+      const page0Req = createReq({
+        region: 'British Columbia',
+        dataset: 'all',
+        pageStartRecord: 0,
+        pageEndRecord: 0,
+        output_shape: {
+          journey_id: 'journey_id',
+          device_id: 'device_id',
+          city: 'city',
+        },
+      });
+      const page0Res = createRes();
+      await handler(page0Req, page0Res);
+
+      expect(page0Res.statusCode).toBe(200);
+      expect(page0Res.body).toEqual([
+        {
+          journey_id: 'journey-1',
+          device_id: 'd-cache-1',
+          city: 'Vancouver',
+        },
+      ]);
+      // Should NOT have called getRawRecords again (cache hit)
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(1);
+
+      // 3. Third request: Page 1 fetch (pagination advance)
+      const page1Req = createReq({
+        region: 'British Columbia',
+        dataset: 'all',
+        pageStartRecord: 1,
+        pageEndRecord: 1,
+        output_shape: {
+          journey_id: 'journey_id',
+          device_id: 'device_id',
+          city: 'city',
+        },
+      });
+      const page1Res = createRes();
+      await handler(page1Req, page1Res);
+
+      expect(page1Res.statusCode).toBe(200);
+      expect(page1Res.body).toEqual([
+        {
+          journey_id: 'journey-2',
+          device_id: 'd-cache-2',
+          city: 'Vancouver',
+        },
+      ]);
+      // Still 1 repository call!
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('queries repository afresh when filter parameters change (cache isolation)', async () => {
+      const getRawRecordsMock = vi.fn().mockResolvedValue(visitsForCacheTest);
+      const mockRepo = {
+        getManageData: vi.fn(),
+        getRawRecords: getRawRecordsMock,
+      };
+
+      const handler = makePostManageHandler(mockRepo);
+
+      // Request with region 'British Columbia'
+      const req1 = createReq({
+        region: 'British Columbia',
+        output_shape: { num_recs: 'count' },
+      });
+      const res1 = createRes();
+      await handler(req1, res1);
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(1);
+
+      // Request with different region 'Ontario'
+      const req2 = createReq({
+        region: 'Ontario',
+        output_shape: { num_recs: 'count' },
+      });
+      const res2 = createRes();
+      await handler(req2, res2);
+
+      // Should dispatch a fresh repository query
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(2);
+      expect(res2.body).toEqual([{ num_recs: 0 }]);
+    });
+
+    it('queries repository after manual cache clearance', async () => {
+      const getRawRecordsMock = vi.fn().mockResolvedValue(visitsForCacheTest);
+      const mockRepo = {
+        getManageData: vi.fn(),
+        getRawRecords: getRawRecordsMock,
+      };
+
+      const handler = makePostManageHandler(mockRepo);
+
+      const req = createReq({
+        region: 'British Columbia',
+        output_shape: { num_recs: 'count' },
+      });
+      const res1 = createRes();
+      await handler(req, res1);
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(1);
+
+      // Manually invalidate cache (e.g. upon new visit logging)
+      journeyQueryCache.clear();
+
+      const res2 = createRes();
+      await handler(req, res2);
+      expect(getRawRecordsMock).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -123,6 +123,7 @@ import { db } from '@services/dbService';
 import { visitInfo } from '@db/schema/visit_info';
 import { cacheStore } from '@cache/cacheStore';
 import { resolveDateRange } from '@helpers/dateParser';
+import { journeyQueryCache } from '@routes/v1/clients/joinaunion/visit_info/manage/POST';
 
 /* make this true to enforce authenticated requests, later... */
 export const authRequired = false;
@@ -174,7 +175,7 @@ export type GeneratorOptions = {
 
 type GeneratedJourneys = { records: VisitRecord[]; journeys: number; devices: number };
 
-export const WIDGET_CLICK_PROBABILITY = 0.8;
+export const WIDGET_CLICK_PROBABILITY = 0.95;
 
 export const WIDGET_PROVINCES = [
     'British Columbia',
@@ -207,6 +208,58 @@ export const WIDGET_INDUSTRIES = [
 
 export const WIDGET_MODES = ['anon', 'rep'] as const;
 
+export const FAQ_ANCHORS = [
+    'what-is-a-union',
+    'why-join-a-union',
+    'how-union-formed',
+    'collective-agreement',
+    'dues',
+    'strike',
+    'representation',
+    'province-territory',
+] as const;
+
+export const UNION_IDS = [
+    'cupe',
+    'unifor',
+    'ufcw',
+    'psac',
+    'usw',
+] as const;
+
+export const UNION_SOURCE_LINKS = [
+    'source-cupe',
+    'source-unifor',
+    'source-ufcw',
+    'source-psac',
+    'source-usw',
+] as const;
+
+export const UNION_EMAIL_LINKS = [
+    'email-cupe',
+    'email-ufcw',
+    'email-psac',
+] as const;
+
+export const UNION_GUIDE_ANCHORS = [
+    'anonymous',
+    'contact',
+    'cupe',
+    'unifor',
+    'ufcw',
+    'psac',
+    'usw',
+    'source-cupe',
+    'source-unifor',
+    'source-ufcw',
+    'source-psac',
+    'source-usw',
+    'email-cupe',
+    'email-ufcw',
+    'email-psac',
+    'submit',
+] as const;
+
 export function getWidgetAbandonProbability(step: number): number {
     switch (step) {
         case 1:
@@ -223,15 +276,26 @@ export function getWidgetAbandonProbability(step: number): number {
 }
 
 export const REDIS_PAGES_KEY = 'joinaunion:dynamic_pages';
-export const DEFAULT_FALLBACK_PAGES = [
+export const CURATED_PAGES = [
     'Home',
-    'Your Rights',
+    'Union Guide',
     'Why Unions',
+    'Your Rights',
     'Resources',
+    'FAQs',
     'About',
     'Contact',
-    'Privacy',
+    'Privacy Policy',
+    'Dashboard',
+    'Administration',
+    'Tasks & To-Do',
+    'Reports Hub',
+    'Heatmap Report',
+    'Tabular Report',
+    'Status Report',
 ] as const;
+
+export const DEFAULT_FALLBACK_PAGES = CURATED_PAGES;
 
 let localPageCache: string[] | null = null;
 let localPageCacheExpiresAt = 0;
@@ -285,7 +349,8 @@ export async function getDynamicPages(): Promise<string[]> {
         const rawNotes = rows.map((r) => r.note).filter((n): n is string => Boolean(n));
         const extracted = extractUniquePages(rawNotes);
 
-        localPageCache = extracted.length > 1 ? extracted : [...DEFAULT_FALLBACK_PAGES];
+        const merged = Array.from(new Set([...CURATED_PAGES, ...extracted]));
+        localPageCache = merged;
         localPageCacheExpiresAt = Date.now() + PAGE_CACHE_TTL_MS;
 
         try {
@@ -296,7 +361,7 @@ export async function getDynamicPages(): Promise<string[]> {
 
         return localPageCache;
     } catch {
-        localPageCache = [...DEFAULT_FALLBACK_PAGES];
+        localPageCache = [...CURATED_PAGES];
         localPageCacheExpiresAt = Date.now() + PAGE_CACHE_TTL_MS;
         return localPageCache;
     }
@@ -507,6 +572,9 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
         const enableWidget = options.enableWidget ?? options.enable_widget ?? (options.pages && options.pages.length > 0 ? false : true);
         const entersWidget = enableWidget && random() < WIDGET_CLICK_PROBABILITY;
 
+        let startPageForWalk = 'Home';
+        const visitedPages = new Set<string>(['Home']);
+
         if (entersWidget) {
             const province = (point.regionName && (WIDGET_PROVINCES as readonly string[]).includes(point.regionName))
                 ? point.regionName
@@ -629,31 +697,42 @@ export async function generateVisitJourneys(options: GeneratorOptions): Promise<
             // Widget Completed -> proceed to Union Guide
             const dur4 = 1 + Math.floor(random() * 30);
             nextTouchMs = touchTime.getTime() + dur4 * 1000;
-            if (nextTouchMs <= endMs && nextTouchMs <= nowMs && nextTouchMs <= journeyMaxMs) {
-                touchTime = new Date(nextTouchMs);
-                records.push({
-                    deviceId,
-                    userId,
-                    requestMethod: 'GET',
-                    touchTime,
-                    latitude: point.latitude,
-                    longitude: point.longitude,
-                    locationSource: options.locationSource,
-                    city: point.city,
-                    country: point.countryCode,
-                    region: point.regionName,
-                    note: 'visit: Union Guide',
-                });
+            if (nextTouchMs > endMs || nextTouchMs > nowMs || nextTouchMs > journeyMaxMs) {
+                journeys += 1;
+                if (nextTouchMs > endMs || nextTouchMs > nowMs) break;
+                continue;
             }
 
-            journeys += 1;
-            continue;
+            touchTime = new Date(nextTouchMs);
+            records.push({
+                deviceId,
+                userId,
+                requestMethod: 'GET',
+                touchTime,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                locationSource: options.locationSource,
+                city: point.city,
+                country: point.countryCode,
+                region: point.regionName,
+                note: 'visit: Union Guide',
+            });
+
+            visitedPages.add('Union Guide');
+            startPageForWalk = 'Union Guide';
+
+            const durPost = 1 + Math.floor(random() * 30);
+            nextTouchMs = touchTime.getTime() + durPost * 1000;
+            if (nextTouchMs > endMs || nextTouchMs > nowMs || nextTouchMs > journeyMaxMs) {
+                journeys += 1;
+                if (nextTouchMs > endMs || nextTouchMs > nowMs) break;
+                continue;
+            }
         }
 
-        // Standard page walk for non-widget journeys
-        let page = nextPage('Home', pages, random);
+        // Standard page walk for non-widget journeys or after completing the widget
+        let page = nextPage(startPageForWalk, pages, random);
         let step = 0;
-        const visitedPages = new Set<string>(['Home']);
         const pageDwellTimes = new Map<string, number>();
         let terminated = false;
 
@@ -844,6 +923,7 @@ export default async function POST(req: Request, res: Response): Promise<Respons
         } catch {
             // Ignore cache invalidation failure
         }
+        journeyQueryCache.clear();
         resetLocalPageCache();
 
         return res.status(200).json({
@@ -879,4 +959,11 @@ export const __test__ = {
     WIDGET_PROVINCES,
     WIDGET_INDUSTRIES,
     WIDGET_MODES,
+    FAQ_ANCHORS,
+    UNION_IDS,
+    UNION_SOURCE_LINKS,
+    UNION_EMAIL_LINKS,
+    UNION_GUIDE_ANCHORS,
+    CURATED_PAGES,
+    DEFAULT_FALLBACK_PAGES,
 };

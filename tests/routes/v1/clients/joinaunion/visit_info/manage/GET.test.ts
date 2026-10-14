@@ -23,6 +23,9 @@ function createMockResponse() {
     const res = {
         statusCode: 200,
         body: undefined as any,
+        headers: {} as Record<string, string>,
+        writtenChunks: [] as string[],
+        ended: false,
         status: vi.fn().mockImplementation(function (this: any, code: number) {
             this.statusCode = code;
             return this;
@@ -31,7 +34,25 @@ function createMockResponse() {
             this.body = data;
             return this;
         }),
-    } as unknown as Response & { statusCode: number; body: any };
+        setHeader: vi.fn().mockImplementation(function (this: any, name: string, value: string) {
+            this.headers[name.toLowerCase()] = value;
+            return this;
+        }),
+        write: vi.fn().mockImplementation(function (this: any, chunk: string) {
+            this.writtenChunks.push(chunk);
+            return true;
+        }),
+        end: vi.fn().mockImplementation(function (this: any) {
+            this.ended = true;
+            return this;
+        }),
+    } as unknown as Response & {
+        statusCode: number;
+        body: any;
+        headers: Record<string, string>;
+        writtenChunks: string[];
+        ended: boolean;
+    };
     return res;
 }
 
@@ -45,17 +66,21 @@ function mockQueryChain(results: Array<{
     city: string | null;
     country?: string | null;
     region?: string | null;
+    locationSource?: string | null;
 }>) {
-    const fromMock = vi.fn();
-    const whereMock = vi.fn();
     const orderByMock = vi.fn().mockResolvedValue(results);
+    const whereMock = vi.fn().mockReturnValue({
+        orderBy: orderByMock,
+    });
+    const fromMock = vi.fn().mockImplementation(() => {
+        const promiseObj: any = Promise.resolve(results);
+        promiseObj.where = whereMock;
+        promiseObj.orderBy = orderByMock;
+        return promiseObj;
+    });
 
     vi.mocked(db.select).mockReturnValue({
-        from: fromMock.mockReturnValue({
-            where: whereMock.mockReturnValue({
-                orderBy: orderByMock,
-            }),
-        }),
+        from: fromMock,
     } as any);
 
     return { fromMock, whereMock, orderByMock };
@@ -655,5 +680,195 @@ describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
         expect(result[0].deviceId).toBe('aaaa-1111');
         expect(result[0].journeys[0].city).toBe('Calgary');
         expect(result[0].journeys).toHaveLength(1);
+    });
+
+    describe('Overloaded GET with journey count and filter sets', () => {
+        const sampleVisits = [
+            // Device 1: 2 valid journeys
+            { deviceId: 'd1', touchTime: new Date('2026-09-01T10:00:00.000Z'), note: 'visit: Home', city: 'Toronto', region: 'Ontario', country: 'CA', locationSource: 'generated' },
+            { deviceId: 'd1', touchTime: new Date('2026-09-01T10:01:00.000Z'), note: 'visit: Step1', city: 'Toronto', region: 'Ontario', country: 'CA', locationSource: 'generated' },
+            { deviceId: 'd1', touchTime: new Date('2026-09-01T10:05:00.000Z'), note: 'visit: Home', city: 'Toronto', region: 'Ontario', country: 'CA', locationSource: 'generated' },
+            { deviceId: 'd1', touchTime: new Date('2026-09-01T10:07:00.000Z'), note: 'visit: Step2', city: 'Toronto', region: 'Ontario', country: 'CA', locationSource: 'generated' },
+            // Device 2: 1 valid journey
+            { deviceId: 'd2', touchTime: new Date('2026-09-01T11:00:00.000Z'), note: 'visit: Home', city: 'Calgary', region: 'Alberta', country: 'CA', locationSource: 'generated' },
+            { deviceId: 'd2', touchTime: new Date('2026-09-01T11:02:00.000Z'), note: 'visit: Automotive', city: 'Calgary', region: 'Alberta', country: 'CA', locationSource: 'generated' },
+            // Device 3: Bounce (single visit, 0 duration) -> ignored
+            { deviceId: 'd3', touchTime: new Date('2026-09-01T12:00:00.000Z'), note: 'visit: Home', city: 'Vancouver', region: 'British Columbia', country: 'CA', locationSource: 'generated' },
+            // Device 4: Non-home start -> dropped
+            { deviceId: 'd4', touchTime: new Date('2026-09-01T13:00:00.000Z'), note: 'visit: Contact', city: 'Montreal', region: 'Quebec', country: 'CA', locationSource: 'generated' },
+        ];
+
+        test('calculates journey count when output_shape={"count"}', async () => {
+            mockQueryChain(sampleVisits);
+
+            const req = {
+                query: {
+                    dataset: 'all',
+                    startDate: '',
+                    endDate: '',
+                    region: 'Canada',
+                    output_shape: '{"count"}',
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toEqual([{ count: 3 }]);
+        });
+
+        test('calculates journey count with filterSet object e.g. { count: "count" }', async () => {
+            mockQueryChain(sampleVisits);
+
+            const req = {
+                query: {
+                    dataset: 'all',
+                    startDate: '',
+                    endDate: '',
+                    region: 'Canada',
+                    output_shape: { count: 'count' },
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toEqual([{ count: 3 }]);
+        });
+
+        test('filters visits by region before computing journeys', async () => {
+            mockQueryChain(sampleVisits);
+
+            const req = {
+                query: {
+                    dataset: 'all',
+                    region: 'Alberta',
+                    output_shape: { count: 'count' },
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toEqual([{ count: 1 }]);
+        });
+
+        test('streams response when stream=true is specified', async () => {
+            mockQueryChain(sampleVisits);
+
+            const req = {
+                query: {
+                    dataset: 'all',
+                    stream: 'true',
+                    output_shape: { count: 'count' },
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.headers['content-type']).toBe('application/x-ndjson; charset=utf-8');
+            expect(res.writtenChunks).toEqual(['{"count":3}\n']);
+            expect(res.ended).toBe(true);
+        });
+
+        test('supports full filterSet passed as serialized JSON parameter', async () => {
+            mockQueryChain(sampleVisits);
+
+            const filterSet = {
+                dataset: 'all',
+                startDate: '',
+                endDate: '',
+                region: 'Canada',
+                filters: {},
+                output_shape: { count: 'count' },
+                stream: false,
+                sortColumn: 'touch_time',
+                sortDirection: 'asc',
+                pageStartRecord: 0,
+                pageEndRecord: 100,
+            };
+
+            const req = {
+                query: {
+                    filterSet: JSON.stringify(filterSet),
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toEqual([{ count: 3 }]);
+        });
+
+        test('streams NDJSON journey records when journey output shape is requested with stream=true', async () => {
+            mockQueryChain(sampleVisits);
+
+            const req = {
+                query: {
+                    dataset: 'all',
+                    stream: 'true',
+                    sortColumn: 'journey_start_time',
+                    output_shape: JSON.stringify({
+                        city: 'city',
+                        country: 'country',
+                        region: 'region',
+                        latitude: 'latitude',
+                        longitude: 'longitude',
+                        locationSource: 'locationSource',
+                        device_id: 'device_id',
+                        userId: 'userId',
+                        journey_average_time_per_page: 'journey_average_time_per_page',
+                        journey_average_time_per_page_seconds: 'journey_average_time_per_page_seconds',
+                        journey_duration: 'journey_duration',
+                        journey_duration_seconds: 'journey_duration_seconds',
+                        journey_id: 'journey_id',
+                        journey_num_pages: 'journey_num_pages',
+                        journey_start_time: 'journey_start_time',
+                        longest_page: 'longest_page',
+                        pages_viewed_percent: 'pages_viewed_percent',
+                        pages: 'pages',
+                    }),
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.headers['content-type']).toBe('application/x-ndjson; charset=utf-8');
+            expect(res.writtenChunks.length).toBe(3);
+
+            const j1 = JSON.parse(res.writtenChunks[0]);
+            expect(j1.journey_id).toBe('journey-1');
+            expect(j1.device_id).toBe('d1');
+            expect(j1.city).toBe('Toronto');
+            expect(j1.country).toBe('CA');
+            expect(j1.region).toBe('Ontario');
+            expect(j1.pages).toHaveLength(2);
+            expect(j1.records).toBeUndefined();
+        });
+
+        test('returns 400 for invalid output_shape format', async () => {
+            const req = {
+                query: {
+                    output_shape: '',
+                },
+            } as unknown as Request;
+            const res = createMockResponse();
+
+            await handler(req, res);
+
+            expect(res.statusCode).toBe(400);
+            expect(res.body).toEqual({
+                error: 'INVALID_REQUEST',
+                message: 'A valid output_shape object is required',
+            });
+        });
     });
 });

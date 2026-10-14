@@ -46,6 +46,7 @@ import { db } from "@services/dbService";
 import crypto from "crypto";
 import { visitInfo } from "@db/schema/visit_info";
 import { logger } from "@helpers/logger";
+import { journeyQueryCache } from "@routes/v1/clients/joinaunion/visit_info/manage/POST";
 
 /**
  * Deterministically formats a hex string into a UUIDv7-style string.
@@ -245,6 +246,7 @@ export default async function handler(
             region: finalRegion,
             note: finalNote
         });
+        journeyQueryCache.clear();
         
         res.locals.visitLogged = true;
     } catch (e) {

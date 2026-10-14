@@ -74,6 +74,21 @@ import { eq, asc } from 'drizzle-orm';
 import { db } from '@services/dbService';
 import { visitInfo } from '@db/schema/visit_info';
 import { logger } from '@helpers/logger';
+import {
+    countJourneys,
+    type VisitInfoRow,
+} from './journeys';
+import {
+    filterRecord,
+    processManageRecords,
+    processJourneyRecords,
+    isJourneyQuery,
+    parseOutputShape,
+    isStreamRequest,
+    type ManageQueryParams,
+    type RawVisitRecord,
+    type ManageQueryRepository,
+} from './POST';
 
 export const authRequired = false;
 
@@ -187,6 +202,7 @@ export function buildDeviceJourneys(rows: VisitRow[]): DeviceJourneys[] {
     >();
 
     for (const row of rows) {
+        if (row.note && row.note.toLowerCase().includes('/v1/')) continue;
         if (!deviceMap.has(row.deviceId)) {
             deviceMap.set(row.deviceId, []);
         }
@@ -346,34 +362,353 @@ export async function getDeviceJourneysBySource(source: string): Promise<DeviceJ
     return buildDeviceJourneys(rows as VisitRow[]);
 }
 
-export default async function GET(req: Request, res: Response): Promise<Response> {
-    try {
-        const rawSource = Array.isArray(req.query.source) ? req.query.source[0] : req.query.source;
-        let source = DEFAULT_SOURCE;
+export function extractManageParams(req: Request): Record<string, unknown> {
+    const query = (req.query || {}) as Record<string, unknown>;
+    const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
 
-        if (typeof rawSource === 'string') {
-            const trimmed = rawSource.trim();
-            if (trimmed.length > 0) {
-                source = trimmed;
+    let container: Record<string, unknown> = {};
+    const rawFilterSet = query.filterSet ?? query.filter_set ?? query.params ?? query.filterSetJson ?? query.filter;
+    if (typeof rawFilterSet === 'string') {
+        try {
+            const parsed = JSON.parse(rawFilterSet);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                container = parsed as Record<string, unknown>;
             }
+        } catch {
+            // ignore
         }
-
-        if (source.length > MAX_SOURCE_LENGTH) {
-            return badRequest(res, `source must be ${MAX_SOURCE_LENGTH} characters or fewer`);
-        }
-
-        const deviceJourneys = await getDeviceJourneysBySource(source);
-
-        return res.status(200).json(deviceJourneys);
-    } catch (err) {
-        logger.error('GET /v1/clients/joinaunion/visit_info/manage error:', err);
-
-        return res.status(500).json({
-            error: 'INTERNAL_ERROR',
-            message: 'Failed to retrieve device journeys',
-        });
+    } else if (rawFilterSet && typeof rawFilterSet === 'object' && !Array.isArray(rawFilterSet)) {
+        container = rawFilterSet as Record<string, unknown>;
     }
+
+    return {
+        ...container,
+        ...body,
+        ...query,
+    };
 }
+
+export function hasManageOverloadParams(params: Record<string, unknown>): boolean {
+    const rawOutputShape =
+        params.output_shape ??
+        params.outputShape ??
+        params.shape ??
+        params.output_fields ??
+        params.outputFields;
+
+    if (rawOutputShape !== undefined) return true;
+
+    if (params.filters !== undefined) return true;
+    if (params.startDate !== undefined || params.start_date !== undefined) return true;
+    if (params.endDate !== undefined || params.end_date !== undefined) return true;
+    if (params.sector !== undefined) return true;
+    if (params.region !== undefined && params.region !== '') return true;
+    if (params.sortColumn !== undefined || params.sort_column !== undefined) return true;
+    if (params.pageStartRecord !== undefined || params.page_start_record !== undefined) return true;
+    if (params.pageEndRecord !== undefined || params.page_end_record !== undefined) return true;
+    if (params.dataset !== undefined && params.dataset !== '') return true;
+    if (params.stream !== undefined || params.chunk_batches !== undefined) return true;
+
+    return false;
+}
+
+export function normalizeRawOutputShape(raw: unknown): unknown {
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+                return JSON.parse(trimmed);
+            } catch {
+                const inner = trimmed.slice(1, -1).trim();
+                if (inner.length > 0) {
+                    const parts = inner.split(',').map((p) => p.trim().replace(/^["']|["']$/g, ''));
+                    const shapeObj: Record<string, unknown> = {};
+                    for (const part of parts) {
+                        const kv = part.split(':').map((s) => s.trim().replace(/^["']|["']$/g, ''));
+                        if (kv.length === 2) {
+                            shapeObj[kv[0]] = kv[1];
+                        } else {
+                            shapeObj[part] = part;
+                        }
+                    }
+                    return shapeObj;
+                }
+            }
+        } else if (trimmed.length > 0) {
+            return { [trimmed]: trimmed };
+        }
+    }
+    return raw;
+}
+
+export const defaultGetManageQueryRepository: ManageQueryRepository = {
+    getManageData: async (params: ManageQueryParams): Promise<Record<string, unknown>[]> => {
+        const rows = await db
+            .select({
+                id: visitInfo.id,
+                deviceId: visitInfo.deviceId,
+                userId: visitInfo.userId,
+                requestMethod: visitInfo.requestMethod,
+                touchTime: visitInfo.touchTime,
+                latitude: visitInfo.latitude,
+                longitude: visitInfo.longitude,
+                locationSource: visitInfo.locationSource,
+                city: visitInfo.city,
+                country: visitInfo.country,
+                region: visitInfo.region,
+                note: visitInfo.note,
+            })
+            .from(visitInfo);
+
+        if (
+            isJourneyQuery(params) ||
+            (params.countFields &&
+                params.countFields.length > 0 &&
+                params.columns.length === 0)
+        ) {
+            return processJourneyRecords(rows as RawVisitRecord[], params);
+        }
+
+        return processManageRecords(rows as RawVisitRecord[], params);
+    },
+    getRawRecords: async (): Promise<RawVisitRecord[]> => {
+        const rows = await db
+            .select({
+                id: visitInfo.id,
+                deviceId: visitInfo.deviceId,
+                userId: visitInfo.userId,
+                requestMethod: visitInfo.requestMethod,
+                touchTime: visitInfo.touchTime,
+                latitude: visitInfo.latitude,
+                longitude: visitInfo.longitude,
+                locationSource: visitInfo.locationSource,
+                city: visitInfo.city,
+                country: visitInfo.country,
+                region: visitInfo.region,
+                note: visitInfo.note,
+            })
+            .from(visitInfo);
+
+        return rows as RawVisitRecord[];
+    },
+};
+
+export function makeGetManageHandler(repo: ManageQueryRepository = defaultGetManageQueryRepository) {
+    return async function GET(req: Request, res: Response): Promise<Response> {
+        try {
+            const params = extractManageParams(req);
+
+            if (!hasManageOverloadParams(params)) {
+                const rawSource = Array.isArray(req.query.source) ? req.query.source[0] : req.query.source;
+                let source = DEFAULT_SOURCE;
+
+                if (typeof rawSource === 'string') {
+                    const trimmed = rawSource.trim();
+                    if (trimmed.length > 0) {
+                        source = trimmed;
+                    }
+                }
+
+                if (source.length > MAX_SOURCE_LENGTH) {
+                    return badRequest(res, `source must be ${MAX_SOURCE_LENGTH} characters or fewer`);
+                }
+
+                const deviceJourneys = await getDeviceJourneysBySource(source);
+                return res.status(200).json(deviceJourneys);
+            }
+
+            const rawOutputShape = normalizeRawOutputShape(
+                params.output_shape ??
+                params.outputShape ??
+                params.shape ??
+                params.output_fields ??
+                params.outputFields ??
+                { count: 'count' }
+            );
+
+            let parsedShape;
+            try {
+                parsedShape = parseOutputShape(rawOutputShape);
+            } catch (parseErr) {
+                return res.status(400).json({
+                    error: 'INVALID_REQUEST',
+                    message: parseErr instanceof Error ? parseErr.message : 'Invalid output_shape',
+                });
+            }
+
+            let filters = params.filters;
+            if (typeof filters === 'string') {
+                try {
+                    filters = JSON.parse(filters);
+                } catch {
+                    filters = undefined;
+                }
+            }
+
+            const queryParams: ManageQueryParams = {
+                columns: parsedShape.columns,
+                functions: parsedShape.functions,
+                countFields: parsedShape.countFields,
+                dataset:
+                    typeof params.dataset === 'string'
+                        ? params.dataset
+                        : typeof params.location_source === 'string'
+                          ? params.location_source
+                          : typeof params.locationSource === 'string'
+                            ? params.locationSource
+                            : typeof params.source === 'string'
+                              ? params.source
+                              : undefined,
+                startDate:
+                    typeof params.startDate === 'string'
+                        ? params.startDate
+                        : typeof params.start_date === 'string'
+                          ? params.start_date
+                          : undefined,
+                endDate:
+                    typeof params.endDate === 'string'
+                        ? params.endDate
+                        : typeof params.end_date === 'string'
+                          ? params.end_date
+                          : undefined,
+                sector: typeof params.sector === 'string' ? params.sector : undefined,
+                region: typeof params.region === 'string' ? params.region : undefined,
+                filters: filters && typeof filters === 'object' ? (filters as Record<string, string[]>) : undefined,
+                query: typeof params.query === 'string' ? params.query : typeof params.where === 'string' ? params.where : undefined,
+                sortColumn:
+                    typeof params.sortColumn === 'string'
+                        ? params.sortColumn
+                        : typeof params.sort_column === 'string'
+                          ? params.sort_column
+                          : undefined,
+                sortDirection:
+                    params.sortDirection === 'desc' || params.sort_direction === 'desc'
+                        ? 'desc'
+                        : 'asc',
+                pageStartRecord: Number.isFinite(
+                    Number(params.pageStartRecord ?? params.page_start_record),
+                )
+                    ? Number(params.pageStartRecord ?? params.page_start_record)
+                    : 0,
+                pageEndRecord: Number.isFinite(
+                    Number(params.pageEndRecord ?? params.page_end_record),
+                )
+                    ? Number(params.pageEndRecord ?? params.page_end_record)
+                    : (params.limit !== undefined && Number.isFinite(Number(params.limit))) ||
+                      (params.pageSize !== undefined && Number.isFinite(Number(params.pageSize))) ||
+                      (params.page_size !== undefined && Number.isFinite(Number(params.page_size))) ||
+                      (params.max_records !== undefined && Number.isFinite(Number(params.max_records))) ||
+                      (params.maxRecords !== undefined && Number.isFinite(Number(params.maxRecords)))
+                    ? (Number.isFinite(Number(params.pageStartRecord ?? params.page_start_record))
+                        ? Number(params.pageStartRecord ?? params.page_start_record)
+                        : 0) +
+                      Number(
+                          params.limit ??
+                          params.pageSize ??
+                          params.page_size ??
+                          params.max_records ??
+                          params.maxRecords,
+                      ) -
+                      1
+                    : undefined,
+            };
+
+            let data: Record<string, unknown>[];
+
+            if (parsedShape.countFields.length > 0 && parsedShape.columns.length === 0) {
+                const rawRecords = repo.getRawRecords
+                    ? await repo.getRawRecords()
+                    : ((await repo.getManageData({
+                          columns: [
+                              { outputKey: 'id', columnKey: 'id' },
+                              { outputKey: 'deviceId', columnKey: 'deviceId' },
+                              { outputKey: 'touchTime', columnKey: 'touchTime' },
+                              { outputKey: 'note', columnKey: 'note' },
+                              { outputKey: 'city', columnKey: 'city' },
+                              { outputKey: 'region', columnKey: 'region' },
+                              { outputKey: 'country', columnKey: 'country' },
+                              { outputKey: 'locationSource', columnKey: 'locationSource' },
+                          ],
+                          dataset: queryParams.dataset,
+                          startDate: queryParams.startDate,
+                          endDate: queryParams.endDate,
+                          sector: queryParams.sector,
+                          region: queryParams.region,
+                          filters: queryParams.filters,
+                      })) as RawVisitRecord[]);
+
+                const matchingRecords = (rawRecords as RawVisitRecord[]).filter((r) =>
+                    filterRecord(r, queryParams),
+                );
+                const journeyCount = countJourneys(matchingRecords as VisitInfoRow[]);
+
+                const entry: Record<string, unknown> = {};
+                for (const cf of parsedShape.countFields) {
+                    entry[cf.outputKey] = journeyCount;
+                }
+                data = [entry];
+            } else if (isJourneyQuery(queryParams)) {
+                if (repo.getRawRecords) {
+                    const rawRecords = await repo.getRawRecords();
+                    data = processJourneyRecords(rawRecords as RawVisitRecord[], queryParams);
+                } else {
+                    data = await repo.getManageData(queryParams);
+                }
+            } else {
+                data = await repo.getManageData(queryParams);
+            }
+
+            if (isStreamRequest(req)) {
+                res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+                res.setHeader('Transfer-Encoding', 'chunked');
+                res.setHeader('Cache-Control', 'no-cache, no-transform');
+                res.setHeader('X-Content-Type-Options', 'nosniff');
+                res.status(200);
+
+                const chunkSize =
+                    Number(
+                        params.chunkSize ??
+                        params.chunk_size ??
+                        params.batchSize ??
+                        params.batch_size,
+                    ) || 0;
+                const sendAsChunks =
+                    (params.chunk_batches === true ||
+                        params.chunk_arrays === true ||
+                        params.as_chunks === true) &&
+                    chunkSize > 0;
+
+                if (Array.isArray(data)) {
+                    if (sendAsChunks) {
+                        for (let i = 0; i < data.length; i += chunkSize) {
+                            const chunk = data.slice(i, i + chunkSize);
+                            res.write(JSON.stringify(chunk) + '\n');
+                        }
+                    } else {
+                        for (const record of data) {
+                            res.write(JSON.stringify(record) + '\n');
+                        }
+                    }
+                }
+
+                res.end();
+                return res;
+            }
+
+            return res.status(200).json(data);
+        } catch (err) {
+            logger.error('GET /v1/clients/joinaunion/visit_info/manage error:', err);
+
+            return res.status(500).json({
+                error: 'INTERNAL_ERROR',
+                message: 'Failed to retrieve device journeys',
+            });
+        }
+    };
+}
+
+const GET = makeGetManageHandler(defaultGetManageQueryRepository);
+export default GET;
 
 export const __test__ = {
     getDeviceJourneysBySource,
@@ -383,4 +718,9 @@ export const __test__ = {
     DEFAULT_SOURCE,
     MAX_SOURCE_LENGTH,
     MAX_JOURNEY_GAP_MS,
+    makeGetManageHandler,
+    defaultGetManageQueryRepository,
+    extractManageParams,
+    hasManageOverloadParams,
+    normalizeRawOutputShape,
 };

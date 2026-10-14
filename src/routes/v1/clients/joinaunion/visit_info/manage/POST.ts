@@ -105,6 +105,7 @@
  * }
  */
 
+import crypto from 'crypto';
 import type { Request, Response } from 'express';
 import { db } from '@services/dbService';
 import { visitInfo } from '@db/schema/visit_info';
@@ -115,6 +116,11 @@ import {
   evaluateFunctions,
   type FunctionInvocation,
 } from '@helpers/reportFunctions';
+import {
+  buildJourneys,
+  type VisitInfoRow,
+  type JourneyRecord,
+} from './journeys';
 
 /* SET THIS back to true for production */
 export const authRequired = false;
@@ -135,7 +141,26 @@ export type AllowedVisitInfoColumn =
   | 'region'
   | 'note';
 
-export const COLUMN_MAP: Record<string, AllowedVisitInfoColumn> = {
+export type AllowedJourneyField =
+  | 'journey_id'
+  | 'journey_duration_seconds'
+  | 'journey_duration'
+  | 'journey_num_pages'
+  | 'device_id'
+  | 'journey_start_time'
+  | 'journey_average_time_per_page_seconds'
+  | 'journey_average_time_per_page'
+  | 'city'
+  | 'region'
+  | 'country'
+  | 'pages_viewed_percent'
+  | 'longest_page'
+  | 'pages'
+  | 'records';
+
+export type AllowedManageColumn = AllowedVisitInfoColumn | AllowedJourneyField;
+
+export const COLUMN_MAP: Record<string, AllowedManageColumn> = {
   id: 'id',
   device_id: 'deviceId',
   deviceid: 'deviceId',
@@ -161,6 +186,36 @@ export const COLUMN_MAP: Record<string, AllowedVisitInfoColumn> = {
   country: 'country',
   region: 'region',
   note: 'note',
+  // Journey schema fields
+  journey_id: 'journey_id',
+  journeyid: 'journey_id',
+  journeyId: 'journey_id',
+  journey_duration_seconds: 'journey_duration_seconds',
+  journeydurationseconds: 'journey_duration_seconds',
+  journeyDurationSeconds: 'journey_duration_seconds',
+  journey_duration: 'journey_duration',
+  journeyduration: 'journey_duration',
+  journeyDuration: 'journey_duration',
+  journey_num_pages: 'journey_num_pages',
+  journeynumpages: 'journey_num_pages',
+  journeyNumPages: 'journey_num_pages',
+  journey_start_time: 'journey_start_time',
+  journeystarttime: 'journey_start_time',
+  journeyStartTime: 'journey_start_time',
+  journey_average_time_per_page_seconds: 'journey_average_time_per_page_seconds',
+  journeyaveragetimeperpageseconds: 'journey_average_time_per_page_seconds',
+  journeyAverageTimePerPageSeconds: 'journey_average_time_per_page_seconds',
+  journey_average_time_per_page: 'journey_average_time_per_page',
+  journeyaveragetimeperpage: 'journey_average_time_per_page',
+  journeyAverageTimePerPage: 'journey_average_time_per_page',
+  pages_viewed_percent: 'pages_viewed_percent',
+  pagesviewedpercent: 'pages_viewed_percent',
+  pagesViewedPercent: 'pages_viewed_percent',
+  longest_page: 'longest_page',
+  longestpage: 'longest_page',
+  longestPage: 'longest_page',
+  pages: 'pages',
+  records: 'records',
 };
 
 export const ALLOWED_COLUMN_NAMES = [
@@ -168,15 +223,64 @@ export const ALLOWED_COLUMN_NAMES = [
   'country',
   'device_id',
   'id',
+  'journey_average_time_per_page',
+  'journey_average_time_per_page_seconds',
+  'journey_duration',
+  'journey_duration_seconds',
+  'journey_id',
+  'journey_num_pages',
+  'journey_start_time',
   'latitude',
   'location_source',
+  'locationSource',
   'longitude',
+  'longest_page',
   'note',
+  'pages',
+  'pages_viewed_percent',
+  'records',
   'region',
   'request_method',
   'touch_time',
   'user_id',
+  'userId',
 ] as const;
+
+export const JOURNEY_SPECIFIC_COLUMNS = new Set([
+  'journey_id',
+  'journey_duration_seconds',
+  'journey_duration',
+  'journey_num_pages',
+  'journey_start_time',
+  'journey_average_time_per_page_seconds',
+  'journey_average_time_per_page',
+  'pages_viewed_percent',
+  'longest_page',
+  'pages',
+  'records',
+]);
+
+export function isJourneyColumnName(col: string): boolean {
+  if (!col || typeof col !== 'string') return false;
+  const normalized = col.trim().toLowerCase();
+  const mapped = COLUMN_MAP[normalized] ?? COLUMN_MAP[col.trim()] ?? normalized;
+  return JOURNEY_SPECIFIC_COLUMNS.has(String(mapped)) || JOURNEY_SPECIFIC_COLUMNS.has(normalized);
+}
+
+export function isJourneyQuery(params: ManageQueryParams): boolean {
+  if (params.sortColumn && isJourneyColumnName(params.sortColumn)) {
+    return true;
+  }
+  if (
+    params.columns &&
+    params.columns.some(
+      (c) => isJourneyColumnName(String(c.columnKey)) || isJourneyColumnName(c.outputKey),
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export const COUNT_FIELD_NAMES = new Set([
   'count',
@@ -209,7 +313,7 @@ export const COLUMN_DESCRIPTOR_KEYS = new Set([
 
 export interface ColumnOutputMapping {
   outputKey: string;
-  columnKey: AllowedVisitInfoColumn;
+  columnKey: AllowedManageColumn;
 }
 
 export interface CountOutputMapping {
@@ -286,7 +390,7 @@ export function parseOutputShape(rawShape: unknown): ParsedOutputShape {
   const functions: FunctionInvocation[] = [];
   const countFields: CountOutputMapping[] = [];
 
-  const resolveCol = (colName: string): AllowedVisitInfoColumn | undefined => {
+  const resolveCol = (colName: string): AllowedManageColumn | undefined => {
     return COLUMN_MAP[colName.toLowerCase()] ?? COLUMN_MAP[colName];
   };
 
@@ -331,17 +435,25 @@ export function parseOutputShape(rawShape: unknown): ParsedOutputShape {
     }
 
     if (isCuratedFunction(key, val, isKnownCol)) {
-      const parsedFn = parseFunctionInvocation(key, val, resolveCol);
-      if (parsedFn) {
-        functions.push(parsedFn);
-        if (parsedFn.functionName === 'count') {
-          countFields.push({ outputKey: key, functionType: 'count' });
+      if (
+        !(
+          (lowerKey === 'records' || lowerKey === 'record') &&
+          typeof val === 'string' &&
+          (val.trim().toLowerCase() === 'records' || val.trim().toLowerCase() === 'record')
+        )
+      ) {
+        const parsedFn = parseFunctionInvocation(key, val, resolveCol);
+        if (parsedFn) {
+          functions.push(parsedFn);
+          if (parsedFn.functionName === 'count') {
+            countFields.push({ outputKey: key, functionType: 'count' });
+          }
+          return;
         }
-        return;
       }
     }
 
-    let colKey: AllowedVisitInfoColumn | undefined = resolveCol(trimmedKey);
+    let colKey: AllowedManageColumn | undefined = resolveCol(trimmedKey);
 
     if (!colKey && typeof val === 'string' && val.trim().length > 0) {
       colKey = resolveCol(val.trim());
@@ -462,12 +574,21 @@ export function filterRecord(
 
   // Custom column filters
   if (filters && typeof filters === 'object') {
+    if (Array.isArray(filters.sector) && filters.sector.length > 0) {
+      const note = (record.note ?? '').toLowerCase();
+      const matchSector = filters.sector.some(
+        (s) => !s || s === 'Any sector' || note.includes(String(s).toLowerCase()),
+      );
+      if (!matchSector) return false;
+    }
+
     for (const [filterCol, allowedValues] of Object.entries(filters)) {
+      if (filterCol.toLowerCase() === 'sector') continue;
       if (Array.isArray(allowedValues) && allowedValues.length > 0) {
         const colKey =
           COLUMN_MAP[filterCol.toLowerCase()] ?? COLUMN_MAP[filterCol];
         if (colKey) {
-          const recordVal = record[colKey];
+          const recordVal = (record as Record<string, unknown>)[colKey];
           const recordStr =
             recordVal instanceof Date
               ? recordVal.toISOString()
@@ -532,7 +653,7 @@ export function processManageRecords(
         const groupValues: Record<string, unknown> = {};
 
         for (const col of columns) {
-          let rawVal = rec[col.columnKey];
+          let rawVal = (rec as Record<string, unknown>)[col.columnKey];
           if (rawVal instanceof Date) {
             rawVal = rawVal.toISOString();
           } else if (rawVal === undefined) {
@@ -568,7 +689,7 @@ export function processManageRecords(
     for (const rec of filtered) {
       const row: Record<string, unknown> = {};
       for (const col of columns) {
-        let rawVal = rec[col.columnKey];
+        let rawVal = (rec as Record<string, unknown>)[col.columnKey];
         if (rawVal instanceof Date) {
           rawVal = rawVal.toISOString();
         } else if (rawVal === undefined) {
@@ -617,14 +738,452 @@ export function processManageRecords(
   return end !== undefined ? result.slice(start, end) : result.slice(start);
 }
 
+export function filterJourney(
+  journey: JourneyRecord,
+  params: ManageQueryParams,
+): boolean {
+  const { dataset, startDate, endDate, sector, region, filters } = params;
+
+  // Dataset / Location Source
+  if (dataset && dataset !== 'all') {
+    const locSource =
+      journey.locationSource ??
+      (journey as unknown as Record<string, unknown>).location_source ??
+      journey.records?.[0]?.location_source ??
+      journey.records?.[0]?.locationSource ??
+      '';
+    if (dataset === 'default') {
+      if (String(locSource).length > 0) return false;
+    } else {
+      if (String(locSource).toLowerCase() !== dataset.toLowerCase()) return false;
+    }
+  }
+
+  // Touch Time / Date Range filtering
+  if (journey.journey_start_time) {
+    const journeyStart = new Date(journey.journey_start_time);
+    if (!isNaN(journeyStart.getTime())) {
+      if (startDate) {
+        const parsedStart = parseDateValue(startDate);
+        if (parsedStart && journeyStart < parsedStart) return false;
+      }
+      if (endDate) {
+        const parsedEnd = parseDateValue(endDate);
+        if (parsedEnd) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())) {
+            const endOfDay = new Date(
+              parsedEnd.getTime() + 24 * 60 * 60 * 1000,
+            );
+            if (journeyStart >= endOfDay) return false;
+          } else if (journeyStart > parsedEnd) {
+            return false;
+          }
+        }
+      }
+    }
+  }
+
+  // Region filtering
+  if (region && region !== 'Canada' && region !== 'all') {
+    const journeyRegion = (journey.region ?? '').toLowerCase();
+    if (journeyRegion !== region.toLowerCase()) return false;
+  }
+
+  // Sector filtering
+  if (sector && sector !== 'Any sector') {
+    const sectorLower = sector.toLowerCase();
+    const hasSector =
+      journey.pages.some(
+        (p) =>
+          (p.notes ?? '').toLowerCase().includes(sectorLower) ||
+          (p.page_name ?? '').toLowerCase().includes(sectorLower),
+      ) ||
+      Boolean(
+        journey.records &&
+          journey.records.some((r) =>
+            (r.note ?? '').toLowerCase().includes(sectorLower),
+          ),
+      );
+    if (!hasSector) return false;
+  }
+
+  // Custom filters
+  if (filters && typeof filters === 'object') {
+    if (Array.isArray(filters.sector) && filters.sector.length > 0) {
+      const matchSector = filters.sector.some((s) => {
+        if (!s || s === 'Any sector') return true;
+        const sLower = String(s).toLowerCase();
+        return (
+          journey.pages.some(
+            (p) =>
+              (p.notes ?? '').toLowerCase().includes(sLower) ||
+              (p.page_name ?? '').toLowerCase().includes(sLower),
+          ) ||
+          Boolean(
+            journey.records &&
+              journey.records.some((r) =>
+                (r.note ?? '').toLowerCase().includes(sLower),
+              ),
+          )
+        );
+      });
+      if (!matchSector) return false;
+    }
+
+    for (const [filterCol, allowedValues] of Object.entries(filters)) {
+      if (filterCol.toLowerCase() === 'sector') continue;
+      if (Array.isArray(allowedValues) && allowedValues.length > 0) {
+        const colKey =
+          COLUMN_MAP[filterCol.toLowerCase()] ??
+          COLUMN_MAP[filterCol] ??
+          filterCol;
+        const journeyObj = journey as unknown as Record<string, unknown>;
+        let journeyVal = journeyObj[colKey];
+        if (journeyVal === undefined) {
+          if (colKey === 'deviceId') journeyVal = journeyObj['device_id'] ?? journeyObj['deviceId'];
+          else if (colKey === 'userId') journeyVal = journeyObj['userId'] ?? journeyObj['user_id'];
+          else if (colKey === 'locationSource') journeyVal = journeyObj['locationSource'] ?? journeyObj['location_source'];
+        }
+        const allowedLower = allowedValues.map((v) => String(v).toLowerCase());
+
+        if (journeyVal !== undefined && journeyVal !== null) {
+          const journeyValStr = String(journeyVal).toLowerCase();
+          if (!allowedLower.includes(journeyValStr)) return false;
+        } else if (colKey === 'note') {
+          const matchesAnyPage = journey.pages.some((p) => {
+            const reconstructedNote = p.notes ? `visit: ${p.page_name}#${p.notes}` : `visit: ${p.page_name}`;
+            return (
+              allowedLower.includes(reconstructedNote.toLowerCase()) ||
+              allowedLower.includes(p.page_name.toLowerCase()) ||
+              allowedLower.includes((p.notes || '').toLowerCase())
+            );
+          });
+          if (!matchesAnyPage) return false;
+        } else if (journey.records) {
+          const matchesAnyRecord = journey.records.some((r) => {
+            const rVal = (r as unknown as Record<string, unknown>)[colKey];
+            return (
+              rVal !== undefined &&
+              rVal !== null &&
+              allowedLower.includes(String(rVal).toLowerCase())
+            );
+          });
+          if (!matchesAnyRecord) return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+export function normalizeFilters(
+  filters: Record<string, unknown> | undefined,
+): Record<string, string[]> {
+  if (!filters || typeof filters !== 'object') return {};
+  const sortedKeys = Object.keys(filters).sort();
+  const normalized: Record<string, string[]> = {};
+  for (const k of sortedKeys) {
+    const val = (filters as Record<string, unknown>)[k];
+    if (Array.isArray(val)) {
+      normalized[k] = [...val].map((v) => String(v).trim().toLowerCase()).sort();
+    } else if (val !== undefined && val !== null) {
+      normalized[k] = [String(val).trim().toLowerCase()];
+    }
+  }
+  return normalized;
+}
+
+export function generateJourneyQueryKey(
+  params: Partial<ManageQueryParams>,
+): string {
+  const normalized = {
+    dataset: (params.dataset ?? 'all').toLowerCase(),
+    startDate: (params.startDate ?? '').trim(),
+    endDate: (params.endDate ?? '').trim(),
+    region: (params.region ?? 'all').toLowerCase(),
+    sector: (params.sector ?? 'all').toLowerCase(),
+    filters: normalizeFilters(params.filters),
+    sortColumn: (params.sortColumn ?? '').trim().toLowerCase(),
+    sortDirection: (params.sortDirection ?? 'asc').trim().toLowerCase(),
+  };
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(normalized))
+    .digest('hex');
+}
+
+export interface JourneyCacheEntry {
+  journeys: JourneyRecord[];
+  expiresAt: number;
+}
+
+export class JourneyQueryCache {
+  private cache = new Map<string, JourneyCacheEntry>();
+  private readonly maxEntries: number;
+  private readonly defaultTtlMs: number;
+
+  constructor(maxEntries = 50, defaultTtlMs = 60_000) {
+    this.maxEntries = maxEntries;
+    this.defaultTtlMs = defaultTtlMs;
+  }
+
+  get(key: string): JourneyRecord[] | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    // Refresh LRU order
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.journeys;
+  }
+
+  set(key: string, journeys: JourneyRecord[], ttlMs?: number): void {
+    const effectiveTtl = ttlMs !== undefined ? ttlMs : this.defaultTtlMs;
+    const expiresAt = Date.now() + effectiveTtl;
+
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxEntries) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+
+    this.cache.set(key, { journeys, expiresAt });
+  }
+
+  has(key: string): boolean {
+    const entry = this.cache.get(key);
+    if (!entry) return false;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  size(): number {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiresAt) {
+        this.cache.delete(key);
+      }
+    }
+    return this.cache.size;
+  }
+}
+
+export const journeyQueryCache = new JourneyQueryCache(50, 60_000);
+
+export function sliceAndFormatJourneys(
+  journeys: JourneyRecord[],
+  params: ManageQueryParams,
+): Record<string, unknown>[] {
+  const {
+    columns = [],
+    countFields = [],
+    pageStartRecord = 0,
+    pageEndRecord,
+  } = params;
+
+  if (countFields.length > 0 && columns.length === 0) {
+    const entry: Record<string, unknown> = {};
+    for (const cf of countFields) {
+      entry[cf.outputKey] = journeys.length;
+    }
+    return [entry];
+  }
+
+  const start = Math.max(0, pageStartRecord);
+  let end: number | undefined;
+  if (pageEndRecord !== undefined && Number.isFinite(pageEndRecord)) {
+    end = Math.max(start, pageEndRecord + 1);
+  }
+  const paged = end !== undefined ? journeys.slice(start, end) : journeys.slice(start);
+
+  if (columns.length === 0) {
+    return paged as unknown as Record<string, unknown>[];
+  }
+
+  return paged.map((journey) => {
+    const journeyObj = journey as unknown as Record<string, unknown>;
+    const row: Record<string, unknown> = {};
+    for (const col of columns) {
+      const colKey = String(col.columnKey);
+      let val = journeyObj[colKey];
+      if (val === undefined) {
+        if (colKey === 'deviceId') val = journeyObj['device_id'] ?? journeyObj['deviceId'];
+        else if (colKey === 'device_id') val = journeyObj['device_id'] ?? journeyObj['deviceId'];
+        else if (colKey === 'userId') val = journeyObj['userId'] ?? journeyObj['user_id'];
+        else if (colKey === 'user_id') val = journeyObj['userId'] ?? journeyObj['user_id'];
+        else if (colKey === 'locationSource') val = journeyObj['locationSource'] ?? journeyObj['location_source'];
+        else if (colKey === 'location_source') val = journeyObj['locationSource'] ?? journeyObj['location_source'];
+        else if (colKey === 'journeyStartTime') val = journeyObj['journey_start_time'];
+        else if (colKey === 'journeyDurationSeconds') val = journeyObj['journey_duration_seconds'];
+        else if (colKey === 'journeyDuration') val = journeyObj['journey_duration'];
+        else if (colKey === 'journeyNumPages') val = journeyObj['journey_num_pages'];
+        else if (colKey === 'journeyAverageTimePerPageSeconds') val = journeyObj['journey_average_time_per_page_seconds'];
+        else if (colKey === 'journeyAverageTimePerPage') val = journeyObj['journey_average_time_per_page'];
+        else if (colKey === 'pagesViewedPercent') val = journeyObj['pages_viewed_percent'];
+        else if (colKey === 'longestPage') val = journeyObj['longest_page'];
+      }
+      row[col.outputKey] = val !== undefined ? val : null;
+    }
+    return row;
+  });
+}
+
+export async function getOrReconstructJourneys(
+  fetchRows: () => Promise<RawVisitRecord[]>,
+  params: ManageQueryParams,
+  useCache = true,
+): Promise<JourneyRecord[]> {
+  const queryKey = generateJourneyQueryKey(params);
+  if (useCache) {
+    const cached = journeyQueryCache.get(queryKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const rawRecords = await fetchRows();
+  const journeys = buildJourneys(rawRecords as VisitInfoRow[]).filter((j) =>
+    filterJourney(j, params),
+  );
+
+  const { sortColumn, sortDirection = 'asc' } = params;
+  if (sortColumn && journeys.length > 0) {
+    const isDesc = sortDirection.toLowerCase() === 'desc';
+    journeys.sort((a, b) => {
+      const valA = (a as unknown as Record<string, unknown>)[sortColumn];
+      const valB = (b as unknown as Record<string, unknown>)[sortColumn];
+
+      if (valA === valB) return 0;
+      if (valA === null || valA === undefined) return isDesc ? -1 : 1;
+      if (valB === null || valB === undefined) return isDesc ? 1 : -1;
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return isDesc ? valB - valA : valA - valB;
+      }
+
+      const strA = String(valA);
+      const strB = String(valB);
+      return isDesc ? strB.localeCompare(strA) : strA.localeCompare(strB);
+    });
+  }
+
+  if (useCache) {
+    journeyQueryCache.set(queryKey, journeys);
+  }
+
+  return journeys;
+}
+
+export function processJourneyRecords(
+  records: RawVisitRecord[],
+  params: ManageQueryParams,
+  useCache = false,
+): Record<string, unknown>[] {
+  const queryKey = generateJourneyQueryKey(params);
+  if (useCache) {
+    const cached = journeyQueryCache.get(queryKey);
+    if (cached) {
+      return sliceAndFormatJourneys(cached, params);
+    }
+  }
+
+  const journeys = buildJourneys(records as VisitInfoRow[]).filter((j) =>
+    filterJourney(j, params),
+  );
+  const {
+    sortColumn,
+    sortDirection = 'asc',
+  } = params;
+
+  if (sortColumn && journeys.length > 0) {
+    const isDesc = sortDirection.toLowerCase() === 'desc';
+    journeys.sort((a, b) => {
+      const valA = (a as unknown as Record<string, unknown>)[sortColumn];
+      const valB = (b as unknown as Record<string, unknown>)[sortColumn];
+
+      if (valA === valB) return 0;
+      if (valA === null || valA === undefined) return isDesc ? -1 : 1;
+      if (valB === null || valB === undefined) return isDesc ? 1 : -1;
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return isDesc ? valB - valA : valA - valB;
+      }
+
+      const strA = String(valA);
+      const strB = String(valB);
+      return isDesc ? strB.localeCompare(strA) : strA.localeCompare(strB);
+    });
+  }
+
+  if (useCache) {
+    journeyQueryCache.set(queryKey, journeys);
+  }
+
+  return sliceAndFormatJourneys(journeys, params);
+}
+
 export interface ManageQueryRepository {
   getManageData(params: ManageQueryParams): Promise<Record<string, unknown>[]>;
+  getRawRecords?(): Promise<RawVisitRecord[]>;
 }
 
 export const defaultManageQueryRepository: ManageQueryRepository = {
   getManageData: async (
     params: ManageQueryParams,
   ): Promise<Record<string, unknown>[]> => {
+    const isJourney =
+      isJourneyQuery(params) ||
+      (params.countFields &&
+        params.countFields.length > 0 &&
+        params.columns.length === 0);
+
+    if (isJourney) {
+      const journeys = await getOrReconstructJourneys(
+        async () => {
+          const rows = await db
+            .select({
+              id: visitInfo.id,
+              deviceId: visitInfo.deviceId,
+              userId: visitInfo.userId,
+              requestMethod: visitInfo.requestMethod,
+              touchTime: visitInfo.touchTime,
+              latitude: visitInfo.latitude,
+              longitude: visitInfo.longitude,
+              locationSource: visitInfo.locationSource,
+              city: visitInfo.city,
+              country: visitInfo.country,
+              region: visitInfo.region,
+              note: visitInfo.note,
+            })
+            .from(visitInfo);
+          return rows as RawVisitRecord[];
+        },
+        params,
+        true,
+      );
+      return sliceAndFormatJourneys(journeys, params);
+    }
+
     const rows = await db
       .select({
         id: visitInfo.id,
@@ -643,6 +1202,26 @@ export const defaultManageQueryRepository: ManageQueryRepository = {
       .from(visitInfo);
 
     return processManageRecords(rows as RawVisitRecord[], params);
+  },
+  getRawRecords: async (): Promise<RawVisitRecord[]> => {
+    const rows = await db
+      .select({
+        id: visitInfo.id,
+        deviceId: visitInfo.deviceId,
+        userId: visitInfo.userId,
+        requestMethod: visitInfo.requestMethod,
+        touchTime: visitInfo.touchTime,
+        latitude: visitInfo.latitude,
+        longitude: visitInfo.longitude,
+        locationSource: visitInfo.locationSource,
+        city: visitInfo.city,
+        country: visitInfo.country,
+        region: visitInfo.region,
+        note: visitInfo.note,
+      })
+      .from(visitInfo);
+
+    return rows as RawVisitRecord[];
   },
 };
 
@@ -769,7 +1348,27 @@ export function makePostManageHandler(
           : undefined,
       };
 
-      const data = await repo.getManageData(queryParams);
+      let data: Record<string, unknown>[];
+
+      const isJourney =
+        parsedShape.countFields.length > 0 && parsedShape.columns.length === 0
+          ? true
+          : isJourneyQuery(queryParams);
+
+      if (isJourney) {
+        if (repo.getRawRecords) {
+          const journeys = await getOrReconstructJourneys(
+            () => repo.getRawRecords!(),
+            queryParams,
+            true,
+          );
+          data = sliceAndFormatJourneys(journeys, queryParams);
+        } else {
+          data = await repo.getManageData(queryParams);
+        }
+      } else {
+        data = await repo.getManageData(queryParams);
+      }
 
       if (isStreamRequest(req)) {
         res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -831,9 +1430,19 @@ export const __test__ = {
   isNullLike,
   isCountFunction,
   isStreamRequest,
+  isJourneyQuery,
+  isJourneyColumnName,
   parseOutputShape,
   filterRecord,
+  filterJourney,
+  normalizeFilters,
+  generateJourneyQueryKey,
+  JourneyQueryCache,
+  journeyQueryCache,
+  sliceAndFormatJourneys,
+  getOrReconstructJourneys,
   processManageRecords,
+  processJourneyRecords,
   defaultManageQueryRepository,
   makePostManageHandler,
 };

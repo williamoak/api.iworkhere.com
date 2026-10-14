@@ -133,7 +133,8 @@ export const defaultColumnQueryRepository: ColumnQueryRepository = {
         return rows
             .map((r) => r.value)
             .filter((v): v is string | number | Date => v !== null && v !== undefined)
-            .map((v) => (v instanceof Date ? v.toISOString() : v));
+            .map((v) => (v instanceof Date ? v.toISOString() : v))
+            .filter((v) => (columnKey === 'note' && typeof v === 'string' ? !v.toLowerCase().includes('/v1/') : true));
     },
 };
 

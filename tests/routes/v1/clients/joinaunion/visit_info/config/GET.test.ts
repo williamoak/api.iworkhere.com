@@ -261,6 +261,19 @@ describe('GET /v1/clients/joinaunion/visit_info/config', () => {
             expect(result).toEqual(['2026-09-28T12:00:00.000Z']);
         });
 
+        it('filters out system event notes containing /v1/ from unique note values', async () => {
+            mockOrderBy.mockResolvedValue([
+                { value: 'visit: Home' },
+                { value: 'visit: /v1/auth/refresh' },
+                { value: 'visit: /v1/auth/me' },
+                { value: 'visit: Contact Us#Healthcare' },
+            ]);
+
+            const result = await defaultColumnQueryRepository.getUniqueValues('note');
+
+            expect(result).toEqual(['visit: Home', 'visit: Contact Us#Healthcare']);
+        });
+
         it('throws if an invalid column key is somehow passed to repository', async () => {
             await expect(
                 defaultColumnQueryRepository.getUniqueValues('invalidColumnKey' as any),
