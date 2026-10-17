@@ -33,6 +33,8 @@ AI is used as a development-time partner for architecture exploration, implement
 - <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Resume (September 2026)</a>
 - <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Cover Letter (September 2026)</a>
 - <a href="https://api.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
+- [Read the user and integration guide](./docs/USER_GUIDE.md) for API usage, tenants, schema segmentation, Swagger, and a secret-safe environment variable inventory.
+- [Download the user guide as a PDF](./docs/USER_GUIDE.pdf).
 
 ## Architecture at a glance
 
