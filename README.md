@@ -3,9 +3,9 @@
 [![CI](https://github.com/williamoak/api.iworkhere.com/actions/workflows/ci.yml/badge.svg)](https://github.com/williamoak/api.iworkhere.com/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-A production-oriented TypeScript and Express API for the iworkhere applications. The service combines application-scoped authentication, tenant-aware persistence, generated route registration, localization, operational health endpoints, and a strongly tested domain layer around a PostgreSQL-compatible database.
+A production-oriented TypeScript and Express API for the iworkhere applications. The service combines application-scoped authentication, tenant-aware persistence, generated route registration, localization, operational health endpoints, and a strongly tested domain layer around a PostgreSQL-compatible database. It also supports the JoinAUnion.ca experience with contact intake, synthetic traffic generation, and visit-journey analytics.
 
-> **Repository status**: `npm test` currently passes **989 tests across 99 test files**. Run the suite locally before relying on this status line after adding new behavior.
+> **Verified in this working tree**: `npm run build` passes; `npm test` passes **1,046 tests across 102 test files**. `npm run test:coverage` reports 93.94% statements, 83.69% branches, 95.74% functions, and 95.73% lines. Re-run these commands after changes; coverage figures describe this checkout, not a permanent guarantee.
 
 ## Why this codebase stands out
 
@@ -19,7 +19,14 @@ A production-oriented TypeScript and Express API for the iworkhere applications.
 - **Runtime-discovered API surface**: `src/loaders/routeLoader.ts` recursively discovers `GET.ts`, `POST.ts`, `PUT.ts`, `PATCH.ts`, and `DELETE.ts` modules, builds a route metadata tree, and binds the handlers without a monolithic router file.
 - **Operationally useful diagnostics**: request IDs, structured debug phases, request logging, health checks, memory/database/network monitors, and a cleanup job make failures observable without coupling domain services to HTTP responses.
 - **Data-backed localization**: supported languages and slugs are discovered from the database, cached in memory, invalidated on mutation, and resolved with ISO-639, region, dialect, and family fallbacks.
-- **Contract and test discipline**: Zod validation, DTO overlays, OpenAPI/Swagger generation, strict TypeScript settings, isolated Vitest mocks, CI typechecking, and critical-vulnerability auditing reinforce the API contract.
+- **Analytics and reporting pipeline**: JoinAUnion visit events can be filtered and shaped into device journeys, page timing, and grouped reports. The pipeline handles deduplication, chronological ordering, journey boundaries, pagination, and NDJSON streaming; a covering CockroachDB index supports common region/time queries.
+- **Controlled synthetic data generation**: a testable journey transformation layer is paired with a synthetic visit generator using offline country/city data, configurable date ranges, and clearly labelled generated records for analytics development.
+- **Testable integration boundaries**: route handlers accept small repository, mail, and service interfaces, enabling focused unit tests without live database, Redis, or email dependencies.
+- **Contract and test discipline**: Zod validation, DTO overlays, OpenAPI/Swagger generation, strict TypeScript settings, isolated Vitest mocks, coverage thresholds, and dependency auditing reinforce the API contract.
+
+### AI-assisted engineering
+
+AI is used as a development-time partner for architecture exploration, implementation, troubleshooting, and review—not as a substitute for understanding or verifying the result. The repository records project conventions in [`.ai-session.md`](./.ai-session.md) and an AI-first learning and iteration approach in [`readme/ai-first-programming-primer.txt`](./readme/ai-first-programming-primer.txt). AI-assisted changes are grounded in the TypeScript build, explicit request schemas, automated tests, and API documentation. **There is no runtime generative-AI feature in this API**; the JoinAUnion proposal identifies an AI assistant as a possible future enhancement, not a shipped capability.
 
 ### Executive documents
 
@@ -59,6 +66,7 @@ Dynamic route loader (`/v1/**`)
        ├─ Localization services/cache
        ├─ Configuration services
        ├─ Monitoring/health services
+       ├─ JoinAUnion intake and visit analytics
        └─ Warframe data services
               │
               ├─ Drizzle ORM
@@ -102,8 +110,13 @@ All versioned routes currently live under `/v1`.
 - **Localization**: `GET`, `PUT`, and `DELETE /v1/localization`
 - **Health**: `/v1/health`, `/v1/health/api`, `/v1/health/database`, `/v1/health/memory`
 - **Monitoring**: `/v1/monitor`, `/v1/monitor/lang`, `/v1/monitor/localization`, `/v1/monitor/network`, `/v1/monitor/visit`
-- **Warframe data**: CRUD-style endpoints for `/v1/warframe/modules`, `/v1/warframe/warframes`, and `/v1/warframe/weapons`
+- **Warframe data**: CRUD-style endpoints for `/v1/clients/warframe/modules`, `/v1/clients/warframe/warframes`, and `/v1/clients/warframe/weapons`
+- **JoinAUnion**: `/v1/clients/joinaunion/widget` accepts contact inquiries; `/v1/clients/joinaunion/visit_info/config` discovers distinct filter values; `/v1/clients/joinaunion/visit_info/manage` provides journey and filtered report views; `/v1/clients/joinaunion/visit_info/generate` creates synthetic visit data.
 - **Generated documentation**: `GET /v1/readme`; development Swagger UI is available at `/docs`
+
+The JoinAUnion reporting pipeline transforms visit events into device journeys and page-level timing, supports date, location-source, region, sector, and custom-column filtering, and can return selected or aggregated fields as JSON or NDJSON. Synthetic data uses offline country/region/city reference data and a provenance label; it is intended for controlled development and analytics testing, not as real visitor activity.
+
+> **Deployment access-control check:** The current source exports `authRequired = false` for the JoinAUnion journey-management `GET` and `POST` handlers and the synthetic-data `POST /generate` handler. The generator deletes existing records with the supplied `loc_src` before inserting replacements. Treat these endpoints as unauthenticated in this checkout; restrict them at the deployment edge or require authentication before exposing them to untrusted clients. The column-discovery `/config` route does require authentication.
 
 ## Authentication design
 
@@ -217,7 +230,7 @@ The API starts at `http://<HOST_IP>:4300`. In non-production environments, open 
 
 ## Quality gates
 
-The CI workflow runs on pull requests and pushes to `main`, `master`, and `testing` branches. It installs with `npm ci`, runs `npm run build`, and executes `npm audit --audit-level=critical`.
+The CI workflow runs on pull requests and pushes to `main`, `master`, and `testing` branches. It installs with `npm ci`, runs `npm run build`, and executes `npm audit --audit-level=critical`. The current workflow does not run Vitest or ESLint; run the test and lint commands locally when changing the corresponding code.
 
 The Vitest configuration enforces these global minimums for coverage runs:
 
@@ -226,12 +239,14 @@ The Vitest configuration enforces these global minimums for coverage runs:
 - Functions: `80%`
 - Lines: `80%`
 
-The repository’s latest local verification:
+The repository’s latest local verification in this working tree:
 
 ```text
-99 test files passed
-989 tests passed
+102 test files passed
+1,046 tests passed
 npm run build passed
+npm run test:coverage passed
+Statements: 93.94% | Branches: 83.69% | Functions: 95.74% | Lines: 95.73%
 ```
 
 Tests are organized by middleware, loaders, services, routes, validation, DTOs, database mappers/schema, jobs, cache, and application bootstrap. Shared environment and safety mocks live in `tests/vitest.setup.ts`; domain implementations are mocked locally when route tests need isolation.
@@ -253,7 +268,8 @@ src/
 └── validation/            Zod request schemas
 
 tests/                     Mirrored unit and route test suites
-readme/                    Security, contribution, workflow, and schema notes
+docs/                      Deployment and data-inventory references
+readme/                    Security, contribution, workflow, AI, and schema notes
 swagger.json               OpenAPI 3.1 contract
 ```
 
