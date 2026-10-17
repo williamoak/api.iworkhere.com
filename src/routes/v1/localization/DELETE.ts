@@ -58,6 +58,12 @@ import { localizations, type Localization } from '@db/schema/localizations';
 import { logger } from '@helpers/logger';
 import { dirtyCache } from '@cache/localizationCache';
 import type { LocalizationRecord } from './GET';
+import { AuthError, resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
+
+export const authRequired = true;
+const LOCALIZATION_ADMIN_APP_KEY = 'api.iworkhere.com';
+const LOCALIZATION_ADMIN_ROLES = new Set(['owner', 'admin', 'administrator']);
 
 /* ------------------------------------------------------------------ */
 /* Validation                                                         */
@@ -220,7 +226,32 @@ export function makeDeleteLocalizationHandler(repo: LocalizationDeleteRepository
 }
 
 const DELETE = makeDeleteLocalizationHandler(dbLocalizationDeleteRepository);
-export default DELETE;
+export default async function DELETERoute(req: Request, res: Response) {
+    if (!req.auth?.userId) {
+        return res.status(401).json({ error: 'UNAUTHORIZED' });
+    }
+
+    try {
+        const appContext = await resolveAuthContext({
+            app_key: LOCALIZATION_ADMIN_APP_KEY,
+        });
+        const user = await resolveUserIdForApplication(
+            req.auth.userId,
+            appContext.applicationId,
+        );
+        if (!LOCALIZATION_ADMIN_ROLES.has(user.role.toLowerCase())) {
+            return res.status(403).json({ error: 'FORBIDDEN' });
+        }
+    } catch (error) {
+        if (error instanceof AuthError) {
+            return res.status(error.httpStatus).json({ error: error.code });
+        }
+        logger.error('DELETE /v1/localization authorization failed:', error);
+        return res.status(500).json({ error: 'INTERNAL_ERROR' });
+    }
+
+    return DELETE(req, res);
+}
 
 export const __test__ = {
     dbLocalizationDeleteRepository,

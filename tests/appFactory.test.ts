@@ -237,8 +237,8 @@ describe("appFactory", () => {
                 "X-Request-ID": "req-123",
                 "CF-Ray": "ray-123",
                 "User-Agent": "test-agent",
-                "Origin": "https://test.origin",
-                "Referer": "https://test.referer",
+                "Origin": "https://bill.iworkhere.com",
+                "Referer": "https://bill.iworkhere.com",
             },
             body: JSON.stringify({ test: "data" }),
         });
@@ -332,6 +332,22 @@ describe("appFactory", () => {
         const res2 = await testRoute(app, "/verification-error");
         expect(res2.status).toBe(200);
         expect(res2.text).toContain("Unknown error");
+    });
+
+    it("escapes untrusted verification error query values before HTML rendering", async () => {
+        vi.resetModules();
+        delete process.env.DEBUG;
+        delete process.env.AUTH_ME_DEBUG;
+        const { createBaseApp } = await import("@src/appFactory");
+        const app = await createBaseApp();
+
+        const { text } = await testRoute(
+            app,
+            "/verification-error?error=%3Cscript%3Ealert(1)%3C%2Fscript%3E%26%22",
+        );
+
+        expect(text).toContain('&lt;script&gt;alert(1)&lt;/script&gt;&amp;&quot;');
+        expect(text).not.toContain('<script>alert(1)</script>');
     });
 
     it("serves coverage report route", async () => {

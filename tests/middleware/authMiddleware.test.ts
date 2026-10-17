@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { authMiddleware } from '@middleware/authMiddleware';
 import { db } from '@src/services/dbService';
+import { cacheStore } from '@cache/cacheStore';
 
 type ResMock = Response & {
     statusCode: number;
@@ -137,6 +138,21 @@ describe('authMiddleware', () => {
 
         expect(res.statusCode).toBe(401);
         expect(res.body).toEqual({ error: 'UNAUTHORIZED' });
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    test('rejects a revoked token even when a stale cache entry exists', async () => {
+        vi.spyOn(cacheStore, 'get').mockResolvedValue('stale-user');
+        mockDbRows([]);
+
+        const req = createReq('Bearer previously-cached-token');
+        const res = createRes();
+        const next = createNext();
+
+        await authMiddleware()(req, res, next);
+
+        expect(res.statusCode).toBe(401);
+        expect((req as any).auth).toBeUndefined();
         expect(next).not.toHaveBeenCalled();
     });
 

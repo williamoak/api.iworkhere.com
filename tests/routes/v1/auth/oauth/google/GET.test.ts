@@ -6,6 +6,7 @@ vi.mock("@services/auth/applicationOriginResolver", () => ({
   resolveApplicationFromRequest: vi.fn(),
   getCallerOrigin: vi.fn(),
   normalizeOrigin: vi.fn(),
+  isRegisteredWebRedirectUri: vi.fn(),
 }));
 
 vi.mock("@services/auth/oauthStateService", () => ({
@@ -26,19 +27,35 @@ vi.mock("@helpers/config", () => ({
 }));
 
 import GET from "@routes/v1/auth/oauth/google/GET";
-import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
+import {
+  isRegisteredWebRedirectUri,
+  resolveApplicationFromRequest,
+  getCallerOrigin,
+} from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
 import { config } from "@helpers/config";
 
 type ResMock = Response & {
   statusCode: number;
   redirectUrl: string;
+  body?: unknown;
+  status(code: number): ResMock;
+  json(payload: unknown): ResMock;
 };
 
 function createRes(): ResMock {
   return {
     statusCode: 0,
     redirectUrl: "",
+    body: undefined,
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
     redirect(code: number, url: string) {
       this.statusCode = code;
       this.redirectUrl = url;
@@ -50,6 +67,7 @@ function createRes(): ResMock {
 describe("GET /v1/auth/oauth/google", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(true);
   });
 
   it("redirects to Google with correct parameters", async () => {
@@ -74,21 +92,50 @@ describe("GET /v1/auth/oauth/google", () => {
     expect(res.redirectUrl).toContain("state=signed-state-xyz");
   });
 
-  it("passes redirect_uri and flow from query to signState", async () => {
+  it("allows a registered HTTPS web redirect URI", async () => {
     vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
       applicationId: "app-123",
       applicationKey: "bill.iworkhere.com",
     });
 
-    const req = { 
-        query: { redirect_uri: "billapp://auth", flow: "popup" } 
+    const req = {
+        query: { redirect_uri: "https://bill.iworkhere.com/auth", flow: "popup" }
     } as unknown as Request;
     const res = createRes();
 
     await GET(req, res);
 
-    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", "billapp://auth", "popup");
+    expect(isRegisteredWebRedirectUri).toHaveBeenCalledWith(
+      "app-123",
+      "https://bill.iworkhere.com/auth",
+    );
+    expect(signState).toHaveBeenCalledWith(
+      "bill.iworkhere.com",
+      "https://bill.iworkhere.com/auth",
+      "popup",
+    );
     expect(res.statusCode).toBe(302);
+  });
+
+  it.each([
+    "billapp://auth",
+    "http://bill.iworkhere.com/auth",
+    "https://attacker.example/steal",
+  ])("rejects unregistered or non-HTTPS redirect URI %s", async (redirectUri) => {
+    vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
+      applicationId: "app-123",
+      applicationKey: "bill.iworkhere.com",
+    });
+    vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(false);
+
+    const res = createRes();
+    await GET({
+      query: { redirect_uri: redirectUri },
+    } as unknown as Request, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: "OAUTH_REDIRECT_URI_INVALID" });
+    expect(signState).not.toHaveBeenCalled();
   });
 
   it("defaults to redirect flow when flow query is invalid", async () => {
@@ -275,7 +322,7 @@ describe("GET /v1/auth/oauth/google", () => {
     }
   });
 
-  it("passes undefined redirect_uri to signState for a non-string query value", async () => {
+  it("rejects repeated redirect_uri parameters", async () => {
     vi.mocked(resolveApplicationFromRequest).mockResolvedValue({
       applicationId: "app-123",
       applicationKey: "bill.iworkhere.com",
@@ -286,6 +333,8 @@ describe("GET /v1/auth/oauth/google", () => {
 
     await GET(req, res);
 
-    expect(signState).toHaveBeenCalledWith("bill.iworkhere.com", undefined, "redirect");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: "OAUTH_REDIRECT_URI_INVALID" });
+    expect(signState).not.toHaveBeenCalled();
   });
 });

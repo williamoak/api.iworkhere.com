@@ -5,16 +5,17 @@
 
 A production-oriented TypeScript and Express API for the iworkhere applications. The service combines application-scoped authentication, tenant-aware persistence, generated route registration, localization, operational health endpoints, and a strongly tested domain layer around a PostgreSQL-compatible database. It also supports the JoinAUnion.ca experience with contact intake, synthetic traffic generation, and visit-journey analytics.
 
-> **Verified in this working tree**: `npm run build` passes; `npm test` passes **1,046 tests across 102 test files**. `npm run test:coverage` reports 93.94% statements, 83.69% branches, 95.74% functions, and 95.73% lines. Re-run these commands after changes; coverage figures describe this checkout, not a permanent guarantee.
+> **Verified in this working tree**: `npm run build` passes; `npm test` passes **1,091 tests across 103 test files**. `npm run test:coverage` reports 93.78% statements, 83.66% branches, 95.79% functions, and 95.52% lines. Re-run these commands after changes; coverage figures describe this checkout, not a permanent guarantee.
 
 ## Why this codebase stands out
 
 - **Security-conscious auth domain**: opaque access and refresh tokens are generated with cryptographic randomness and persisted as SHA-256 hashes; access validation rejects expired, revoked, and incorrectly typed tokens.
+- **Defense-in-depth security controls**: OAuth redirects are restricted to enabled HTTPS origins registered to the application; tenant SQL identifiers are quoted and constrained to provisioned schemas; analytics and shared-localization mutations require application-scoped administrative roles; and reflected HTML errors are escaped.
 - **Refresh-token rotation**: refresh operations revoke the predecessor and issue a replacement pair transactionally, with cache invalidation for the old token.
 - **Application-scoped identity**: authentication resolves an enabled application before user and credential work proceeds, keeping users, tokens, and origins associated with the calling application.
 - **Complete account lifecycle**: local registration and login, Google OAuth 2.0, email verification, password reset, password history enforcement, account upgrade, token revocation, and token cleanup are represented as separate domain services and route modules.
 - **Passkey authentication**: WebAuthn registration, authentication, listing, and revocation use application-bound ceremonies and issue the same bearer-token pair as password and Google OAuth login.
-- **Tenant isolation at the request boundary**: tenant resolution precedes authentication and database access; tenant transactions acquire a dedicated pooled connection, set `search_path`, bind a scoped Drizzle client through `AsyncLocalStorage`, and restore the connection before release.
+- **Tenant-aware database scoping**: tenant resolution precedes authentication and database access; tenant transactions acquire a dedicated pooled connection, set a validated and quoted `search_path`, bind a scoped Drizzle client through `AsyncLocalStorage`, and restore the connection before release. The configured schema allowlist prevents arbitrary schema selection but does not replace application-level authorization.
 - **Composable request pipeline**: route modules declare validation schemas and whether authentication is required. The loader applies validation, auth-specific rate limits, bearer auth, concurrency throttling, caching, response shaping, and method-not-allowed handling in a deterministic order.
 - **Runtime-discovered API surface**: `src/loaders/routeLoader.ts` recursively discovers `GET.ts`, `POST.ts`, `PUT.ts`, `PATCH.ts`, and `DELETE.ts` modules, builds a route metadata tree, and binds the handlers without a monolithic router file.
 - **Operationally useful diagnostics**: request IDs, structured debug phases, request logging, health checks, memory/database/network monitors, and a cleanup job make failures observable without coupling domain services to HTTP responses.
@@ -118,7 +119,7 @@ All versioned routes currently live under `/v1`.
 
 The JoinAUnion reporting pipeline transforms visit events into device journeys and page-level timing, supports date, location-source, region, sector, and custom-column filtering, and can return selected or aggregated fields as JSON or NDJSON. Synthetic data uses offline country/region/city reference data and a provenance label; it is intended for controlled development and analytics testing, not as real visitor activity.
 
-> **Deployment access-control check:** The current source exports `authRequired = false` for the JoinAUnion journey-management `GET` and `POST` handlers and the synthetic-data `POST /generate` handler. The generator deletes existing records with the supplied `loc_src` before inserting replacements. Treat these endpoints as unauthenticated in this checkout; restrict them at the deployment edge or require authentication before exposing them to untrusted clients. The column-discovery `/config` route does require authentication.
+> **JoinAUnion visit-info access:** Every `/v1/clients/joinaunion/visit_info` endpoint now requires a valid bearer token. Journey reporting, column discovery, and synthetic-data generation also enforce an application-scoped administrative role where applicable. The public contact widget at `/v1/clients/joinaunion/widget` remains unauthenticated so visitors can submit inquiries.
 
 ## Authentication design
 
@@ -244,11 +245,11 @@ The Vitest configuration enforces these global minimums for coverage runs:
 The repository’s latest local verification in this working tree:
 
 ```text
-102 test files passed
-1,046 tests passed
+103 test files passed
+1,091 tests passed
 npm run build passed
 npm run test:coverage passed
-Statements: 93.94% | Branches: 83.69% | Functions: 95.74% | Lines: 95.73%
+Statements: 93.78% | Branches: 83.66% | Functions: 95.79% | Lines: 95.52%
 ```
 
 Tests are organized by middleware, loaders, services, routes, validation, DTOs, database mappers/schema, jobs, cache, and application bootstrap. Shared environment and safety mocks live in `tests/vitest.setup.ts`; domain implementations are mocked locally when route tests need isolation.

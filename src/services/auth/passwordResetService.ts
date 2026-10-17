@@ -28,6 +28,8 @@ import {
     authTokens,
 } from '@db/schema'
 import { enforcePasswordHistory, hashPassword } from '@services/auth/passwordService'
+import { cacheStore } from '@cache/cacheStore'
+import { logger } from '@helpers/logger'
 
 /**
  * Configuration
@@ -247,6 +249,16 @@ export async function completePasswordReset(
     const passwordHash = await hashPassword(newPassword)
     await enforcePasswordHistory(row.userId, newPassword, passwordHash)
 
+    const accessTokens = await db
+        .select({ tokenHash: authTokens.tokenHash })
+        .from(authTokens)
+        .where(
+            and(
+                eq(authTokens.userId, row.userId),
+                eq(authTokens.tokenType, 'access'),
+            ),
+        )
+
     await db.transaction(async (tx) => {
         // Update current password
         await tx
@@ -270,4 +282,20 @@ export async function completePasswordReset(
             .delete(passwordResetTokens)
             .where(eq(passwordResetTokens.id, row.tokenId))
     })
+
+    for (const accessToken of accessTokens) {
+        try {
+            await cacheStore.del(`auth:token:${accessToken.tokenHash}`)
+        } catch (error) {
+            logger.error(
+                'Password reset completed, but access-token cache invalidation failed:',
+                error,
+            )
+            throw new AuthError(
+                'TOKEN_CACHE_INVALIDATION_FAILED',
+                'Password reset completed, but active token cache invalidation failed',
+                500,
+            )
+        }
+    }
 }

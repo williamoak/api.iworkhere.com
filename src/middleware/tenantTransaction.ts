@@ -23,6 +23,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { dbStorage, pool, schema } from '@services/dbService';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { logger } from '@helpers/logger';
+import { quoteTenantSchemaName } from '@db/tenantSchema';
 
 export function tenantTransaction() {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -59,7 +60,7 @@ export function tenantTransaction() {
 
         // Set the search_path for this client
         logger.log(`[DEBUG] [TENANT_TRANSACTION] Setting search_path to ${tenant}, public for tenant ${tenant}`);
-        await client.query(`SET search_path TO ${tenant}, public`);
+        await client.query(`SET search_path TO ${quoteTenantSchemaName(tenant)}, public`);
         
         // Verify search_path
         const check = await client.query('SHOW search_path');

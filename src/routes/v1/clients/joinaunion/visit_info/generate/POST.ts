@@ -51,7 +51,7 @@
  *   records within a given journey share the same location.
  *
  * @auth
- * Authentication is not currently required.
+ * Requires an authenticated JoinAUnion application owner or administrator.
  *
  * @body
  * {
@@ -124,9 +124,10 @@ import { visitInfo } from '@db/schema/visit_info';
 import { cacheStore } from '@cache/cacheStore';
 import { resolveDateRange } from '@helpers/dateParser';
 import { journeyQueryCache } from '@routes/v1/clients/joinaunion/visit_info/manage/POST';
+import { AuthError, resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
 
-/* make this true to enforce authenticated requests, later... */
-export const authRequired = false;
+export const authRequired = true;
 
 export type GeoPoint = {
     latitude: number;
@@ -797,8 +798,36 @@ function badRequest(res: Response, message: string): Response {
 }
 
 export const INSERT_BATCH_SIZE = 1000;
+const JOIN_A_UNION_APP_KEY = 'joinaunion.iworkhere.com';
+const JOURNEY_ADMIN_ROLES = new Set(['owner', 'admin', 'administrator']);
 
 export default async function POST(req: Request, res: Response): Promise<Response> {
+    if (!req.auth?.userId) {
+        return res.status(401).json({ error: 'UNAUTHORIZED' });
+    }
+
+    try {
+        const appContext = await resolveAuthContext({
+            app_key: JOIN_A_UNION_APP_KEY,
+        });
+        const user = await resolveUserIdForApplication(
+            req.auth.userId,
+            appContext.applicationId,
+        );
+        if (!JOURNEY_ADMIN_ROLES.has(user.role.toLowerCase())) {
+            return res.status(403).json({ error: 'FORBIDDEN' });
+        }
+    } catch (error) {
+        if (error instanceof AuthError) {
+            return res.status(error.httpStatus).json({ error: error.code });
+        }
+        console.error('Failed to authorize visit_info generation:', error);
+        return res.status(500).json({
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to authorize visit_info generation',
+        });
+    }
+
     const body = req.body ?? {};
     const query = req.query ?? {};
 

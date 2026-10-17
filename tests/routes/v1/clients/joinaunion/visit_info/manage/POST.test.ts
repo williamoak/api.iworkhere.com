@@ -170,8 +170,8 @@ describe('POST /v1/clients/joinaunion/visit_info/manage', () => {
     journeyQueryCache.clear();
   });
 
-  it('exports authRequired as boolean', () => {
-    expect(typeof authRequired).toBe('boolean');
+  it('requires bearer authentication', () => {
+    expect(authRequired).toBe(true);
   });
 
   describe('isNullLike', () => {

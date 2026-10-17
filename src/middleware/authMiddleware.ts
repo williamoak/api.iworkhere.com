@@ -36,7 +36,6 @@ import crypto from 'crypto';
 import { db } from '@services/dbService';
 import { authTokens } from '@db/schema';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import { cacheStore } from '@cache/cacheStore';
 
 const BEARER_PREFIX = 'bearer ';
 
@@ -131,53 +130,34 @@ export function authMiddleware() {
         });
       } else {
         const tokenHash = hashToken(token);
-        const cacheKey = `auth:token:${tokenHash}`;
         const now = new Date();
 
-        // Check cache first
-        const cachedUserId = await cacheStore.get<string>(cacheKey);
-        if (cachedUserId) {
-          dbg(reqId, 'cache_hit', {
-            tokenHash,
-            cachedUserId,
-          });
-          req.auth = { userId: cachedUserId };
-        } else {
-          dbg(reqId, 'cache_miss', {
-            tokenHash,
-            now: now.toISOString(),
-          });
+        dbg(reqId, 'db.lookup', {
+          tokenHash,
+          now: now.toISOString(),
+        });
 
-          const rows = await db
-            .select({ userId: authTokens.userId, expiresAt: authTokens.expiresAt })
-            .from(authTokens)
-            .where(
-              and(
-                eq(authTokens.tokenHash, tokenHash),
-                eq(authTokens.tokenType, 'access'),
-                isNull(authTokens.revokedAt),
-                gt(authTokens.expiresAt, now),
-              ),
-            )
-            .limit(1);
+        const rows = await db
+          .select({ userId: authTokens.userId })
+          .from(authTokens)
+          .where(
+            and(
+              eq(authTokens.tokenHash, tokenHash),
+              eq(authTokens.tokenType, 'access'),
+              isNull(authTokens.revokedAt),
+              gt(authTokens.expiresAt, now),
+            ),
+          )
+          .limit(1);
 
-          dbg(reqId, 'db.result', {
-            rowsLength: rows.length,
-          });
+        dbg(reqId, 'db.result', {
+          rowsLength: rows.length,
+        });
 
-          if (rows.length > 0) {
-            const userId = rows[0].userId;
-            const expiresAt = rows[0].expiresAt;
-
-            // Set cache if we have an expiration
-            if (expiresAt) {
-              const ttl = Math.max(0, expiresAt.getTime() - now.getTime());
-              await cacheStore.set(cacheKey, userId, ttl);
-            }
-
-            req.auth = { userId };
-            res.locals.visitUserId = userId; // Capture for logging
-          }
+        if (rows.length > 0) {
+          const userId = rows[0].userId;
+          req.auth = { userId };
+          res.locals.visitUserId = userId;
         }
       }
 

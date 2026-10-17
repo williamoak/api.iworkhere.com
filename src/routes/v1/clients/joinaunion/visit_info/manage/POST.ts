@@ -122,8 +122,7 @@ import {
   type JourneyRecord,
 } from './journeys';
 
-/* SET THIS back to true for production */
-export const authRequired = false;
+export const authRequired = true;
 
 export const MAX_REPORT_RECORDS = 300;
 

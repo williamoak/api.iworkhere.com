@@ -43,9 +43,9 @@ import { logger } from '@helpers/logger';
  */
 
 import type { Request } from 'express';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
-import { applications, applicationOrigins } from '@db/schema';
+import { applicationOrigins, applications } from '@db/schema';
 import { db } from '@services/dbService';
 import { AuthError, type AuthContext, resolveAuthContext } from "@services/auth/authContext";
 import { config } from '@helpers/config';
@@ -99,6 +99,42 @@ export function getCallerOrigin(req: Request): string | undefined {
   }
 
   return undefined;
+}
+
+export async function isRegisteredWebRedirectUri(
+  applicationId: string,
+  redirectUri: string,
+): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(redirectUri);
+  } catch {
+    return false;
+  }
+
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.username ||
+    parsed.password ||
+    parsed.origin === 'null'
+  ) {
+    return false;
+  }
+
+  const rows = await db
+    .select({ id: applicationOrigins.id })
+    .from(applicationOrigins)
+    .where(
+      and(
+        eq(applicationOrigins.applicationId, applicationId),
+        eq(applicationOrigins.origin, parsed.origin),
+        eq(applicationOrigins.type, 'web'),
+        eq(applicationOrigins.isEnabled, true),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 async function resolveAuthContextFromOrigin(
@@ -182,4 +218,3 @@ export async function resolveApplicationFromRequest(
 
   return resolveAuthContextFromOrigin(origin);
 }
-

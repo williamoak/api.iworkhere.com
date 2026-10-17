@@ -33,18 +33,38 @@ vi.mock('@db/schema/localizations', () => ({
     },
 }));
 
+vi.mock('@services/auth/authContext', () => ({
+    AuthError: class AuthError extends Error {
+        constructor(
+            public code: string,
+            message: string,
+            public httpStatus: number,
+        ) {
+            super(message);
+        }
+    },
+    resolveAuthContext: vi.fn(),
+}));
+vi.mock('@services/auth/authUserResolver', () => ({
+    resolveUserIdForApplication: vi.fn(),
+}));
+
 import PUT, {
+    authRequired,
     makePutLocalizationHandler,
     upsertLocalization,
     schema,
     type LocalizationWriteRepository,
 } from '@routes/v1/localization/PUT';
 import { isCacheDirty, setCachedSupportedLanguages } from '@cache/localizationCache';
+import { resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
 import type { LocalizationRecord } from '@routes/v1/localization/GET';
 
 function createMockReq(body: any): Request {
     return {
         body,
+        auth: { userId: 'admin-user' },
     } as unknown as Request;
 }
 
@@ -79,6 +99,16 @@ describe('PUT /v1/localization', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         setCachedSupportedLanguages(['eng']);
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'api-app',
+            applicationKey: 'api.iworkhere.com',
+        });
+        vi.mocked(resolveUserIdForApplication).mockResolvedValue({
+            userId: 'admin-user',
+            username: 'admin',
+            email: 'admin@example.com',
+            role: 'owner',
+        });
 
         mockRepo = {
             findBySlugAndLang: vi.fn(),
@@ -88,6 +118,28 @@ describe('PUT /v1/localization', () => {
         };
 
         handler = makePutLocalizationHandler(mockRepo);
+    });
+
+    test('requires authentication and an administrative API application role', async () => {
+        expect(authRequired).toBe(true);
+        const unauthorizedResponse = createMockRes();
+        await PUT({ body: {} } as Request, unauthorizedResponse);
+        expect(unauthorizedResponse.statusCode).toBe(401);
+        expect(mockRepo.insert).not.toHaveBeenCalled();
+
+        vi.mocked(resolveUserIdForApplication).mockResolvedValue({
+            userId: 'ordinary-user',
+            username: 'ordinary',
+            email: 'ordinary@example.com',
+            role: 'user',
+        });
+        const forbiddenResponse = createMockRes();
+        await PUT(
+            { ...createMockReq({ slug: 'test', lang: 'eng', text: 'x' }), auth: { userId: 'ordinary-user' } } as Request,
+            forbiddenResponse,
+        );
+        expect(forbiddenResponse.statusCode).toBe(403);
+        expect(mockRepo.insert).not.toHaveBeenCalled();
     });
 
     test('validates schema correctly', () => {

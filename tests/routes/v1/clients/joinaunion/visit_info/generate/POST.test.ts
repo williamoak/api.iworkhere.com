@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
-import handler, {
+import routeHandler, {
     CURATED_PAGES,
     DEFAULT_FALLBACK_PAGES,
     REDIS_PAGES_KEY,
+    authRequired,
     extractUniquePages,
     generateVisitJourneys,
     getDynamicPages,
@@ -25,6 +26,24 @@ import handler, {
 } from '@routes/v1/clients/joinaunion/visit_info/generate/POST';
 import { db } from '@services/dbService';
 import { cacheStore } from '@cache/cacheStore';
+import { resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
+
+vi.mock('@services/auth/authContext', () => ({
+    AuthError: class AuthError extends Error {
+        constructor(
+            public code: string,
+            message: string,
+            public httpStatus: number,
+        ) {
+            super(message);
+        }
+    },
+    resolveAuthContext: vi.fn(),
+}));
+vi.mock('@services/auth/authUserResolver', () => ({
+    resolveUserIdForApplication: vi.fn(),
+}));
 
 vi.mock('@services/dbService', () => ({
     db: {
@@ -33,6 +52,11 @@ vi.mock('@services/dbService', () => ({
         selectDistinct: vi.fn(),
     },
 }));
+
+const handler = (req: Request, res: Response) => {
+    req.auth = { userId: 'admin-user' };
+    return routeHandler(req, res);
+};
 
 function response() {
     const res = {
@@ -50,6 +74,16 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
         vi.clearAllMocks();
         resetLocalPageCache();
         insertedValues = undefined;
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'joinaunion-app',
+            applicationKey: 'joinaunion.iworkhere.com',
+        });
+        vi.mocked(resolveUserIdForApplication).mockResolvedValue({
+            userId: 'admin-user',
+            username: 'admin',
+            email: 'admin@example.com',
+            role: 'owner',
+        });
         vi.spyOn(cacheStore, 'get').mockResolvedValue(null);
         vi.spyOn(cacheStore, 'set').mockResolvedValue(undefined);
         vi.mocked(db.delete).mockReturnValue({
@@ -74,6 +108,31 @@ describe('POST /v1/clients/joinaunion/visit_info/generate', () => {
                 ]),
             }),
         } as any);
+    });
+
+    test('requires authentication and an administrative application role', async () => {
+        expect(authRequired).toBe(true);
+        const res = response();
+
+        await routeHandler({ body: { loc_src: 'generated' } } as Request, res);
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(db.delete).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+
+        vi.mocked(resolveUserIdForApplication).mockResolvedValue({
+            userId: 'ordinary-user',
+            username: 'ordinary',
+            email: 'ordinary@example.com',
+            role: 'user',
+        });
+        const denied = response();
+        await routeHandler({
+            auth: { userId: 'ordinary-user' },
+            body: { loc_src: 'generated' },
+        } as Request, denied);
+        expect(denied.status).toHaveBeenCalledWith(403);
+        expect(db.delete).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
     });
 
     test('resolves country and region selectors to city places', async () => {

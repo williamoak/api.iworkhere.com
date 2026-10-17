@@ -57,6 +57,19 @@ const publicReadmeDocuments = [
     "William.Oak.Executive.Cover.Letter.Sept.2026.pdf",
 ] as const;
 
+function escapeHtml(value: unknown): string {
+    return String(value).replace(/[&<>"']/g, (character) => {
+        const entities: Record<string, string> = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        };
+        return entities[character];
+    });
+}
+
 const corsOrigin: NonNullable<CorsOptions["origin"]> = (origin, callback) => {
     if (!origin || origin === "null") {
         callback(null, true);
@@ -213,7 +226,7 @@ export async function createBaseApp() {
     });
 
     app.get('/verification-error', (req, res) => {
-        const error = req.query.error || 'Unknown error';
+        const error = escapeHtml(req.query.error || 'Unknown error');
         res.send(`
             <!DOCTYPE html>
             <html>

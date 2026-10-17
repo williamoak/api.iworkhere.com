@@ -40,6 +40,12 @@ vi.mock('@services/auth/passwordService', () => ({
     enforcePasswordHistory: vi.fn(async () => undefined),
 }))
 
+vi.mock('@cache/cacheStore', () => ({
+    cacheStore: {
+        del: vi.fn(),
+    },
+}))
+
 vi.mock('@db/schema', () => ({
     users: {
         id: 'id',
@@ -65,6 +71,8 @@ vi.mock('@db/schema', () => ({
     },
     authTokens: {
         userId: 'user_id',
+        tokenHash: 'token_hash',
+        tokenType: 'token_type',
         revokedAt: 'revoked_at',
     },
 }))
@@ -83,6 +91,7 @@ import {
 } from '@services/auth/passwordResetService'
 import { AuthError } from '@services/auth/authContext'
 import { enforcePasswordHistory } from '@services/auth/passwordService'
+import { cacheStore } from '@cache/cacheStore'
 
 /**
  * ------------------------------------------------------------
@@ -90,12 +99,12 @@ import { enforcePasswordHistory } from '@services/auth/passwordService'
  * ------------------------------------------------------------
  */
 
-function mockSelectOnce(rows: any[]) {
+function mockSelectOnce(rows: any[], withLimit = true) {
     ;(db.select as any).mockReturnValueOnce({
         from: () => ({
-            where: () => ({
-                limit: () => Promise.resolve(rows),
-            }),
+            where: () => withLimit
+                ? { limit: () => Promise.resolve(rows) }
+                : Promise.resolve(rows),
         }),
     })
 }
@@ -239,6 +248,10 @@ describe('passwordResetService', () => {
                 expiresAt: new Date(Date.now() + 100000),
             },
         ])
+        mockSelectOnce([
+            { tokenHash: 'access-hash-1' },
+            { tokenHash: 'access-hash-2' },
+        ], false)
 
         ;(db.transaction as any).mockImplementation(async (fn: any) => {
             await fn({
@@ -266,6 +279,35 @@ describe('passwordResetService', () => {
             'hashed-password'
         )
         expect(db.transaction).toHaveBeenCalled()
+        expect(cacheStore.del).toHaveBeenCalledWith('auth:token:access-hash-1')
+        expect(cacheStore.del).toHaveBeenCalledWith('auth:token:access-hash-2')
+    })
+
+    test('complete: reports cache invalidation failure after revoking tokens', async () => {
+        mockSelectOnce([{
+            tokenId: 't1',
+            userId: 'u1',
+            expiresAt: new Date(Date.now() + 100000),
+        }])
+        mockSelectOnce([{ tokenHash: 'access-hash-1' }], false)
+        vi.mocked(cacheStore.del).mockRejectedValueOnce(new Error('Redis unavailable'))
+
+        ;(db.transaction as any).mockImplementation(async (fn: any) => {
+            await fn({
+                update: () => ({
+                    set: () => ({
+                        where: () => Promise.resolve(),
+                    }),
+                }),
+                delete: () => ({
+                    where: () => Promise.resolve(),
+                }),
+            })
+        })
+
+        await expect(
+            completePasswordReset('valid-token', 'newpass'),
+        ).rejects.toThrow('active token cache invalidation failed')
     })
 
     test('rejects invalid reset TTL configuration during module initialization', async () => {

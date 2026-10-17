@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Request, Response } from 'express';
 
-import handler, {
+import routeHandler, {
     getDeviceJourneysBySource,
     buildDeviceJourneys,
     extractPageName,
@@ -9,6 +9,24 @@ import handler, {
     authRequired,
 } from '@routes/v1/clients/joinaunion/visit_info/manage/GET';
 import { db } from '@services/dbService';
+import { resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
+
+vi.mock('@services/auth/authContext', () => ({
+    AuthError: class AuthError extends Error {
+        constructor(
+            public code: string,
+            message: string,
+            public httpStatus: number,
+        ) {
+            super(message);
+        }
+    },
+    resolveAuthContext: vi.fn(),
+}));
+vi.mock('@services/auth/authUserResolver', () => ({
+    resolveUserIdForApplication: vi.fn(),
+}));
 
 vi.mock('@services/dbService', () => {
     const mockSelect = vi.fn();
@@ -18,6 +36,11 @@ vi.mock('@services/dbService', () => {
         },
     };
 });
+
+const handler = (req: Request, res: Response) => {
+    req.auth = { userId: 'admin-user' };
+    return routeHandler(req, res);
+};
 
 function createMockResponse() {
     const res = {
@@ -89,10 +112,41 @@ function mockQueryChain(results: Array<{
 describe('GET /v1/clients/joinaunion/visit_info/manage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(resolveAuthContext).mockResolvedValue({
+            applicationId: 'joinaunion-app',
+            applicationKey: 'joinaunion.iworkhere.com',
+        });
+        vi.mocked(resolveUserIdForApplication).mockResolvedValue({
+            userId: 'admin-user',
+            username: 'admin',
+            email: 'admin@example.com',
+            role: 'owner',
+        });
     });
 
-    test('does not require authentication', () => {
-        expect(authRequired).toBe(false);
+    test('requires authentication', () => {
+        expect(authRequired).toBe(true);
+    });
+
+    test('rejects requests without an authenticated identity', async () => {
+        const res = createMockResponse();
+        await routeHandler({ query: {} } as Request, res);
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(db.select).not.toHaveBeenCalled();
+    });
+
+    test('rejects authenticated users without an administrative application role', async () => {
+        vi.mocked(resolveUserIdForApplication).mockResolvedValue({
+            userId: 'ordinary-user',
+            username: 'ordinary',
+            email: 'ordinary@example.com',
+            role: 'user',
+        });
+        const req = { auth: { userId: 'ordinary-user' }, query: {} } as Request;
+        const res = createMockResponse();
+        await routeHandler(req, res);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(db.select).not.toHaveBeenCalled();
     });
 
     test('returns structured device journeys with default source="generated"', async () => {

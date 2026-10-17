@@ -27,10 +27,11 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '@helpers/logger';
+import { isAllowedTenantSchemaName } from '@db/tenantSchema';
 
 
 export function tenantMiddleware() {
-  return async (req: Request, _res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     // 1. Try determining tenant from X-Tenant header first
     let tenant = 'localhost';
     const xTenant = req.headers['x-tenant'] as string;
@@ -93,9 +94,17 @@ export function tenantMiddleware() {
     // Safety check: ignore 'accounts' or common third-party domains
     if (tenant === 'accounts' || tenant === 'google') tenant = 'public';
 
+    tenant = tenant.toLowerCase();
+    if (!isAllowedTenantSchemaName(tenant)) {
+      return res.status(400).json({
+        error: 'INVALID_TENANT',
+        message: 'Tenant identifier is invalid or not configured',
+      });
+    }
+
     logger.log(`Tenant determined: ${tenant}`);
     (req as any).tenant = tenant;
-    
+
     next();
   };
 }

@@ -3,6 +3,7 @@ import { Request } from 'express'
 import { AuthError } from '@services/auth/authContext'
 import {
     getCallerOrigin,
+    isRegisteredWebRedirectUri,
     normalizeOrigin,
     resolveApplicationFromRequest,
 } from '@services/auth/applicationOriginResolver'
@@ -34,7 +35,13 @@ vi.mock('@helpers/config', () => ({
 
 vi.mock('@db/schema', () => ({
     applications: { id: 'app_id', appKey: 'app_key', isEnabled: true },
-    applicationOrigins: { isEnabled: true },
+    applicationOrigins: {
+        id: 'origin_id',
+        applicationId: 'application_id',
+        origin: 'origin',
+        type: 'type',
+        isEnabled: 'is_enabled',
+    },
 }))
 
 vi.mock('@services/auth/authContext', async () => {
@@ -69,6 +76,44 @@ const createMockRequest = (overrides: Partial<Request> = {}): Request => ({
  */
 
 describe('applicationOriginResolver', () => {
+    describe('isRegisteredWebRedirectUri', () => {
+        test('accepts an enabled HTTPS origin registered to the application', async () => {
+            const limit = vi.fn().mockResolvedValue([{ id: 'origin-id' }])
+            const where = vi.fn(() => ({ limit }))
+            const from = vi.fn(() => ({ where }))
+            vi.mocked(db.select).mockReturnValue({ from } as any)
+
+            await expect(
+                isRegisteredWebRedirectUri(
+                    'app-1',
+                    'https://bill.iworkhere.com/oauth/callback?flow=web',
+                ),
+            ).resolves.toBe(true)
+
+            expect(db.select).toHaveBeenCalled()
+            expect(from).toHaveBeenCalled()
+            expect(where).toHaveBeenCalled()
+        })
+
+        test.each([
+            'http://bill.iworkhere.com/callback',
+            'billapp://oauth/callback',
+            'https://user:password@bill.iworkhere.com/callback',
+            'https://attacker.example/callback',
+        ])('rejects an unsafe or unregistered redirect %s', async (redirectUri) => {
+            if (redirectUri.startsWith('https://attacker.example')) {
+                const limit = vi.fn().mockResolvedValue([])
+                const where = vi.fn(() => ({ limit }))
+                const from = vi.fn(() => ({ where }))
+                vi.mocked(db.select).mockReturnValue({ from } as any)
+            }
+
+            await expect(
+                isRegisteredWebRedirectUri('app-1', redirectUri),
+            ).resolves.toBe(false)
+        })
+    })
+
     describe('origin parsing', () => {
         test('normalizes origin protocol, host, and case', () => {
             expect(normalizeOrigin('HTTPS://Example.COM/path?q=1')).toBe('https://example.com')

@@ -15,6 +15,9 @@ vi.mock("@helpers/config", () => ({
 }));
 vi.mock("@services/auth/oauthStateService", () => ({ verifyState: vi.fn() }));
 vi.mock("@services/auth/authContext", () => ({ resolveAuthContext: vi.fn() }));
+vi.mock("@services/auth/applicationOriginResolver", () => ({
+  isRegisteredWebRedirectUri: vi.fn(),
+}));
 vi.mock("@services/auth/tokenService", () => ({ issueLoginTokens: vi.fn() }));
 vi.mock("@db/schema", () => ({
   userAuthOauth: {
@@ -43,6 +46,7 @@ import GET from "@routes/v1/auth/oauth/google/callback/GET";
 import { getGoogleOAuthConfig } from "@helpers/config";
 import { verifyState } from "@services/auth/oauthStateService";
 import { resolveAuthContext } from "@services/auth/authContext";
+import { isRegisteredWebRedirectUri } from "@services/auth/applicationOriginResolver";
 import { issueLoginTokens } from "@services/auth/tokenService";
 import { db } from "@services/dbService";
 
@@ -76,6 +80,7 @@ function createRes(): ResMock {
 describe("GET /v1/auth/oauth/google/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(true);
     vi.stubGlobal("fetch", vi.fn());
     insertBuilderMock.returning.mockResolvedValue([{ userId: "user-123" }]);
 
@@ -125,10 +130,26 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     expect(res.sentHtml).toContain("OAUTH_SUCCESS");
   });
 
-  it("redirects for mobile flow using deep links", async () => {
-    vi.mocked(verifyState).mockReturnValue({ 
+  it("rejects unregistered native redirect URIs before exchanging tokens", async () => {
+    vi.mocked(verifyState).mockReturnValue({
         app_key: "bill.iworkhere.com", 
         redirect_uri: "billapp://auth" 
+    } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
+    vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(false);
+
+    const res = createRes();
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.sentHtml).toBe("Invalid OAuth redirect URI");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not place refresh tokens in web redirect URLs", async () => {
+    vi.mocked(verifyState).mockReturnValue({
+      app_key: "bill.iworkhere.com",
+      redirect_uri: "https://bill.iworkhere.com/auth?from=login",
     } as any);
     vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
     vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
@@ -137,8 +158,41 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     await GET({ query: { code: "c", state: "s" } } as any, res);
 
     expect(res.statusCode).toBe(302);
-    expect(res.redirectUrl).toContain("billapp://auth");
-    expect(res.redirectUrl).toContain("access_token=at");
+    expect(res.redirectUrl).toBe("https://bill.iworkhere.com/auth?from=login");
+    expect(res.redirectUrl).not.toContain("access_token");
+    expect(res.redirectUrl).not.toContain("refresh_token");
+  });
+
+  it("does not include a token-bearing fallback URL in popup HTML", async () => {
+    vi.mocked(verifyState).mockReturnValue({
+      app_key: "bill.iworkhere.com",
+      flow: "popup",
+      redirect_uri: "https://bill.iworkhere.com",
+    } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
+    vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
+
+    const res = createRes();
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(res.sentHtml).toContain("window.opener.postMessage");
+    expect(res.sentHtml).not.toContain("window.location.href");
+    expect(res.sentHtml).not.toContain("oauth_token");
+  });
+
+  it("rejects an unregistered web redirect before issuing tokens", async () => {
+    vi.mocked(verifyState).mockReturnValue({
+      app_key: "bill.iworkhere.com",
+      redirect_uri: "https://attacker.example/steal",
+    } as any);
+    vi.mocked(resolveAuthContext).mockResolvedValue({ applicationId: "app-1", applicationKey: "bill.iworkhere.com" } as any);
+    vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(false);
+
+    const res = createRes();
+    await GET({ query: { code: "c", state: "s" } } as any, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(issueLoginTokens).not.toHaveBeenCalled();
   });
 
   it("redirects to failureRedirectUrl when query has error or missing params", async () => {

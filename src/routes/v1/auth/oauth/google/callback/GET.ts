@@ -19,6 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { getGoogleOAuthConfig } from "@helpers/config";
 import { verifyState } from "@services/auth/oauthStateService";
 import { resolveAuthContext } from "@services/auth/authContext";
+import { isRegisteredWebRedirectUri } from "@services/auth/applicationOriginResolver";
 import { issueLoginTokens } from "@services/auth/tokenService";
 import { db } from "@services/dbService";
 import { users, userApplications, userAuthOauth } from "@db/schema";
@@ -44,8 +45,17 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   try {
     const statePayload = verifyState(state);
-  logger.log('[DEBUG] [oauth/callback/GET] state payload', { statePayload });
     const appCtx = await resolveAuthContext({ app_key: statePayload.app_key });
+    if (
+      statePayload.redirect_uri &&
+      !(await isRegisteredWebRedirectUri(
+        appCtx.applicationId,
+        statePayload.redirect_uri,
+      ))
+    ) {
+      res.status(400).send('Invalid OAuth redirect URI');
+      return;
+    }
 
     const tokenResponse = await fetch(googleConfig.tokenUrl, {
       method: "POST",
@@ -132,21 +142,7 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     const tokens = await issueLoginTokens(userRow.userId, appCtx.applicationId);
     res.locals.visitUserId = userRow.userId; // Set for logging middleware
 
-    // --- ENHANCED SWITCHBOARD LOGIC ---
-
-    // 1. Detect if the receiver is a Native/Mobile app (Uses a deep link scheme like exp:// or billapp://)
-    const isDeepLink = (statePayload.redirect_uri?.includes("://") || statePayload.redirect_uri?.includes("--/")) &&
-                       !statePayload.redirect_uri?.startsWith("http");
-
-    logger.log('[DEBUG] [oauth-callback] Checking switchboard:', {
-        flow: statePayload.flow,
-        isDeepLink,
-        redirect_uri: statePayload.redirect_uri
-    });
-
-    // 2. Web Popup Flow (ONLY if not a deep link and flow is set to popup)
-    if (statePayload.flow === "popup" && !isDeepLink) {
-        logger.log('[DEBUG] [oauth-callback] Setting auth_token cookie for popup flow');
+    if (statePayload.flow === "popup") {
         res.cookie('auth_token', tokens.access.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -158,7 +154,11 @@ export default async function GET(req: Request, res: Response): Promise<void> {
             throw new Error("Missing redirect_uri for popup flow");
         }
         const targetOrigin = new URL(statePayload.redirect_uri).origin;
-        logger.log('[DEBUG] [oauth-callback] Sending OAUTH_SUCCESS postMessage to', targetOrigin);
+        const popupPayload = JSON.stringify({
+          access_token: tokens.access.token,
+          refresh_token: tokens.refresh.token,
+        }).replace(/</g, '\\u003c');
+        const popupOrigin = JSON.stringify(targetOrigin);
 
         res.status(200).send(`
             <!DOCTYPE html>
@@ -166,19 +166,13 @@ export default async function GET(req: Request, res: Response): Promise<void> {
             <head><title>Authenticated</title></head>
             <body>
                 <script>
-                    const data = {
-                        access_token: "${tokens.access.token}",
-                        refresh_token: "${tokens.refresh.token}"
-                    };
-                    
+                    const data = ${popupPayload};
                     try {
-                        window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, "${targetOrigin}");
+                        if (!window.opener) throw new Error("OAuth popup has no opener");
+                        window.opener.postMessage({ type: "OAUTH_SUCCESS", data }, ${popupOrigin});
                         setTimeout(() => window.close(), 1000);
                     } catch (error) {
-
-                        logger.error("[oauth-popup] error:", error);
-                        // Last resort: redirect to app with tokens in URL
-                        window.location.href = "${statePayload.redirect_uri}?oauth_token=" + encodeURIComponent(JSON.stringify(data));
+                        console.error("OAuth popup handoff failed");
                     }
                 </script>
                 <div style="text-align: center; font-family: sans-serif; margin-top: 50px;">
@@ -191,27 +185,16 @@ export default async function GET(req: Request, res: Response): Promise<void> {
         return;
     }
 
-    // 3. Mobile/Native or Standard Redirect Flow
     if (statePayload.redirect_uri) {
         const redirectUrl = new URL(statePayload.redirect_uri);
 
-        // Only append tokens if it's NOT a web URL
-        if (redirectUrl.protocol !== 'http:' && redirectUrl.protocol !== 'https:') {
-            redirectUrl.searchParams.set("access_token", tokens.access.token);
-            redirectUrl.searchParams.set("refresh_token", tokens.refresh.token);
-        }
-
-        // If it's a web URL (http/https), set the auth cookie for web authentication
-        if (redirectUrl.protocol === 'http:' || redirectUrl.protocol === 'https:') {
-        logger.log('[DEBUG] [oauth-callback] Setting auth_token cookie');
-          res.cookie('auth_token', tokens.access.token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: tokens.access.expiresAt.getTime() - Date.now(),
-            path: '/',
-            domain: '.iworkhere.com',
-          });
-        }
+        res.cookie('auth_token', tokens.access.token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: tokens.access.expiresAt.getTime() - Date.now(),
+          path: '/',
+          domain: '.iworkhere.com',
+        });
 
         res.redirect(302, redirectUrl.toString());
         return;

@@ -126,9 +126,9 @@ The current global tenant middleware chooses a tenant using this order:
 
 For example, an `Origin: https://joinaunion.iworkhere.com` ordinarily selects tenant name `joinaunion`; `X-Tenant: bill` selects `bill`. A value such as `X-Tenant: bill.workhere.com` is reduced to `bill`.
 
-**`X-Tenant` is a routing hint, not proof of identity or authorization.** The current resolver does not consult the application registry to authorize tenant choices. Do not let an untrusted end user choose arbitrary tenant headers. A trusted client backend or reverse proxy should control this value, and deployment operators must ensure tenant names map to valid, intended database schemas.[^3]
+**`X-Tenant` is a routing hint, not proof of identity or authorization.** The resolver does not consult the application registry to authorize tenant choices. A caller can select among the configured tenant names, so authenticated endpoints must still enforce application and user permissions. Do not expose tenant selection as a way to grant access to another tenant's data.[^3]
 
-The current tenant middleware interpolates the selected tenant into a SQL `SET search_path` statement and does not validate it against a schema allowlist. Only trusted infrastructure should be able to influence tenant selection; production deployments should validate schema identifiers against an allowlist before using this mechanism.
+Before setting `search_path`, the middleware now normalizes the tenant name, rejects invalid identifiers, and allows only the configured schemas `bill`, `joinaunion`, `michael`, `localhost`, and `public`. Tenant identifiers used in SQL are quoted after validation. Adding a schema requires updating `src/db/tenantSchema.ts` and provisioning/migrating the database schema; merely creating a new application origin does not add a tenant schema. The allowlist prevents arbitrary schema names and SQL identifier injection, but it is **not** a user-to-tenant authorization mechanism.
 
 ### 3.3 Examples: Bill and JoinAUnion clients
 
@@ -227,11 +227,11 @@ curl 'https://api.iworkhere.com/v1/auth/me' \
   --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
 ```
 
-The server hashes the presented token and validates token type, expiry, and revocation. Redis may cache valid token lookups until expiry. Refresh operations rotate tokens: clients should replace the old pair with the returned pair and must not expect a refresh token to be reusable indefinitely.
+The server hashes the presented token and checks token type, expiry, and revocation against the database for each authenticated request; a stale Redis entry cannot authorize a revoked token. Password resets revoke stored tokens and invalidate corresponding access-token cache entries. Refresh operations rotate tokens: clients should replace the old pair with the returned pair and must not expect a refresh token to be reusable indefinitely.
 
 ### 5.3 Other sign-in and recovery options
 
-- **Google OAuth 2.0:** uses application context and signed OAuth state; the provider client and redirect URLs must be configured.
+- **Google OAuth 2.0:** uses application context and signed OAuth state. A redirect target must use HTTPS and its origin must be enabled as a `web` origin for the resolved application. Native/custom URI schemes are rejected until a trusted native-redirect registry exists. OAuth tokens are not added to redirect URLs; popup flows use an origin-checked `postMessage`.
 - **Passkeys / WebAuthn:** the client completes registration or login options/verification ceremonies; valid origins and relying-party identity must be registered/configured. See [WebAuthn deployment notes](./webauthn-deployment.md).
 - **Email verification:** registration verification and resend operations use application context and expiring codes.
 - **Password recovery:** initiate, verify, and complete the flow using the documented reset endpoints. Completion updates password history and revokes existing auth tokens.
@@ -241,7 +241,7 @@ The server hashes the presented token and validates token type, expiry, and revo
 
 Do not infer authentication requirements from the URL prefix, the Swagger UI, or an endpoint's prose alone. Runtime route registration reads the route module's `authRequired` export. If the module does not set it to `true`, the route loader treats that method as not requiring bearer authentication. The checked-in Swagger generation currently does not emit an OpenAPI security scheme or per-operation security requirements.[^9]
 
-In particular, the current JoinAUnion visit-management `GET` and `POST` routes and synthetic-data `POST /generate` export `authRequired = false`. Generation deletes all existing `joinaunion.visit_info` rows with the supplied `location_source` before inserting generated data. Production adds a `confirm_delete` confirmation requirement for that destructive operation, but this is **not authentication or authorization**. Restrict these endpoints at a trusted deployment boundary or change their runtime access controls before exposing them to untrusted callers.
+The JoinAUnion visit-history and synthetic-data generation routes require bearer authentication and an `owner`, `admin`, or `administrator` role for the JoinAUnion application. The generator deletes existing `joinaunion.visit_info` rows with the supplied `location_source` before inserting generated data. Production's `confirm_delete` requirement remains an additional safeguard, not a substitute for authorization. Localization writes and deletes require an administrator-level role for the API application.
 
 ## 6. Understanding and using Swagger
 

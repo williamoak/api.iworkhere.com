@@ -49,7 +49,11 @@ import { logger } from '@helpers/logger';
 import type { Request, Response } from "express";
 import { config } from "@helpers/config";
 import { getGoogleOAuthConfig } from "@helpers/config";
-import { resolveApplicationFromRequest, getCallerOrigin } from "@services/auth/applicationOriginResolver";
+import {
+  getCallerOrigin,
+  isRegisteredWebRedirectUri,
+  resolveApplicationFromRequest,
+} from "@services/auth/applicationOriginResolver";
 import { signState } from "@services/auth/oauthStateService";
 
 
@@ -98,6 +102,22 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     }
   }
 
+  if (redirect_uri !== undefined) {
+    if (
+      typeof redirect_uri !== 'string' ||
+      !(await isRegisteredWebRedirectUri(
+        appCtx.applicationId,
+        redirect_uri,
+      ))
+    ) {
+      res.status(400).json({
+        error: 'OAUTH_REDIRECT_URI_INVALID',
+        message: 'Redirect URI must use HTTPS and match an enabled origin registered to this application',
+      });
+      return;
+    }
+  }
+
   logger.log('[DEBUG] [oauth/google/GET] Before state signing', { redirect_uri, flowType });
   const state = signState(
       appCtx.applicationKey,
@@ -118,4 +138,3 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
   res.redirect(302, authorizationUrl.toString());
 }
-

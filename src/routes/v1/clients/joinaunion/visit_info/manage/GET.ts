@@ -20,7 +20,7 @@
  * with total duration summed and the number of touches recorded.
  *
  * @auth
- * Authentication is not required.
+ * Requires an authenticated JoinAUnion application owner or administrator.
  *
  * @query
  * {
@@ -74,6 +74,8 @@ import { eq, asc } from 'drizzle-orm';
 import { db } from '@services/dbService';
 import { visitInfo } from '@db/schema/visit_info';
 import { logger } from '@helpers/logger';
+import { AuthError, resolveAuthContext } from '@services/auth/authContext';
+import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
 import {
     countJourneys,
     type VisitInfoRow,
@@ -90,8 +92,10 @@ import {
     type ManageQueryRepository,
 } from './POST';
 
-export const authRequired = false;
+export const authRequired = true;
 
+const JOIN_A_UNION_APP_KEY = 'joinaunion.iworkhere.com';
+const JOURNEY_ADMIN_ROLES = new Set(['owner', 'admin', 'administrator']);
 const DEFAULT_SOURCE = 'generated';
 const MAX_SOURCE_LENGTH = 32;
 const MAX_JOURNEY_GAP_MS = 5 * 60 * 1000; // 5 minutes
@@ -496,6 +500,30 @@ export const defaultGetManageQueryRepository: ManageQueryRepository = {
 export function makeGetManageHandler(repo: ManageQueryRepository = defaultGetManageQueryRepository) {
     return async function GET(req: Request, res: Response): Promise<Response> {
         try {
+            if (!req.auth?.userId) {
+                return res.status(401).json({ error: 'UNAUTHORIZED' });
+            }
+
+            const appContext = await resolveAuthContext({
+                app_key: JOIN_A_UNION_APP_KEY,
+            });
+            let user;
+            try {
+                user = await resolveUserIdForApplication(
+                    req.auth.userId,
+                    appContext.applicationId,
+                );
+            } catch (error) {
+                if (error instanceof AuthError) {
+                    return res.status(error.httpStatus).json({ error: error.code });
+                }
+                throw error;
+            }
+
+            if (!JOURNEY_ADMIN_ROLES.has(user.role.toLowerCase())) {
+                return res.status(403).json({ error: 'FORBIDDEN' });
+            }
+
             const params = extractManageParams(req);
 
             if (!hasManageOverloadParams(params)) {
