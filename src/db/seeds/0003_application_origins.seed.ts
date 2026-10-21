@@ -1,4 +1,5 @@
 import { logger } from '@helpers/logger';
+import { configGet } from '@helpers/config';
 
 import { db } from '@services/dbService';
 
@@ -26,8 +27,8 @@ const CONSUMERS = [
     name: 'JoinAUnion Web',
   },
   {
-    app_key: 'api.iworkhere.com',
-    origin: 'https://api.iworkhere.com',
+    app_key: configGet('APP_KEY'),
+    origin: configGet('API_ORIGIN'),
     name: 'API Server',
   }
 ];

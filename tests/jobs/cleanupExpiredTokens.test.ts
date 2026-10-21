@@ -82,7 +82,7 @@ describe('cleanupExpiredTokens', () => {
             }
             ;(db.delete as any).mockReturnValue(mockDelete)
 
-            const consoleSpy = vi.spyOn(console, 'log').mockImplementation()
+            const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
             await cleanupExpiredTokens()
 
@@ -153,6 +153,50 @@ describe('cleanupExpiredTokens', () => {
 
             clearInterval(intervalId)
             loggerSpy.mockRestore()
+        })
+
+        test('swallows a rejected startup cleanup without an unhandled rejection', async () => {
+            ;(db.delete as any).mockImplementation(() => {
+                throw new Error('Database error')
+            })
+            // Throwing from the error logger is the only way cleanupExpiredTokens can reject.
+            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {
+                throw new Error('logger failure')
+            })
+            const unhandled = vi.fn()
+            process.on('unhandledRejection', unhandled)
+
+            const intervalId = startCleanupJob(5000)
+            await vi.advanceTimersByTimeAsync(0)
+
+            expect(loggerSpy).toHaveBeenCalledTimes(1)
+            expect(unhandled).not.toHaveBeenCalled()
+
+            clearInterval(intervalId)
+            process.off('unhandledRejection', unhandled)
+        })
+
+        test('swallows a rejected interval cleanup and keeps the job scheduled', async () => {
+            ;(db.delete as any).mockImplementation(() => {
+                throw new Error('Database error')
+            })
+            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {
+                throw new Error('logger failure')
+            })
+            const unhandled = vi.fn()
+            process.on('unhandledRejection', unhandled)
+
+            const intervalId = startCleanupJob(5000)
+            await vi.advanceTimersByTimeAsync(5000)
+            await vi.advanceTimersByTimeAsync(5000)
+
+            // Startup run + two interval runs, each rejecting and each swallowed.
+            expect(db.delete).toHaveBeenCalledTimes(3)
+            expect(loggerSpy).toHaveBeenCalledTimes(3)
+            expect(unhandled).not.toHaveBeenCalled()
+
+            clearInterval(intervalId)
+            process.off('unhandledRejection', unhandled)
         })
 
     })

@@ -1,14 +1,13 @@
 import type { Config } from "drizzle-kit";
 import * as fs from "fs";
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env.development" });
+import { config, configGet } from "./src/helpers/config";
 
-const DB_HOST     = process.env.DB_HOSTNAME!;
-const DB_PORT     = Number(process.env.DB_PORT || 26257);
-const DB_NAME     = process.env.DB_NAME!;
-const DB_USER     = process.env.DB_USER!;
-const DB_CERT_DIR = process.env.DB_CERT_DIR!;
+const DB_HOST     = configGet("DB_HOSTNAME");
+const DB_PORT     = Number(config.DB_PORT || 26257);
+const DB_NAME     = configGet("DB_NAME");
+const DB_USER     = configGet("DB_USER");
+const DB_CERT_DIR = configGet("DB_CERT_DIR");
 
 export default {
     schema: "./src/db/schema/index.ts",

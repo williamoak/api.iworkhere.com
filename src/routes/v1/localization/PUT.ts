@@ -60,13 +60,14 @@ import { uuidv7 } from 'uuidv7';
 import { db } from '@services/dbService';
 import { localizations, type Localization } from '@db/schema/localizations';
 import { logger } from '@helpers/logger';
+import { configGet } from '@helpers/config';
 import { dirtyCache } from '@cache/localizationCache';
 import type { LocalizationRecord } from './GET';
 import { AuthError, resolveAuthContext } from '@services/auth/authContext';
 import { resolveUserIdForApplication } from '@services/auth/authUserResolver';
 
 export const authRequired = true;
-const LOCALIZATION_ADMIN_APP_KEY = 'api.iworkhere.com';
+const LOCALIZATION_ADMIN_APP_KEY = configGet('APP_KEY');
 const LOCALIZATION_ADMIN_ROLES = new Set(['owner', 'admin', 'administrator']);
 
 /* ------------------------------------------------------------------ */

@@ -54,7 +54,7 @@ export async function cleanupExpiredTokens(): Promise<number> {
  * Start the periodic cleanup job.
  * Runs every hour by default (configurable via CLEANUP_JOB_INTERVAL_MS).
  */
-export function startCleanupJob(intervalMs: number = 3_600_000): NodeJS.Timer {
+export function startCleanupJob(intervalMs: number = 3_600_000): NodeJS.Timeout {
   logger.log(
     `[cleanupExpiredTokens] Starting job with interval: ${intervalMs}ms (${(intervalMs / 1000 / 60).toFixed(0)} minutes)`,
   );

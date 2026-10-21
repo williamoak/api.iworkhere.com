@@ -109,6 +109,53 @@ for (const file of envFiles) {
  */
 combined = { ...combined, ...process.env };
 
+const appKey = combined.APP_KEY?.trim();
+
+if (!appKey) {
+  throw new Error('Missing required environment variable: APP_KEY');
+}
+
+if (appKey.includes('://') || appKey.includes('/')) {
+  throw new Error(
+    'APP_KEY must contain only a hostname, such as api.iworkhere.com',
+  );
+}
+
+const apiOrigin = `https://${appKey}`;
+
+combined = {
+  ...combined,
+
+  APP_KEY: appKey,
+  API_HOST: appKey,
+  API_ORIGIN: apiOrigin,
+  API_BASE_URL: `${apiOrigin}/api`,
+
+  // Temporary compatibility fallback.
+  // Docker can later provide DB_HOSTNAME=cockroachdb.
+  DB_HOSTNAME: combined.DB_HOSTNAME?.trim() || appKey,
+
+  // Relative paths resolve against the project root; absolute paths still work.
+  DB_CERT_DIR: path.resolve(
+    projectRoot,
+    combined.DB_CERT_DIR?.trim() || 'certs/cockroach',
+  ),
+
+  APP_URL: apiOrigin,
+
+  GOOGLE_OAUTH_REDIRECT_URI:
+    combined.GOOGLE_OAUTH_REDIRECT_URI?.trim() ||
+    `${apiOrigin}/v1/auth/oauth/google/callback`,
+
+  GOOGLE_OAUTH_SUCCESS_REDIRECT_URL:
+    combined.GOOGLE_OAUTH_SUCCESS_REDIRECT_URL?.trim() ||
+    `${apiOrigin}/auth/oauth/success`,
+
+  GOOGLE_OAUTH_FAILURE_REDIRECT_URL:
+    combined.GOOGLE_OAUTH_FAILURE_REDIRECT_URL?.trim() ||
+    `${apiOrigin}/auth/oauth/failure`,
+};
+
 /**
  * Export configuration object
  */
