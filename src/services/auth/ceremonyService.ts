@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
-import { cacheStore } from '@cache/cacheStore';
 import { getWebAuthnConfig } from '@helpers/config';
 import { AuthError } from '@services/auth/authContext';
+import { db } from '@services/dbService';
+import { consumedWebauthnCeremonies } from '@db/schema';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type CeremonyOperation = 'registration' | 'authentication';
 
@@ -86,17 +89,39 @@ export async function consumeCeremony(
     }
 
     const now = Math.floor(Date.now() / 1000);
-    if (!payload.jti || !payload.challenge || payload.expiresAt <= now || payload.issuedAt > now + 30) invalidCeremony();
+    if (typeof payload.jti !== 'string' || !UUID_PATTERN.test(payload.jti)) invalidCeremony();
+    if (!payload.challenge || payload.expiresAt <= now || payload.issuedAt > now + 30) invalidCeremony();
     if (!payload.rpId || !payload.origin) invalidCeremony();
     for (const [key, value] of Object.entries(expected)) {
         if (value !== undefined && payload[key as keyof CeremonyPayload] !== value) invalidCeremony();
     }
 
-    const claimed = await cacheStore.consumeOnce(
-        `webauthn:ceremony:${payload.jti}`,
-        Math.max(1, payload.expiresAt - now) * 1000,
-    );
+    // Last step: the ceremony is accepted only if this call wins the claim.
+    // A database failure throws here, so the ceremony is never accepted without a claim.
+    const claimed = await claimCeremonyJti(payload.jti, payload.expiresAt);
     if (!claimed) invalidCeremony();
 
     return payload;
+}
+
+/**
+ * Claims a ceremony for single use by inserting its jti into CockroachDB.
+ * The insert succeeds only for the first consumer of a jti, so exactly one
+ * API instance can win a race for the same token.
+ *
+ * Database errors propagate to the caller. Callers must treat them as a
+ * failed claim.
+ */
+export async function claimCeremonyJti(
+    jti: string,
+    expiresAt: number,
+    database: Pick<typeof db, 'insert'> = db,
+): Promise<boolean> {
+    const claimed = await database
+        .insert(consumedWebauthnCeremonies)
+        .values({ jti, expiresAt: new Date(expiresAt * 1000) })
+        .onConflictDoNothing({ target: consumedWebauthnCeremonies.jti })
+        .returning({ jti: consumedWebauthnCeremonies.jti });
+
+    return claimed.length === 1;
 }

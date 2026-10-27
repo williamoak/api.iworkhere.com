@@ -11,7 +11,8 @@ describe('tenantMiddleware', () => {
             body: {},
             ...reqOverrides,
         } as unknown as Request;
-        const res = {} as Response;
+        const json = vi.fn();
+        const res = { status: vi.fn(() => ({ json })) } as unknown as Response;
         const next = vi.fn() as NextFunction;
         return { req, res, next };
     };
@@ -76,6 +77,58 @@ describe('tenantMiddleware', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
+    it.each(['api-dev.iworkhere.com'])(
+        'uses public context for API hostname %s',
+        async (hostname) => {
+            const mw = tenantMiddleware();
+            const { req, res, next } = createReqResNext({ hostname });
+
+            await mw(req, res, next);
+
+            expect((req as any).tenant).toBe('public');
+            expect(next).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('uses public context when the API hostname is supplied as the origin', async () => {
+        const mw = tenantMiddleware();
+        const { req, res, next } = createReqResNext({
+            hostname: 'api-dev.iworkhere.com',
+            headers: { origin: 'https://api-dev.iworkhere.com' },
+        });
+
+        await mw(req, res, next);
+
+        expect((req as any).tenant).toBe('public');
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses public context when a proxy hostname hides the API origin', async () => {
+        const mw = tenantMiddleware();
+        const { req, res, next } = createReqResNext({
+            hostname: 'public.iworkhere.com',
+            headers: { referer: 'https://api-dev.iworkhere.com/' },
+        });
+
+        await mw(req, res, next);
+
+        expect((req as any).tenant).toBe('public');
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses public context when the proxy receives a frontend origin', async () => {
+        const mw = tenantMiddleware();
+        const { req, res, next } = createReqResNext({
+            hostname: 'public.iworkhere.com',
+            headers: { origin: 'https://joinaunion-dev.iworkhere.com' },
+        });
+
+        await mw(req, res, next);
+
+        expect((req as any).tenant).toBe('public');
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
     it('derives tenant from 2-part custom hostname', async () => {
         const mw = tenantMiddleware();
         const { req, res, next } = createReqResNext({
@@ -114,7 +167,7 @@ describe('tenantMiddleware', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    it('defaults generic domains (api, public, iworkhere) to localhost', async () => {
+    it('does not reserve generic-looking tenant names', async () => {
         const mw = tenantMiddleware();
         const { req, res, next } = createReqResNext({
             headers: { 'x-tenant': 'api' },
@@ -122,11 +175,11 @@ describe('tenantMiddleware', () => {
 
         await mw(req, res, next);
 
-        expect((req as any).tenant).toBe('localhost');
+        expect((req as any).tenant).toBe('api');
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    it('maps third-party auth domains (accounts, google) to public', async () => {
+    it('does not reserve third-party-looking tenant names', async () => {
         const mw = tenantMiddleware();
         const { req, res, next } = createReqResNext({
             headers: { 'x-tenant': 'accounts' },
@@ -134,7 +187,7 @@ describe('tenantMiddleware', () => {
 
         await mw(req, res, next);
 
-        expect((req as any).tenant).toBe('public');
+        expect((req as any).tenant).toBe('accounts');
         expect(next).toHaveBeenCalledTimes(1);
     });
 
@@ -157,24 +210,22 @@ describe('tenantMiddleware', () => {
         expect(status).toHaveBeenCalledWith(400);
         expect(json).toHaveBeenCalledWith({
             error: 'INVALID_TENANT',
-            message: 'Tenant identifier is invalid or not configured',
+            message: 'Tenant identifier is invalid(1)',
         });
         expect(next).not.toHaveBeenCalled();
     });
 
-    it('rejects a well-formed but unconfigured tenant schema', async () => {
+    it('accepts a well-formed tenant without an explicit configuration entry', async () => {
         const mw = tenantMiddleware();
-        const json = vi.fn();
-        const status = vi.fn(() => ({ json }));
         const { req, next } = createReqResNext({
             headers: { 'x-tenant': 'unconfigured' },
         });
-        const res = { status } as unknown as Response;
+        const res = {} as Response;
 
         await mw(req, res, next);
 
-        expect(status).toHaveBeenCalledWith(400);
-        expect(next).not.toHaveBeenCalled();
+        expect((req as any).tenant).toBe('unconfigured');
+        expect(next).toHaveBeenCalledOnce();
     });
 
     it('normalizes tenant names before schema validation', async () => {

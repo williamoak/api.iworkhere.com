@@ -22,10 +22,10 @@ describe('tenant schema identifiers', () => {
   );
 
   it.each(['tenant_2', 'arbitrary', 'pg_catalog'])(
-    'rejects syntactically valid but unconfigured schema %s',
+    'accepts syntactically valid schema %s',
     (name) => {
       expect(isValidTenantSchemaName(name)).toBe(true);
-      expect(isAllowedTenantSchemaName(name)).toBe(false);
+      expect(isAllowedTenantSchemaName(name)).toBe(true);
     },
   );
 

@@ -260,6 +260,20 @@
       "when": 1791486209506,
       "tag": "0036_create_passkey_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792079820000,
+      "tag": "0037_add_visit_info_journey_covering_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792692000000,
+      "tag": "0038_create_consumed_webauthn_ceremonies",
+      "breakpoints": true
     }
   ]
 }

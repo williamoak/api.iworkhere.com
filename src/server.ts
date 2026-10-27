@@ -24,11 +24,11 @@ import { logger } from '@helpers/logger';
  * }
  */
 
-import "tsconfig-paths/register";
+//import "tsconfig-paths/register";
 import "@helpers/config";
 import http from "http";
 
-import { configGet } from "@helpers/config";
+import { configGet, configGetNumber } from "@helpers/config";
 import { createBaseApp } from "@src/appFactory";
 import { verifyConnection } from "@services/dbService";
 import { loadSwagger } from "@loaders/swagger";
@@ -61,12 +61,17 @@ async function bootstrap() {
         loadSwagger(app);
     }
 
-    const PORT = 4300;
+    const PORT = configGetNumber('PORT', {
+      defaultValue: 4300,
+      min: 1024,
+      max: 65535,
+    });
 
     // HTTP-only server; nginx performs TLS termination
     const HOST = configGet("HOST_IP");
 
     http.createServer(app).listen(PORT, HOST, () => {
+        logger.log(`server bootup complete and listening on port:${PORT}`, forceLog);
         logger.log(`API server running at http://${HOST}:${PORT}`);
         logger.log("HTTPS termination is handled by nginx; internal traffic is HTTP-only.");
 
@@ -75,5 +80,4 @@ async function bootstrap() {
         }
     });
 }
-logger.log("server bootup complete",forceLog);
 export { bootstrap };

@@ -117,7 +117,7 @@ if (!appKey) {
 
 if (appKey.includes('://') || appKey.includes('/')) {
   throw new Error(
-    'APP_KEY must contain only a hostname, such as api.iworkhere.com',
+    'APP_KEY must contain only a hostname, such as api-dev.iworkhere.com',
   );
 }
 

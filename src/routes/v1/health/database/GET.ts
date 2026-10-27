@@ -1,7 +1,7 @@
 /**
  * @myDocBlock v2.2
  * @file GET.ts
- * @external api.iworkhere.com
+ * @external api-dev.iworkhere.com
  * @module health-database
  * @tag health
  * @version 2.0.0

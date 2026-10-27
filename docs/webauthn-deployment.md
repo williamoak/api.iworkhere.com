@@ -4,8 +4,8 @@ The API uses explicit WebAuthn configuration. It never trusts an origin or RP ID
 
 Required environment variables:
 
-- `WEBAUTHN_RP_ID`: the registrable RP ID, for example `joinaunion.iworkhere.com`.
-- `WEBAUTHN_ALLOWED_ORIGINS`: comma-separated HTTPS origins, for example `https://joinaunion.iworkhere.com`.
+- `WEBAUTHN_RP_ID`: the registrable RP ID, for example `joinaunion-dev.iworkhere.com`.
+- `WEBAUTHN_ALLOWED_ORIGINS`: comma-separated HTTPS origins, for example `https://joinaunion-dev.iworkhere.com`.
 - `WEBAUTHN_CEREMONY_SECRET`: a high-entropy signing secret used for short-lived ceremony payloads.
 
 Optional variables:

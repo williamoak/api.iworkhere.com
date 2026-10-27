@@ -96,7 +96,13 @@ router.get('/', webAuthMiddleware, async (req: any, res) => {
         }, 1000);
 
         document.getElementById('logout-btn').addEventListener('click', async () => {
-            await fetch('/v1/auth/token', { method: 'DELETE', credentials: 'include' });
+            try {
+                await fetch('/v1/auth/token', { method: 'DELETE', credentials: 'include' });
+            } finally {
+                // Remove any client-held access/refresh values before leaving the app.
+                window.localStorage.clear();
+                window.sessionStorage.clear();
+            }
             window.location.href = '/';
         });
     </script>

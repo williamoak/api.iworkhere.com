@@ -57,10 +57,9 @@ import { logger } from '@helpers/logger';
  */
 
 import path from 'path';
-import { pathToFileURL } from 'url';
+import { pathToFileURL, fileURLToPath } from 'url';
 import { promises as fsp } from 'fs';
 import type { Application, NextFunction, Request, Response } from 'express';
-;
 import { configGet } from '@helpers/config';
 import type { ValidationSchemas } from '@middleware/validate';
 import { makeValidator } from '@middleware/validate';
@@ -208,7 +207,9 @@ export async function loadRoutes(app: Application): Promise<void> {
     configGet('MAX_CONCURRENT_REQUESTS') ?? '10',
   );
 
-  const baseDir = path.join(process.cwd(), 'src', 'routes', apiVersion);
+  // replaced: const baseDir = path.join(process.cwd(), 'src', 'routes', apiVersion);
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const baseDir = path.join(moduleDir, '..', 'routes', apiVersion);
 
   await scanDirectory({
     dir: baseDir,
@@ -240,6 +241,7 @@ async function scanDirectory(args: {
   routeTree: Record<string, RouteNode>;
 }): Promise<void> {
   const { dir, routePath, routeTree } = args;
+  const routeExtension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
 
   const node =
     routeTree[routePath] ??
@@ -256,12 +258,16 @@ async function scanDirectory(args: {
   // Import handlers for method files
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    if (!METHOD_FILES.has(entry.name)) continue;
+    if (!entry.name.endsWith(routeExtension)) continue;
+
+    const method = entry.name.slice(0, -routeExtension.length) as HttpMethod;
+
+    if (!METHOD_FILES.has(`${method}.ts`)) continue;
 
     const fullPath = path.join(dir, entry.name);
-    const method = entry.name.replace('.ts', '') as HttpMethod;
 
     const mod = (await import(pathToFileURL(fullPath).href)) as RouteModule;
+
     if (typeof mod.default !== 'function') {
       throw new Error(`RouteLoader: ${fullPath} missing default export`);
     }

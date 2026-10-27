@@ -229,3 +229,30 @@ export async function revokeToken(
     await cacheStore.del(`auth:token:${tokenHash}`)
     clearTenantCache();
 }
+
+/**
+ * Revoke every active token belonging to a user.
+ *
+ * Logout must invalidate both the access token and its refresh token, including
+ * tokens held by the in-process/cache-backed authentication layer.
+ */
+export async function revokeUserTokens(userId: string): Promise<void> {
+    const activeTokens = await db
+        .select({ tokenHash: authTokens.tokenHash })
+        .from(authTokens)
+        .where(and(eq(authTokens.userId, userId), isNull(authTokens.revokedAt)))
+
+    if (activeTokens.length === 0) {
+        return
+    }
+
+    await db
+        .update(authTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(authTokens.userId, userId), isNull(authTokens.revokedAt)))
+
+    await Promise.all(
+        activeTokens.map(({ tokenHash }) => cacheStore.del(`auth:token:${tokenHash}`)),
+    )
+    clearTenantCache()
+}

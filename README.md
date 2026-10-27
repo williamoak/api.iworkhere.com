@@ -1,6 +1,6 @@
-# api.iworkhere.com
+# api-dev.iworkhere.com
 
-[![CI](https://github.com/williamoak/api.iworkhere.com/actions/workflows/ci.yml/badge.svg)](https://github.com/williamoak/api.iworkhere.com/actions/workflows/ci.yml)
+[![CI](https://github.com/williamoak/api-dev.iworkhere.com/actions/workflows/ci.yml/badge.svg)](https://github.com/williamoak/api-dev.iworkhere.com/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 A production-oriented TypeScript and Express API for the iworkhere applications. The service combines application-scoped authentication, tenant-aware persistence, generated route registration, localization, operational health endpoints, and a strongly tested domain layer around a PostgreSQL-compatible database. It also supports the JoinAUnion.ca experience with contact intake, synthetic traffic generation, and visit-journey analytics.
@@ -31,9 +31,9 @@ AI is used as a development-time partner for architecture exploration, implement
 
 ### Executive documents
 
-- <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Resume (September 2026)</a>
-- <a href="https://api.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Cover Letter (September 2026)</a>
-- <a href="https://api.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
+- <a href="https://api-dev.iworkhere.com/readme/William.Oak.Executive.Resume.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Resume (September 2026)</a>
+- <a href="https://api-dev.iworkhere.com/readme/William.Oak.Executive.Cover.Letter.Sept.2026.pdf" target="_blank" rel="noopener noreferrer">William Oak Executive Cover Letter (September 2026)</a>
+- <a href="https://api-dev.iworkhere.com/docs" target="_blank" rel="noopener noreferrer">Open the Swagger UI documentation</a>. Regenerate the contract with `npm run swagger:gen`.
 - [Read the user and integration guide](./docs/USER_GUIDE.md) for API usage, tenants, schema segmentation, Swagger, and a secret-safe environment variable inventory.
 - [Download the user guide as a PDF](./docs/USER_GUIDE.pdf).
 
@@ -154,7 +154,7 @@ Passkeys are an additional login method; password login and Google OAuth remain 
 
 The API stores only credential IDs, public keys, counters, transports, display names, timestamps, and revocation state in `passkey_credentials`. Private keys, raw assertions, and ceremony secrets are not stored. Redis records consumed ceremony identifiers so signed stateless ceremonies cannot be replayed.
 
-Configure `WEBAUTHN_CEREMONY_SECRET` and the optional ceremony TTL/key-rotation settings for the API deployment. WebAuthn origins and RP IDs are resolved per application from enabled `application_origins` rows: register `https://bill.iworkhere.com`, `https://michael.iworkhere.com`, or any future HTTPS client against its matching `applications.app_key`. The API's `APP_KEY=api.iworkhere.com` identifies the API service and does not restrict which registered client applications may use passkeys. Origins must be explicitly registered; never derive trust from an arbitrary request header.
+Configure `WEBAUTHN_CEREMONY_SECRET` and the optional ceremony TTL/key-rotation settings for the API deployment. WebAuthn origins and RP IDs are resolved per application from enabled `application_origins` rows: register `https://bill.iworkhere.com`, `https://michael.iworkhere.com`, or any future HTTPS client against its matching `applications.app_key`. The API's `APP_KEY=api-dev.iworkhere.com` identifies the API service and does not restrict which registered client applications may use passkeys. Origins must be explicitly registered; never derive trust from an arbitrary request header.
 
 ### Email verification and password reset
 
@@ -187,7 +187,7 @@ Route-level processing then adds validation, auth rate limits, required bearer a
 
 ```bash
 git clone <repo-url>
-cd api.iworkhere.com
+cd api-dev.iworkhere.com
 npm ci
 cp .env.example .env.development
 ```

@@ -36,9 +36,10 @@
  */
 
 import fs from 'fs';
-import { Pool } from 'pg';
+import { X509Certificate } from 'crypto';
+import { Pool, type PoolClient } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { configGet } from '@helpers/config.js';
+import { config, configGet } from '@helpers/config.js';
 import * as schema from '@db/schema';
 export { schema };
 
@@ -48,6 +49,9 @@ const DB_PORT = Number(configGet('DB_PORT'));
 const DB_NAME = configGet('DB_NAME');
 const DB_USER = configGet('DB_USER');
 const DB_CERT_DIR = configGet('DB_CERT_DIR');
+const DEBUG = ['1', 'true', 'yes', 'on'].includes(
+  config.DEBUG?.trim().toLowerCase() ?? '',
+);
 
 // === TLS configuration ===
 const ssl = {
@@ -58,6 +62,92 @@ const ssl = {
   servername: DB_HOST,
 };
 
+type CertificateSummary = {
+  subject?: string;
+  issuer?: string;
+  subjectAltName?: string;
+  validFrom?: string;
+  validTo?: string;
+  fingerprint256?: string;
+};
+
+function summarizeCertificate(pem: string | undefined): CertificateSummary | undefined {
+  if (!pem) return undefined;
+
+  try {
+    const certificate = new X509Certificate(pem);
+    return {
+      subject: certificate.subject,
+      issuer: certificate.issuer,
+      subjectAltName: certificate.subjectAltName,
+      validFrom: certificate.validFrom,
+      validTo: certificate.validTo,
+      fingerprint256: certificate.fingerprint256,
+    };
+  } catch (error) {
+    if (DEBUG) {
+      console.warn('[db] Unable to inspect configured TLS certificate', {
+        error: describeError(error),
+      });
+    }
+    return undefined;
+  }
+}
+
+function describeError(error: unknown) {
+  if (!(error instanceof Error)) return { value: String(error) };
+
+  const candidate = error as Error & {
+    code?: string;
+    errno?: string;
+    syscall?: string;
+    address?: string;
+    port?: number;
+    reason?: string;
+    host?: string;
+  };
+
+  return {
+    name: candidate.name,
+    message: candidate.message,
+    code: candidate.code,
+    errno: candidate.errno,
+    syscall: candidate.syscall,
+    address: candidate.address,
+    port: candidate.port,
+    reason: candidate.reason,
+    host: candidate.host,
+  };
+}
+
+function summarizePeerCertificate(client: unknown) {
+  const candidate = client as {
+    connection?: {
+      stream?: {
+        getPeerCertificate?: (detailed?: boolean) => {
+          subject?: unknown;
+          issuer?: unknown;
+          subjectaltname?: string;
+          valid_from?: string;
+          valid_to?: string;
+          fingerprint256?: string;
+        };
+      };
+    };
+  };
+  const certificate = candidate.connection?.stream?.getPeerCertificate?.(true);
+  if (!certificate || Object.keys(certificate).length === 0) return undefined;
+
+  return {
+    subject: certificate.subject,
+    issuer: certificate.issuer,
+    subjectAltName: certificate.subjectaltname,
+    validFrom: certificate.valid_from,
+    validTo: certificate.valid_to,
+    fingerprint256: certificate.fingerprint256,
+  };
+}
+
 // === Shared connection pool ===
 export const pool = new Pool({
   host: DB_HOST,
@@ -65,6 +155,25 @@ export const pool = new Pool({
   database: DB_NAME,
   user: DB_USER,
   ssl,
+});
+
+if (DEBUG) {
+  console.info('[db] Configured CockroachDB connection', {
+    host: DB_HOST,
+    port: DB_PORT,
+    database: DB_NAME,
+    user: DB_USER,
+    tlsServername: ssl.servername,
+    rejectUnauthorized: ssl.rejectUnauthorized,
+    certDir: DB_CERT_DIR,
+    clientCertificate: summarizeCertificate(ssl.cert),
+  });
+}
+
+pool.on('error', (error) => {
+  if (DEBUG) {
+    console.error('[db] Unexpected idle-client error', describeError(error));
+  }
 });
 
 // === Base Drizzle ORM Instance ===
@@ -96,7 +205,69 @@ export async function query(sql: string, params?: unknown[]) {
  * Used at server startup
  */
 export async function verifyConnection() {
-  const result = await pool.query('SELECT now()');
-  return { now: result.rows[0].now };
+  const startedAt = Date.now();
+  let client: PoolClient | undefined;
+
+  if (DEBUG) {
+    console.info('[db] Verifying CockroachDB connection', {
+      host: DB_HOST,
+      port: DB_PORT,
+      tlsServername: ssl.servername,
+      pool: {
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount,
+      },
+    });
+  }
+
+  try {
+    client = await pool.connect();
+    const result = await client.query('SELECT now()');
+
+    const peerCertificate = summarizePeerCertificate(client);
+
+    console.info(
+      `cockroach server connected using certificate SANs ${peerCertificate?.subjectAltName ?? 'unknown'}`,
+    );
+
+    if (DEBUG) {
+      console.info('[db] CockroachDB connection verified', {
+        elapsedMs: Date.now() - startedAt,
+        serverTime: result.rows[0]?.now,
+        peerCertificate,
+        pool: {
+          total: pool.totalCount,
+          idle: pool.idleCount,
+          waiting: pool.waitingCount,
+        },
+      });
+    }
+
+    return { now: result.rows[0].now };
+  } catch (error) {
+    if (DEBUG) {
+      console.error('[db] CockroachDB connection failed', {
+        elapsedMs: Date.now() - startedAt,
+        connection: {
+          host: DB_HOST,
+          port: DB_PORT,
+          database: DB_NAME,
+          user: DB_USER,
+          tlsServername: ssl.servername,
+          rejectUnauthorized: ssl.rejectUnauthorized,
+        },
+        pool: {
+          total: pool.totalCount,
+          idle: pool.idleCount,
+          waiting: pool.waitingCount,
+        },
+        error: describeError(error),
+      });
+    }
+    throw error;
+  } finally {
+    client?.release();
+  }
 }
 

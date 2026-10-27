@@ -98,7 +98,7 @@ The email verification workflow ensures users verify ownership of their email ad
 ### Endpoint: `GET /v1/auth/emailverify?token={token}`
 
 1. **User clicks email link**
-   - Browser navigates to: `https://api.iworkhere.com/v1/auth/emailverify?token=abc123xyz...`
+   - Browser navigates to: `https://api-dev.iworkhere.com/v1/auth/emailverify?token=abc123xyz...`
 
 2. **Query validation**
    - Middleware: `makeValidator`
@@ -210,7 +210,7 @@ SMTP_PASS=some-secret-goes-here
 SMTP_FROM_EMAIL=noreply@iworkhere.com
 
 # Application URL (for verification links)
-APP_URL=https://api.iworkhere.com
+APP_URL=https://api-dev.iworkhere.com
 
 # Token TTL (in seconds) - MUST BE SET
 EMAIL_VERIFY_TOKEN_TTL_SECONDS=3600  # Default: 1 hour

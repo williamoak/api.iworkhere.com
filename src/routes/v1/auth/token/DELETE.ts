@@ -35,7 +35,7 @@ import crypto from 'crypto'
 import { db } from '@services/dbService'
 import { authTokens } from '@db/schema'
 import { eq } from 'drizzle-orm'
-import { revokeToken } from '@services/auth/tokenService'
+import { revokeUserTokens, revokeToken } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
 import { z } from 'zod';
 
@@ -66,6 +66,13 @@ export default async function DELETE(
         }
         
         logger.log(`[DEBUG] [DELETE] Logout attribution check: res.locals.visitUserId=${res.locals.visitUserId}`);
+        const userId = res.locals.visitUserId || (req as any).auth?.userId;
+        if (userId) {
+            await revokeUserTokens(userId)
+        } else if (token) {
+            await revokeToken(token)
+        }
+
         if (!token) {
             // If no token, nothing to revoke.
             res.cookie("auth_token", "", {
@@ -77,8 +84,6 @@ export default async function DELETE(
             res.status(204).end();
             return;
         }
-
-        await revokeToken(token)
 
         res.clearCookie('auth_token', { path: '/' });
         logger.log('[DEBUG] [DELETE] auth_token cookie set to expire, secure:', process.env.NODE_ENV === 'production');

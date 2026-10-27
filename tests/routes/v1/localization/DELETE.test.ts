@@ -99,7 +99,7 @@ describe('DELETE /v1/localization', () => {
         setCachedSupportedLanguages(['eng']);
         vi.mocked(resolveAuthContext).mockResolvedValue({
             applicationId: 'api-app',
-            applicationKey: 'api.iworkhere.com',
+            applicationKey: 'api-dev.iworkhere.com',
         });
         vi.mocked(resolveUserIdForApplication).mockResolvedValue({
             userId: 'admin-user',

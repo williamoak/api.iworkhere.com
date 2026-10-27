@@ -13,7 +13,7 @@
  * future passkey authentication. Existing bearer sessions remain unchanged.
  *
  * @requestExample
- * { "app_key": "joinaunion.iworkhere.com", "credential_id": "credential-id" }
+ * { "app_key": "joinaunion-dev.iworkhere.com", "credential_id": "credential-id" }
  *
  * @response
  * { "revoked": true }

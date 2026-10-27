@@ -30,6 +30,7 @@ import type { Request, Response } from 'express'
 
 vi.mock('@services/auth/tokenService', () => ({
     revokeToken: vi.fn(),
+    revokeUserTokens: vi.fn(),
 }))
 
 vi.mock('@services/dbService', async () => {
@@ -44,7 +45,7 @@ vi.mock('@services/dbService', async () => {
  */
 
 import DELETE, { schema } from '@routes/v1/auth/token/DELETE'
-import { revokeToken } from '@services/auth/tokenService'
+import { revokeToken, revokeUserTokens } from '@services/auth/tokenService'
 import { AuthError } from '@services/auth/authContext'
 import { db } from '@services/dbService'
 
@@ -123,7 +124,7 @@ describe('DELETE /v1/auth/token', () => {
     })
 
     test('returns 204 on successful revoke', async () => {
-        ;(revokeToken as any).mockResolvedValue(undefined);
+        ;(revokeUserTokens as any).mockResolvedValue(undefined);
         ;(db.select as any).mockReturnValue({
             from: () => ({
                 where: () => ({
@@ -148,7 +149,7 @@ describe('DELETE /v1/auth/token', () => {
         await DELETE(req, res);
 
         expect(res.statusCode).toBe(204)
-        expect(revokeToken).toHaveBeenCalledWith('some-token')
+        expect(revokeUserTokens).toHaveBeenCalledWith('user-id')
     })
 
     test('handles logout when no token is present', async () => {
@@ -164,7 +165,7 @@ describe('DELETE /v1/auth/token', () => {
     });
 
     test('accepts token from req.body and performs pre-emptive user lookup', async () => {
-        ;(revokeToken as any).mockResolvedValue(undefined);
+        ;(revokeUserTokens as any).mockResolvedValue(undefined);
         ;(db.select as any).mockReturnValue({
             from: () => ({
                 where: () => ({
@@ -182,7 +183,7 @@ describe('DELETE /v1/auth/token', () => {
 
         expect(res.statusCode).toBe(204);
         expect(res.locals.visitUserId).toBe('user-from-token');
-        expect(revokeToken).toHaveBeenCalledWith('body-token-123');
+        expect(revokeUserTokens).toHaveBeenCalledWith('user-from-token');
     });
 
     test('handles pre-emptive user lookup exception gracefully', async () => {
@@ -202,7 +203,7 @@ describe('DELETE /v1/auth/token', () => {
     });
 
     test('translates AuthError to HTTP response', async () => {
-        ;(revokeToken as any).mockRejectedValue(
+        ;(revokeUserTokens as any).mockRejectedValue(
             new AuthError('INVALID_TOKEN', 'Token is invalid', 401)
         );
         ;(db.select as any).mockReturnValue({

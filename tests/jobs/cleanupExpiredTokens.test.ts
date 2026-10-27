@@ -1,5 +1,9 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanupExpiredTokens, startCleanupJob } from '@jobs/cleanupExpiredTokens'
+import {
+  cleanupExpiredCeremonies,
+  cleanupExpiredTokens,
+  startCleanupJob,
+} from '@jobs/cleanupExpiredTokens'
 import { db } from '@services/dbService'
 import { logger } from '@helpers/logger'
 
@@ -11,6 +15,11 @@ vi.mock('@services/dbService', async () => {
     return createDbServiceMock();
 })
 
+vi.mock('@db/schema', () => ({
+    emailVerificationTokens: { id: 'id-column', expiresAt: 'expires-at-column' },
+    consumedWebauthnCeremonies: { jti: 'jti-column', expiresAt: 'expires-at-column' },
+}))
+
 vi.mock('@helpers/config', () => ({
     configGet: vi.fn((key: string) => {
         if (key === 'DEBUG') return 'true';
@@ -20,6 +29,14 @@ vi.mock('@helpers/config', () => ({
         DEBUG: 'true'
     }
 }))
+
+/** Builds the delete(...).where(...).returning(...) chain, resolving to the given rows. */
+function mockDeleteRows(rows: Array<{ id?: string; jti?: string }>) {
+    const returning = vi.fn().mockResolvedValue(rows)
+    const where = vi.fn(() => ({ returning }))
+    ;(db.delete as any).mockReturnValue({ where })
+    return { where, returning }
+}
 
 /**
  * Test suite
@@ -36,38 +53,31 @@ describe('cleanupExpiredTokens', () => {
 
     describe('cleanupExpiredTokens', () => {
         test('deletes expired tokens from database', async () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
+            const { where, returning } = mockDeleteRows([])
 
             await cleanupExpiredTokens()
 
             expect(db.delete).toHaveBeenCalled()
-            expect(mockDelete.where).toHaveBeenCalled()
+            expect(where).toHaveBeenCalled()
+            expect(returning).toHaveBeenCalled()
         })
 
-        test('returns 0 on successful cleanup', async () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
+        test('returns the number of deleted tokens', async () => {
+            mockDeleteRows([{ id: 'a' }, { id: 'b' }])
 
             const result = await cleanupExpiredTokens()
 
-            expect(result).toBe(0)
+            expect(result).toBe(2)
         })
 
-        test('handles database errors gracefully', async () => {
+        test('rethrows database errors after logging them', async () => {
             ;(db.delete as any).mockImplementation(() => {
                 throw new Error('Database error')
             })
 
             const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
-            const result = await cleanupExpiredTokens()
-
-            expect(result).toBe(0)
+            await expect(cleanupExpiredTokens()).rejects.toThrow('Database error')
             expect(loggerSpy).toHaveBeenCalledWith(
                 expect.stringContaining('cleanupExpiredTokens'),
                 expect.any(Error)
@@ -77,63 +87,87 @@ describe('cleanupExpiredTokens', () => {
         })
 
         test('logs successful cleanup', async () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
+            mockDeleteRows([{ id: 'a' }])
 
-            const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+            const logSpy = vi.spyOn(logger, 'log').mockImplementation(() => {})
 
             await cleanupExpiredTokens()
 
-            expect(consoleSpy).toHaveBeenCalledWith(
+            expect(logSpy).toHaveBeenCalledWith(
                 expect.stringContaining('cleanupExpiredTokens')
             )
 
-            consoleSpy.mockRestore()
+            logSpy.mockRestore()
+        })
+    })
+
+    describe('cleanupExpiredCeremonies', () => {
+        test('deletes consumed ceremonies whose expiry is older than the grace period', async () => {
+            vi.setSystemTime(new Date('2026-10-22T12:00:00Z'))
+            const { where } = mockDeleteRows([{ jti: 'a' }])
+
+            const result = await cleanupExpiredCeremonies()
+
+            expect(result).toBe(1)
+            expect(db.delete).toHaveBeenCalledTimes(1)
+            expect(where).toHaveBeenCalledTimes(1)
+        })
+
+        test('returns 0 when no records are expired', async () => {
+            mockDeleteRows([])
+
+            await expect(cleanupExpiredCeremonies()).resolves.toBe(0)
+        })
+
+        test('rethrows database errors after logging them', async () => {
+            ;(db.delete as any).mockImplementation(() => {
+                throw new Error('Database error')
+            })
+
+            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
+
+            await expect(cleanupExpiredCeremonies()).rejects.toThrow('Database error')
+            expect(loggerSpy).toHaveBeenCalledWith(
+                expect.stringContaining('cleanupExpiredCeremonies'),
+                expect.any(Error)
+            )
+
+            loggerSpy.mockRestore()
         })
     })
 
     describe('startCleanupJob', () => {
-        test('runs cleanup immediately on startup', () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
-
-            vi.clearAllMocks()
+        test('runs both cleanups immediately on startup', () => {
+            mockDeleteRows([])
 
             const intervalId = startCleanupJob()
 
-            // db.delete should be called immediately (not just scheduled)
-            expect(db.delete).toHaveBeenCalled()
+            // Both tables use db.delete, so both cleanups run synchronously up to the first await.
+            expect(db.delete).toHaveBeenCalledTimes(2)
             clearInterval(intervalId)
         })
 
-        test('runs cleanup on specified interval', () => {
-            const mockDelete = {
-                where: vi.fn().mockResolvedValue(undefined),
-            }
-            ;(db.delete as any).mockReturnValue(mockDelete)
+        test('runs both cleanups again on each interval', async () => {
+            mockDeleteRows([])
 
-            vi.clearAllMocks()
-
-            const intervalMs = 5000 // 5 seconds
+            const intervalMs = 5000
             const intervalId = startCleanupJob(intervalMs)
 
-            // First call is immediate, second is scheduled
-            expect(db.delete).toHaveBeenCalledTimes(1)
-
-            // Fast-forward time to trigger interval
-            vi.advanceTimersByTime(intervalMs)
-
-            // Should be called again
+            // Startup run: one email-token cleanup and one ceremony cleanup.
             expect(db.delete).toHaveBeenCalledTimes(2)
+
+            await vi.advanceTimersByTimeAsync(intervalMs)
+
+            expect(db.delete).toHaveBeenCalledTimes(4)
 
             clearInterval(intervalId)
         })
 
-        test('handles errors during interval execution', () => {
+        test('rejects an interval below one second', () => {
+            expect(() => startCleanupJob(999)).toThrow(RangeError)
+        })
+
+        test('keeps the scheduler running after a failed interval', async () => {
             ;(db.delete as any).mockImplementation(() => {
                 throw new Error('Database error')
             })
@@ -141,63 +175,46 @@ describe('cleanupExpiredTokens', () => {
             const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {})
 
             const intervalId = startCleanupJob(5000)
-
-            // Clear initial startup calls
+            await vi.advanceTimersByTimeAsync(0)
             loggerSpy.mockClear()
 
-            // Advance time to trigger interval
-            vi.advanceTimersByTime(5000)
+            await vi.advanceTimersByTimeAsync(5000)
 
-            // Error should be logged
-            expect(loggerSpy).toHaveBeenCalled()
+            // Both cleanups log their own failure on each run.
+            expect(loggerSpy).toHaveBeenCalledWith(
+                expect.stringContaining('cleanupExpiredTokens'),
+                expect.any(Error)
+            )
+            expect(loggerSpy).toHaveBeenCalledWith(
+                expect.stringContaining('cleanupExpiredCeremonies'),
+                expect.any(Error)
+            )
 
             clearInterval(intervalId)
             loggerSpy.mockRestore()
         })
 
-        test('swallows a rejected startup cleanup without an unhandled rejection', async () => {
-            ;(db.delete as any).mockImplementation(() => {
-                throw new Error('Database error')
+        test('skips an overlapping run while the previous one is still active', async () => {
+            let release!: () => void
+            const pending = new Promise<unknown[]>((resolve) => {
+                release = () => resolve([])
             })
-            // Throwing from the error logger is the only way cleanupExpiredTokens can reject.
-            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {
-                throw new Error('logger failure')
-            })
-            const unhandled = vi.fn()
-            process.on('unhandledRejection', unhandled)
+            const returning = vi.fn(() => pending)
+            ;(db.delete as any).mockReturnValue({ where: vi.fn(() => ({ returning })) })
+
+            const logSpy = vi.spyOn(logger, 'log').mockImplementation(() => {})
 
             const intervalId = startCleanupJob(5000)
+            await vi.advanceTimersByTimeAsync(5000)
+
+            expect(logSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Previous cleanup still running')
+            )
+
+            release()
             await vi.advanceTimersByTimeAsync(0)
-
-            expect(loggerSpy).toHaveBeenCalledTimes(1)
-            expect(unhandled).not.toHaveBeenCalled()
-
             clearInterval(intervalId)
-            process.off('unhandledRejection', unhandled)
+            logSpy.mockRestore()
         })
-
-        test('swallows a rejected interval cleanup and keeps the job scheduled', async () => {
-            ;(db.delete as any).mockImplementation(() => {
-                throw new Error('Database error')
-            })
-            const loggerSpy = vi.spyOn(logger, 'error').mockImplementation(() => {
-                throw new Error('logger failure')
-            })
-            const unhandled = vi.fn()
-            process.on('unhandledRejection', unhandled)
-
-            const intervalId = startCleanupJob(5000)
-            await vi.advanceTimersByTimeAsync(5000)
-            await vi.advanceTimersByTimeAsync(5000)
-
-            // Startup run + two interval runs, each rejecting and each swallowed.
-            expect(db.delete).toHaveBeenCalledTimes(3)
-            expect(loggerSpy).toHaveBeenCalledTimes(3)
-            expect(unhandled).not.toHaveBeenCalled()
-
-            clearInterval(intervalId)
-            process.off('unhandledRejection', unhandled)
-        })
-
     })
 })

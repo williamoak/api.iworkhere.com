@@ -1,5 +1,5 @@
 /**
- * Registration Handler for api.iworkhere.com
+ * Registration Handler for api-dev.iworkhere.com
  */
 
 window.RegistrationManager = {

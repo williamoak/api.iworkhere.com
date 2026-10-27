@@ -24,69 +24,100 @@ import { logger } from '@helpers/logger';
  *   "environment": ["CORS_ALLOWED_ORIGINS", "DEBUG"]
  * }
  */
-import express from "express";
-import path from "path";
-import cookieParser from "cookie-parser";
-import cors, { type CorsOptions } from "cors";
-import { loadRoutes } from "@loaders/routeLoader";
-import adminRoutes from "@src/admin/adminApp";
+import express, { type Request } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import { loadRoutes } from '@loaders/routeLoader';
+import adminRoutes from '@src/admin/adminApp';
 
-import { applyGlobalMiddleware } from "@middleware/index";
-import { welcomePage } from "@src/admin/client/welcomePage";
+import { applyGlobalMiddleware } from '@middleware/index';
+import { welcomePage } from '@src/admin/client/welcomePage';
 
-import { configGet } from "@helpers/config";
+import { config, configGet } from '@helpers/config';
 
-const DEBUG = configGet("DEBUG") === "true";
-const AUTH_ME_DEBUG = process.env.AUTH_ME_DEBUG === 'true' || process.env.AUTH_ME_DEBUG === '1';
+const DEBUG = configGet('DEBUG') === 'true';
+const AUTH_ME_DEBUG =
+  process.env.AUTH_ME_DEBUG === 'true' || process.env.AUTH_ME_DEBUG === '1';
 
-const allowedOriginRegex = /^https:\/\/([a-z0-9-]+)\.iworkhere\.com$/i;
 const isLocalhost = (origin: string) =>
-    origin === "http://localhost:19006" || // Expo web default
-    origin === "http://localhost:8081" ||  // Metro default
-    /^http:\/\/localhost:\d+$/.test(origin);
+  origin === 'http://localhost:19006' || // Expo web default
+  origin === 'http://localhost:8081' || // Metro default
+  /^http:\/\/localhost:\d+$/.test(origin);
 
 const explicitAllowedOrigins = new Set(
-    (process.env.CORS_ALLOWED_ORIGINS ?? "")
-        .split(",")
-        .map((origin) => origin.trim())
-        .filter(Boolean)
+  (config.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 );
+const configuredApiOrigin = (() => {
+  const appKey = (config.APP_KEY ?? '').trim();
+  if (!appKey) {
+    return null;
+  }
+
+  try {
+    return new URL(`https://${appKey}`).origin;
+  } catch {
+    return null;
+  }
+})();
 
 const publicReadmeDocuments = [
-    "William.Oak.Executive.Resume.Sept.2026.pdf",
-    "William.Oak.Executive.Cover.Letter.Sept.2026.pdf",
+  'William.Oak.Executive.Resume.Sept.2026.pdf',
+  'William.Oak.Executive.Cover.Letter.Sept.2026.pdf',
 ] as const;
 
 function escapeHtml(value: unknown): string {
-    return String(value).replace(/[&<>"']/g, (character) => {
-        const entities: Record<string, string> = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;',
-        };
-        return entities[character];
-    });
+  return String(value).replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character];
+  });
 }
 
-const corsOrigin: NonNullable<CorsOptions["origin"]> = (origin, callback) => {
-    if (!origin || origin === "null") {
-        callback(null, true);
-        return;
-    }
+const corsOrigin = (
+  req: Request,
+  origin: string | undefined,
+  callback: (error: Error | null, allow?: boolean) => void,
+) => {
+  if (!origin || origin === 'null') {
+    callback(null, true);
+    return;
+  }
 
-    if (explicitAllowedOrigins.has(origin)) {
-        callback(null, true);
-        return;
-    }
+  if (explicitAllowedOrigins.has(origin)) {
+    callback(null, true);
+    return;
+  }
 
-    if (allowedOriginRegex.test(origin) || (DEBUG && isLocalhost(origin))) {
-        callback(null, true);
-        return;
-    }
+  if (configuredApiOrigin && origin === configuredApiOrigin) {
+    callback(null, true);
+    return;
+  }
 
-    callback(new Error(`CORS blocked for origin: ${origin}`), false);
+  let isCurrentHost = false;
+  try {
+    const requestOrigin = new URL(`${req.protocol}://${req.get('host')}`).origin;
+    isCurrentHost = new URL(origin).origin === requestOrigin;
+  } catch {
+    isCurrentHost = false;
+  }
+
+  if (isCurrentHost || (DEBUG && isLocalhost(origin))) {
+    callback(null, true);
+    return;
+  }
+
+  callback(new Error(`CORS blocked for origin: ${origin}`), false);
 };
 
 /**
@@ -94,157 +125,186 @@ const corsOrigin: NonNullable<CorsOptions["origin"]> = (origin, callback) => {
  * Shared by server.ts (production) and tests.
  */
 export async function createBaseApp() {
-    const app = express();
-    app.set("trust proxy", true);
+  const app = express();
+  app.set('trust proxy', true);
 
-    // CORS must come first
-    app.use(cors({
-        origin: corsOrigin,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-            "Content-Type",
-            "Authorization",
-            "X-Tenant",
-            "X-Device-Id",
-            "X-Lang",
-            "x-lang",
-            "X-Language",
-            "x-language",
-            "X-Locale",
-            "x-locale",
-            "X-Language-Hint",
-            "x-language-hint",
-            "Language-Hint",
-            "language-hint",
-            "X-Lang-Hint",
-            "x-lang-hint",
-            "Lang-Hint",
-            "lang-hint",
-            "Language",
-            "language",
-            "Lang",
-            "lang",
-            "Locale",
-            "locale",
-            "Accept-Language",
-            "accept-language",
-            "Content-Language",
-            "content-language",
-            "X-Log-Visit",
-            "x-log-visit",
-            "X-Skip-Logging",
-            "x-skip-logging",
-            "X-No-Log",
-            "x-no-log",
-            "X-Audit-Log",
-            "x-audit-log",
-            "X-Log",
-            "x-log"
-        ],
-        credentials: true
-    }));
+  // CORS must come first
+  app.use((req, res, next) =>
+    cors({
+      origin: (origin, callback) => corsOrigin(req, origin, callback),
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Tenant',
+        'X-Device-Id',
+        'X-Lang',
+        'x-lang',
+        'X-Language',
+        'x-language',
+        'X-Locale',
+        'x-locale',
+        'X-Language-Hint',
+        'x-language-hint',
+        'Language-Hint',
+        'language-hint',
+        'X-Lang-Hint',
+        'x-lang-hint',
+        'Lang-Hint',
+        'lang-hint',
+        'Language',
+        'language',
+        'Lang',
+        'lang',
+        'Locale',
+        'locale',
+        'Accept-Language',
+        'accept-language',
+        'Content-Language',
+        'content-language',
+        'X-Log-Visit',
+        'x-log-visit',
+        'X-Skip-Logging',
+        'x-skip-logging',
+        'X-No-Log',
+        'x-no-log',
+        'X-Audit-Log',
+        'x-audit-log',
+        'X-Log',
+        'x-log',
+      ],
+      credentials: true,
+    })(req, res, next),
+  );
 
-    // Body parsing
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: true }));
-    app.use(cookieParser());
+  // Body parsing
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
 
-    for (const documentName of publicReadmeDocuments) {
-        app.get(`/readme/${documentName}`, (_req, res) => {
-            res.sendFile(path.resolve(process.cwd(), "readme", documentName));
-        });
-    }
-
-    applyGlobalMiddleware(app);
-    app.use(express.static("public"));
-    app.use('/admin/assets', express.static(path.resolve('src/admin/client/assets')));
-    app.use('/coverage', express.static(path.resolve('coverage')));
-
-    if (DEBUG) {
-        logger.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);
-    }
-    if (AUTH_ME_DEBUG) {
-        // Diagnostic logging for JSON requests (debug only).
-        app.use((req, _res, next) => {
-            if (req.headers["content-type"]?.includes("application/json")) {
-                const forwardedFor = req.headers["x-forwarded-for"];
-                const realIp = req.headers["x-real-ip"];
-                const requestId = req.headers["x-request-id"];
-                const cfRay = req.headers["cf-ray"];
-                let bodyText = "<no body>";
-                if (req.body !== undefined) {
-                    try {
-                        bodyText = JSON.stringify(req.body, null, 2);
-                    } catch {
-                        bodyText = "<unserializable body>";
-                    }
-                }
-
-                logger.log("----------------------------------------");
-                logger.log("--- JSON REQUEST ---");
-                logger.log(`${req.method} ${req.originalUrl}`);
-                logger.log(`host=${req.hostname}`);
-                logger.log(`ip=${req.ip}`);
-                if (forwardedFor) {
-                    logger.log(`x-forwarded-for=${forwardedFor}`);
-                }
-                if (realIp) {
-                    logger.log(`x-real-ip=${realIp}`);
-                }
-                if (requestId) {
-                    logger.log(`x-request-id=${requestId}`);
-                }
-                if (cfRay) {
-                    logger.log(`cf-ray=${cfRay}`);
-                }
-                logger.log(`user-agent=${req.get("user-agent") ?? ""}`);
-                logger.log(`origin=${req.get("origin") ?? ""}`);
-                logger.log(`referer=${req.get("referer") ?? ""}`);
-                logger.log(`body=${bodyText}`);
-                logger.log("----------------------------------------");
-            }
-            next();
-        });
-    }
-
-    // Routes
-    app.get('/', (req, res) => {
-        logger.log("Root route / hit!");
-        res.set('Cache-Control', 'no-store');
-        res.send(welcomePage(!!req.auth));
+  for (const documentName of publicReadmeDocuments) {
+    app.get(`/readme/${documentName}`, (_req, res) => {
+      res.sendFile(path.resolve(process.cwd(), 'readme', documentName));
     });
+  }
 
-    // Handle verification redirects
-    app.get('/verification-success', (_req, res) => {
-        res.send(`
+  app.get('/favicon.ico', (_req, res) => res.status(204).end());
+  app.use(express.static('public'));
+
+  // Resolve administration assets according to the runtime environment.
+  //
+  // Development:
+  //   /data/websites/iworkhere/api-dev.iworkhere.com/src/admin/client/assets
+  //
+  // Production:
+  //   /data/websites/iworkhere/api-production-test/admin/assets
+
+  const configuredAdminAssetsPath = process.env.ADMIN_ASSETS_DIR
+    ? path.resolve(process.env.ADMIN_ASSETS_DIR)
+    : undefined;
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const adminAssetCandidates = [
+    configuredAdminAssetsPath,
+    process.env.NODE_ENV === 'production'
+      ? path.resolve(process.cwd(), 'admin/assets')
+      : undefined,
+    path.resolve(process.cwd(), 'src/admin/client/assets'),
+    path.resolve(moduleDirectory, 'admin/client/assets'),
+    path.resolve(moduleDirectory, '../src/admin/client/assets'),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const adminAssetsPath =
+    adminAssetCandidates.find((candidate) => fs.existsSync(candidate)) ??
+    adminAssetCandidates[0];
+
+  app.use('/admin/assets', express.static(adminAssetsPath));
+  app.use('/coverage', express.static(path.resolve('coverage')));
+  applyGlobalMiddleware(app);
+
+  if (DEBUG) {
+    logger.log(`[DEBUG] AUTH_ME_DEBUG is: ${AUTH_ME_DEBUG}`);
+  }
+  if (AUTH_ME_DEBUG) {
+    // Diagnostic logging for JSON requests (debug only).
+    app.use((req, _res, next) => {
+      if (req.headers['content-type']?.includes('application/json')) {
+        const forwardedFor = req.headers['x-forwarded-for'];
+        const realIp = req.headers['x-real-ip'];
+        const requestId = req.headers['x-request-id'];
+        const cfRay = req.headers['cf-ray'];
+        let bodyText = '<no body>';
+        if (req.body !== undefined) {
+          try {
+            bodyText = JSON.stringify(req.body, null, 2);
+          } catch {
+            bodyText = '<unserializable body>';
+          }
+        }
+
+        logger.log('----------------------------------------');
+        logger.log('--- JSON REQUEST ---');
+        logger.log(`${req.method} ${req.originalUrl}`);
+        logger.log(`host=${req.hostname}`);
+        logger.log(`ip=${req.ip}`);
+        if (forwardedFor) {
+          logger.log(`x-forwarded-for=${forwardedFor}`);
+        }
+        if (realIp) {
+          logger.log(`x-real-ip=${realIp}`);
+        }
+        if (requestId) {
+          logger.log(`x-request-id=${requestId}`);
+        }
+        if (cfRay) {
+          logger.log(`cf-ray=${cfRay}`);
+        }
+        logger.log(`user-agent=${req.get('user-agent') ?? ''}`);
+        logger.log(`origin=${req.get('origin') ?? ''}`);
+        logger.log(`referer=${req.get('referer') ?? ''}`);
+        logger.log(`body=${bodyText}`);
+        logger.log('----------------------------------------');
+      }
+      next();
+    });
+  }
+
+  // Routes
+  app.get('/', (req, res) => {
+    logger.log('Root route / hit!');
+    res.set('Cache-Control', 'no-store');
+    res.send(welcomePage(!!req.auth));
+  });
+
+  // Handle verification redirects
+  app.get('/verification-success', (_req, res) => {
+    res.send(`
             <!DOCTYPE html>
             <html>
             <head><title>Success</title></head>
             <body><h1>Verification Successful!</h1><p>You can now log in.</p><a href="/">Go to Login</a></body>
             </html>
         `);
-    });
+  });
 
-    app.get('/verification-error', (req, res) => {
-        const error = escapeHtml(req.query.error || 'Unknown error');
-        res.send(`
+  app.get('/verification-error', (req, res) => {
+    const error = escapeHtml(req.query.error || 'Unknown error');
+    res.send(`
             <!DOCTYPE html>
             <html>
             <head><title>Error</title></head>
             <body><h1>Verification Failed</h1><p>Error: ${error}</p><a href="/">Go to Login</a></body>
             </html>
         `);
-    });
-    await loadRoutes(app);
-    app.use('/admin', adminRoutes);
+  });
+  await loadRoutes(app);
+  app.use('/admin', adminRoutes);
 
-    if (DEBUG) {
-        logger.dir(app.locals.routeTree?.["/v1/health"], { depth: 10 });
-    }
+  if (DEBUG) {
+    logger.dir(app.locals.routeTree?.['/v1/health'], { depth: 10 });
+  }
 
-    return app;
+  return app;
 }
 
 export async function createTestApp() {
-    return createBaseApp();
+  return createBaseApp();
 }

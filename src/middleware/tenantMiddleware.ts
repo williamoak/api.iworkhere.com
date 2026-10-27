@@ -27,16 +27,37 @@
  */
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '@helpers/logger';
-import { isAllowedTenantSchemaName } from '@db/tenantSchema';
+import { isValidTenantSchemaName } from '@db/tenantSchema';
+import { config } from '@helpers/config';
 
 
 export function tenantMiddleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
+    const debugEnabled = process.env.TENANT_MIDDLEWARE_DEBUG === 'true';
+    const debug = (message: string, details: Record<string, unknown> = {}) => {
+        if (debugEnabled) {
+            logger.log(`[TENANT_RESOLVER]: ${message} ${JSON.stringify(details)}`, true);
+        }
+    };
+
     // 1. Try determining tenant from X-Tenant header first
     let tenant = 'localhost';
+    let tenantSource = 'default:localhost';
     const xTenant = req.headers['x-tenant'] as string;
+    debug('request received', {
+        method: req.method,
+        path: req.path,
+        hostname: req.hostname,
+        origin: req.headers.origin || null,
+        referer: req.headers.referer || null,
+        xTenantPresent: Boolean(xTenant),
+        appKeyPresent: Boolean(req.query.app_key || (req.body as any)?.app_key),
+    });
+
     if (xTenant) {
         tenant = xTenant.split('.')[0];
+        tenantSource = 'x-tenant';
+        debug('tenant extracted from X-Tenant', { rawPrefix: tenant });
     } else {
         // 2. Try determining tenant from headers (Origin, Referer, Access-Control-Allow-Origin)
         const originHeader = (req.headers['access-control-allow-origin'] as string) ||
@@ -45,8 +66,16 @@ export function tenantMiddleware() {
                              req.headers.referer || 
                              '';
         
-        logger.log(`[DEBUG] [TENANT_RESOLVER] Request headers for tenant check: Host=${req.hostname}, Origin=${req.headers.origin}, Referer=${req.headers.referer}, ACAO=${req.headers['access-control-allow-origin'] || req.headers['access-control-allow_origin']}`);
-        logger.log(`[DEBUG] [TENANT_RESOLVER] All headers: ${JSON.stringify(req.headers)}`);
+        debug('headers selected for tenant lookup', {
+            originHeader: originHeader || null,
+            source: req.headers['access-control-allow-origin'] || req.headers['access-control-allow_origin']
+                ? 'access-control-allow-origin'
+                : req.headers.origin
+                    ? 'origin'
+                    : req.headers.referer
+                        ? 'referer'
+                        : 'none',
+        });
 
         if (originHeader) {
             // Robust extraction: find the part between "https://" or "http://" and the first "."
@@ -54,54 +83,83 @@ export function tenantMiddleware() {
             const protocolMatch = originHeader.match(/https?:\/\/([^\.]+)\./);
             if (protocolMatch) {
                 tenant = protocolMatch[1];
+                tenantSource = 'origin-or-referer:protocol';
             } else {
                 const domainParts = originHeader.replace(/^https?:\/\//, '').split('.');
                 if (domainParts.length > 2) {
                     tenant = domainParts[0];
-                } else if (domainParts.length === 2 && domainParts[0] !== 'api' && domainParts[0] !== 'localhost' && domainParts[0] !== 'iworkhere') {
+                    tenantSource = 'origin-or-referer:hostname';
+                } else if (domainParts.length === 2) {
                     tenant = domainParts[0];
+                    tenantSource = 'origin-or-referer:domain';
                 }
             }
+            debug('tenant extracted from origin/referer', { tenant, tenantSource });
         }
+    }
+
+    // The API hostname identifies the service, not a tenant. In particular,
+    // names such as api-dev contain a hyphen and cannot be PostgreSQL schema
+    // identifiers. Auth requests can resolve their application from app_key,
+    // Origin, or Referer instead.
+    const hostname = req.hostname.toLowerCase();
+    const hostnameLabel = hostname.split('.')[0];
+    // Use the layered configuration so API-host detection remains correct when
+    // dotenv values are loaded after module imports or when a proxy rewrites
+    // the request hostname.
+    const configuredApiHostname = (config.APP_KEY || '').trim().toLowerCase().split('/')[0];
+    const isConfiguredApiHostname = configuredApiHostname !== '' && (
+      hostname === configuredApiHostname || hostnameLabel === configuredApiHostname.split('.')[0]
+    );
+    const configuredProxyHostname = configuredApiHostname.includes('.')
+      ? `public.${configuredApiHostname.split('.').slice(1).join('.')}`
+      : '';
+    const isConfiguredProxyHostname = configuredProxyHostname !== '' && hostname === configuredProxyHostname;
+    const isApiTenant = tenantSource !== 'x-tenant' && (tenant === 'api' || tenant.startsWith('api-'));
+    const isApiHostname = isConfiguredApiHostname || hostnameLabel === 'api' || hostnameLabel.startsWith('api-');
+
+    if (isApiHostname || isApiTenant || isConfiguredProxyHostname) {
+      tenant = 'public';
+      tenantSource = 'api-hostname:public';
     }
 
     // If still not determined or default, check hostname as fallback
     if (tenant === 'localhost') {
-        const hostname = req.hostname;
         const parts = hostname.split('.');
         
         if (parts.length > 2) {
             tenant = parts[0];
-        } else if (parts.length === 2 && parts[0] !== 'api' && parts[0] !== 'localhost') {
+            tenantSource = 'request-hostname';
+        } else if (parts.length === 2) {
             tenant = parts[0];
+            tenantSource = 'request-domain';
         }
     }
 
-    // 3. Fallback to app_key if tenant is still generic
-    if (tenant === 'localhost' || tenant === 'api' || tenant === 'public' || tenant === 'iworkhere') {
+    // 3. Fallback to app_key when no tenant could be derived from the request.
+    if (tenant === 'localhost') {
         const appKey = req.query.app_key as string || (req.body as any)?.app_key;
         if (appKey) {
             tenant = appKey.split('.')[0];
+            tenantSource = 'app_key';
         }
     }
 
-    // 3. Final safety: if it's still generic or the main domain, default to 'localhost'
-    if (tenant === 'api' || tenant === 'public' || tenant === 'iworkhere') {
-        logger.log(`[DEBUG] [TENANT_RESOLVER] Tenant defaulted to localhost. Hostname: ${req.hostname}, Headers: Origin=${req.headers.origin}, Referer=${req.headers.referer}`);
-        tenant = 'localhost';
-    }
-    
-    // Safety check: ignore 'accounts' or common third-party domains
-    if (tenant === 'accounts' || tenant === 'google') tenant = 'public';
-
+    debug('tenant before normalization', { tenant, tenantSource, hostname, hostnameLabel, isApiHostname });
     tenant = tenant.toLowerCase();
-    if (!isAllowedTenantSchemaName(tenant)) {
+    if (!isValidTenantSchemaName(tenant)) {
+      debug('tenant rejected', {
+          tenant,
+          tenantSource,
+          reason: 'invalid tenant schema name',
+      });
       return res.status(400).json({
         error: 'INVALID_TENANT',
-        message: 'Tenant identifier is invalid or not configured',
+        message: 'Tenant identifier is invalid(1)',
       });
     }
 
+    debug('tenant accepted', { tenant, tenantSource });
     logger.log(`Tenant determined: ${tenant}`);
     (req as any).tenant = tenant;
 

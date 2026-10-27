@@ -8,7 +8,7 @@ Getting started
 
 ```bash
 git clone <repo-url>
-cd api.iworkhere.com
+cd api-dev.iworkhere.com
 npm ci
 ```
 

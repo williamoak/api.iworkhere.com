@@ -22,6 +22,7 @@ vi.mock('@helpers/config', () => ({
         if (key === 'HOST_IP') return '127.0.0.1';
         return '';
     }),
+    configGetNumber: vi.fn((_key: string, options?: { defaultValue?: number }) => options?.defaultValue),
 }));
 
 describe('Server Bootstrap', () => {

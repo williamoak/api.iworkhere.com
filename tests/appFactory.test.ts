@@ -19,7 +19,9 @@ async function testRoute(app: any, path: string, options: RequestInit = {}) {
 
 // --- MOCKS (hoisted by Vitest) ---
 
-const corsMock = vi.fn(() => (_req: any, _res: any, next: any) => next());
+const corsMock = vi.fn((_options: any) => (_req: any, _res: any, next: any) => {
+    next();
+});
 
 vi.mock("cors", () => ({
     default: corsMock,
@@ -34,6 +36,9 @@ vi.mock("@middleware/tenantTransaction", () => ({
 }));
 
 vi.mock("@helpers/config", () => ({
+    config: new Proxy({}, {
+        get: (_target, key: string) => process.env[key],
+    }),
     configGet: vi.fn((key: string) => (key === "DEBUG" ? (process.env.DEBUG ?? "false") : "false")),
     configGetNumber: vi.fn(() => 3600),
 }));
@@ -73,7 +78,8 @@ describe("appFactory", () => {
         process.env.CORS_ALLOWED_ORIGINS = "https://docs.partner.example";
 
         const { createBaseApp } = await import("@src/appFactory");
-        await createBaseApp();
+        const app = await createBaseApp();
+        await testRoute(app, "/", { headers: { origin: "https://docs.partner.example" } });
 
         const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
@@ -93,6 +99,35 @@ describe("appFactory", () => {
         delete process.env.CORS_ALLOWED_ORIGINS;
     });
 
+    it("allows the configured API origin when a proxy supplies another host", async () => {
+        vi.resetModules();
+        corsMock.mockClear();
+
+        process.env.APP_KEY = "api-dev.iworkhere.com";
+
+        const { createBaseApp } = await import("@src/appFactory");
+        const app = await createBaseApp();
+        await testRoute(app, "/", {
+            headers: { origin: "https://api-dev.iworkhere.com" },
+        });
+        const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
+        expect(corsOptions).toBeDefined();
+
+        await new Promise<void>((resolve, reject) => {
+            corsOptions.origin(
+                "https://api-dev.iworkhere.com",
+                (err: unknown, allowed?: boolean) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    expect(allowed).toBe(true);
+                    resolve();
+                },
+            );
+        });
+    });
+
     it("rejects non-allowlisted external CORS origin", async () => {
         vi.resetModules();
         corsMock.mockClear();
@@ -100,7 +135,8 @@ describe("appFactory", () => {
         process.env.CORS_ALLOWED_ORIGINS = "https://docs.partner.example";
 
         const { createBaseApp } = await import("@src/appFactory");
-        await createBaseApp();
+        const app = await createBaseApp();
+        await testRoute(app, "/", { headers: { origin: "https://evil.example" } });
 
         const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
@@ -117,21 +153,27 @@ describe("appFactory", () => {
         delete process.env.CORS_ALLOWED_ORIGINS;
     });
 
-    it("allows iworkhere subdomain origin via regex rule", async () => {
+    it("allows the current request host as an origin", async () => {
         vi.resetModules();
         corsMock.mockClear();
 
         delete process.env.CORS_ALLOWED_ORIGINS;
 
         const { createBaseApp } = await import("@src/appFactory");
-        await createBaseApp();
+        const app = await createBaseApp();
+        const server = http.createServer(app);
+        await new Promise<void>((resolve) => server.listen(0, resolve));
+        const address = server.address() as any;
+        const requestOrigin = `http://localhost:${address.port}`;
+        await fetch(requestOrigin, { headers: { origin: requestOrigin } });
+        await new Promise((resolve) => server.close(resolve));
 
         const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
         expect(typeof corsOptions.origin).toBe("function");
 
         await new Promise<void>((resolve, reject) => {
-            corsOptions.origin("https://docs.iworkhere.com", (err: unknown, allowed?: boolean) => {
+            corsOptions.origin(requestOrigin, (err: unknown, allowed?: boolean) => {
                 if (err) {
                     reject(err);
                     return;
@@ -147,7 +189,8 @@ describe("appFactory", () => {
         corsMock.mockClear();
 
         const { createBaseApp } = await import("@src/appFactory");
-        await createBaseApp();
+        const app = await createBaseApp();
+        await testRoute(app, "/");
 
         const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();
@@ -184,7 +227,8 @@ describe("appFactory", () => {
             " https://docs.partner.example , https://status.example ";
 
         const { createBaseApp } = await import("@src/appFactory");
-        await createBaseApp();
+        const app = await createBaseApp();
+        await testRoute(app, "/", { headers: { origin: "https://docs.partner.example" } });
 
         const corsOptions = (corsMock.mock.calls as unknown as any)[0]?.[0];
         expect(corsOptions).toBeDefined();

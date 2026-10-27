@@ -22,8 +22,8 @@ const CONSUMERS = [
     name: 'Michael Web',
   },
   {
-    app_key: 'joinaunion.iworkhere.com',
-    origin: 'https://joinaunion.iworkhere.com',
+    app_key: 'joinaunion-dev.iworkhere.com',
+    origin: 'https://joinaunion-dev.iworkhere.com',
     name: 'JoinAUnion Web',
   },
   {

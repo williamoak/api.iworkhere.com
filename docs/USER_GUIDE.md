@@ -3,7 +3,7 @@
 **Audience:** application developers, client integrators, database operators, and maintainers  
 **Status:** describes the checked-in code and documentation reviewed on 17 October 2026  
 **API version:** `v1`  
-**Canonical API host:** `https://api.iworkhere.com`
+**Canonical API host:** `https://api-dev.iworkhere.com`
 
 **PDF edition:** [Download the printable user and integrator guide](./USER_GUIDE.pdf)
 
@@ -61,7 +61,7 @@ The API does not provide a conversational AI assistant or general-purpose AI end
 For the public deployment, use:
 
 ```text
-https://api.iworkhere.com
+https://api-dev.iworkhere.com
 ```
 
 For local development, the server listens on port `4300` at the configured `HOST_IP`, for example:
@@ -77,7 +77,7 @@ The public hostname, DNS, TLS certificate, proxy routing, and API process must a
 The following health check does not contain a credential:
 
 ```sh
-curl --include https://api.iworkhere.com/v1/health/api
+curl --include https://api-dev.iworkhere.com/v1/health/api
 ```
 
 The `/v1/health/api` route is a basic starting point for checking whether the API responds. Database and memory health routes provide more specific operational signals; whether those checks are publicly exposed should be decided at the deployment edge.
@@ -87,7 +87,7 @@ The `/v1/health/api` route is a basic starting point for checking whether the AP
 An endpoint is the combination of an HTTP method and a path. For example:
 
 ```text
-POST https://api.iworkhere.com/v1/auth/login
+POST https://api-dev.iworkhere.com/v1/auth/login
 ```
 
 Use the method and path shown in the API reference. Send JSON using `Content-Type: application/json` when the operation accepts a JSON body. Read the endpoint's required fields, validation rules, response, and authentication requirements before integrating it.
@@ -110,7 +110,7 @@ These concepts have related names but do different jobs. Treating them as interc
 
 ### 3.1 Application registration is not DNS
 
-An application key such as `bill.workhere.com` or `joinaunion.iworkhere.com` is an identifier stored in `public.applications`; it is not a secret. Authentication resolves that key to an enabled application record. Browser-based application resolution can instead use an exact enabled origin registered in `public.application_origins`.[^2]
+An application key such as `bill.workhere.com` or `joinaunion-dev.iworkhere.com` is an identifier stored in `public.applications`; it is not a secret. Authentication resolves that key to an enabled application record. Browser-based application resolution can instead use an exact enabled origin registered in `public.application_origins`.[^2]
 
 Consequently, pointing a domain at the API is not enough to enable sign-in. The operator must configure the application record and, for browser sign-in, its permitted origin record. Registration, OAuth, passkeys, and other application-aware operations must use the key/origin belonging to the intended consuming application.
 
@@ -124,7 +124,7 @@ The current global tenant middleware chooses a tenant using this order:
 4. For generic API or local hostnames, `app_key` in the query or JSON body as a fallback.
 5. If the resolved value remains generic, it defaults to `localhost`. Special `accounts` and `google` labels are mapped to `public`.
 
-For example, an `Origin: https://joinaunion.iworkhere.com` ordinarily selects tenant name `joinaunion`; `X-Tenant: bill` selects `bill`. A value such as `X-Tenant: bill.workhere.com` is reduced to `bill`.
+For example, an `Origin: https://joinaunion-dev.iworkhere.com` ordinarily selects tenant name `joinaunion`; `X-Tenant: bill` selects `bill`. A value such as `X-Tenant: bill.workhere.com` is reduced to `bill`.
 
 **`X-Tenant` is a routing hint, not proof of identity or authorization.** The resolver does not consult the application registry to authorize tenant choices. A caller can select among the configured tenant names, so authenticated endpoints must still enforce application and user permissions. Do not expose tenant selection as a way to grant access to another tenant's data.[^3]
 
@@ -135,11 +135,11 @@ Before setting `search_path`, the middleware now normalizes the tenant name, rej
 | Consumer | Example application key | Example browser origin | Expected schema tenant from that origin |
 |---|---|---|---|
 | Bill client | `bill.workhere.com` | `https://bill.workhere.com` | `bill` |
-| JoinAUnion client | `joinaunion.iworkhere.com` | `https://joinaunion.iworkhere.com` | `joinaunion` |
+| JoinAUnion client | `joinaunion-dev.iworkhere.com` | `https://joinaunion-dev.iworkhere.com` | `joinaunion` |
 
 These are illustrative identities. Confirm that the exact application key is enabled and that the exact origin is registered before relying on it. An application key should be sent in the endpoint's documented body or query parameter; it does not replace `Authorization: Bearer ...` on protected endpoints.
 
-**Browser CORS is separate.** The API allows HTTPS origins matching a single subdomain of `iworkhere.com` by default, plus exact origins in `CORS_ALLOWED_ORIGINS`. Thus `https://joinaunion.iworkhere.com` matches the built-in pattern, while `https://bill.workhere.com` needs an explicit CORS allowlist entry. CORS acceptance does not by itself make an origin valid in `application_origins`; that registry check is separate.[^4] Non-browser clients such as `curl` are not restricted by browser CORS enforcement.
+**Browser CORS is separate.** The API allows HTTPS origins matching a single subdomain of `iworkhere.com` by default, plus exact origins in `CORS_ALLOWED_ORIGINS`. Thus `https://joinaunion-dev.iworkhere.com` matches the built-in pattern, while `https://bill.workhere.com` needs an explicit CORS allowlist entry. CORS acceptance does not by itself make an origin valid in `application_origins`; that registry check is separate.[^4] Non-browser clients such as `curl` are not restricted by browser CORS enforcement.
 
 ## 4. Database organization and schema segmentation
 
@@ -207,10 +207,10 @@ Registration is application-scoped. A typical registration request contains the 
 Example login request (replace the example host, username, and password with authorized test credentials; never commit real credentials):
 
 ```sh
-curl --request POST 'https://api.iworkhere.com/v1/auth/login' \
+curl --request POST 'https://api-dev.iworkhere.com/v1/auth/login' \
   --header 'Content-Type: application/json' \
   --data '{
-    "app_key": "joinaunion.iworkhere.com",
+    "app_key": "joinaunion-dev.iworkhere.com",
     "identifier": "YOUR_TEST_USERNAME_OR_EMAIL",
     "password": "YOUR_TEST_PASSWORD"
   }'
@@ -223,7 +223,7 @@ A successful login returns user/application metadata and an access/refresh token
 For endpoints whose route module requires authentication, send the access token using the Bearer scheme:
 
 ```sh
-curl 'https://api.iworkhere.com/v1/auth/me' \
+curl 'https://api-dev.iworkhere.com/v1/auth/me' \
   --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
 ```
 
@@ -300,7 +300,7 @@ An endpoint may return `400` for invalid input, `401` for missing/invalid authen
 
 ### 8.1 Browser application sign-in
 
-For a browser application at `https://joinaunion.iworkhere.com`:
+For a browser application at `https://joinaunion-dev.iworkhere.com`:
 
 1. Ask the operator to confirm that the application exists and is enabled in `public.applications`.
 2. Ask the operator to register that exact HTTPS origin in `public.application_origins`.
@@ -315,7 +315,7 @@ Do not set `X-Tenant` in browser code based solely on an untrusted URL or a user
 For an authorized backend that has been explicitly assigned to the `bill` tenant:
 
 ```sh
-curl 'https://api.iworkhere.com/v1/clients/warframe/warframes' \
+curl 'https://api-dev.iworkhere.com/v1/clients/warframe/warframes' \
   --header 'Accept: application/json' \
   --header 'X-Tenant: bill' \
   --header 'Authorization: Bearer YOUR_ACCESS_TOKEN'
@@ -328,9 +328,9 @@ This example illustrates header syntax only. Confirm the actual route, its metho
 The widget accepts an inquiry body with recipient, sender email, message, province, and industry:
 
 ```sh
-curl --request PUT 'https://api.iworkhere.com/v1/clients/joinaunion/widget' \
+curl --request PUT 'https://api-dev.iworkhere.com/v1/clients/joinaunion/widget' \
   --header 'Content-Type: application/json' \
-  --header 'Origin: https://joinaunion.iworkhere.com' \
+  --header 'Origin: https://joinaunion-dev.iworkhere.com' \
   --data '{
     "recipient": "organizer@example.invalid",
     "email": "worker@example.invalid",

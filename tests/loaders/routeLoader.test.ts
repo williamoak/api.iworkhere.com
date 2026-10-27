@@ -132,8 +132,8 @@ describe("routeLoader", () => {
             query: { app_key: appKey },
         } as any);
 
-        const oauthKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/oauth/google", "joinaunion.iworkhere.com"));
-        const passkeyKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/passkeys", "joinaunion.iworkhere.com"));
+        const oauthKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/oauth/google", "joinaunion-dev.iworkhere.com"));
+        const passkeyKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/passkeys", "joinaunion-dev.iworkhere.com"));
         const otherAppKey = __test__.getAuthRateLimitKey(makeRequest("/v1/auth/passkeys", "bill.iworkhere.com"));
 
         expect(new Set([oauthKey, passkeyKey, otherAppKey]).size).toBe(3);
