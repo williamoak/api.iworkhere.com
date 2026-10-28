@@ -29,11 +29,11 @@ services:
 
     volumes:
       - type: bind
-        source: /data/secrets/cockroach
+        source: /data/secrets/production/cockroach
         target: /run/secrets/cockroach
         read_only: true
       - type: bind
-        source: /data/secrets/api
+        source: /data/secrets/production/api
         target: /run/secrets/api
         read_only: true
 
@@ -70,7 +70,7 @@ services:
 
     volumes:
       - type: bind
-        source: /data/secrets/redis-password
+        source: /data/secrets/production/redis-password
         target: /run/secrets/redis-password
         read_only: true
 

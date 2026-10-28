@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { configGet } from '../helpers/config';
 import {
   localizationCache,
   LocalizationCache,
@@ -17,7 +18,7 @@ import {
 const redis = new Redis({
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_SERVER_PASSWORD,
+  password: configGet('REDIS_SERVER_PASSWORD'),
 });
 
 export type CacheValue = unknown;

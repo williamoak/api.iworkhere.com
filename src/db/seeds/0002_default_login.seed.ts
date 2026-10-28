@@ -3,6 +3,7 @@ import { logger } from '@helpers/logger';
 import bcrypt from "bcryptjs";
 ;
 import { db } from "@services/dbService";
+import { configGet } from "@helpers/config";
 
 /**
  * Default local login seed for user 'bill'
@@ -24,14 +25,10 @@ import { db } from "@services/dbService";
 
 const USERNAME = "bill";
 const EMAIL = "william.r.oak@gmail.com";
-const APP_KEY = "bill.iworkhere.com";
+const APP_KEY = configGet('APP_KEY');
 const APP_NAME = "Bill Web";
 
-const PASSWORD = process.env.SEED_BILL_PASSWORD;
-
-if (!PASSWORD) {
-    throw new Error("SEED_BILL_PASSWORD must be set in .env.development");
-}
+const PASSWORD = configGet('SEED_BILL_PASSWORD');
 
 /* -------------------------------------------------
  * 1. Ensure user exists (natural key = username)
@@ -57,6 +54,7 @@ await db.execute(`
         SELECT 1
         FROM users
         WHERE username = '${USERNAME}'
+           OR email = '${EMAIL}'
     )
 `);
 
@@ -68,6 +66,7 @@ const userResult = await db.execute<{ id: string }>(`
     SELECT id
     FROM users
     WHERE username = '${USERNAME}'
+       OR email = '${EMAIL}'
     LIMIT 1
 `);
 

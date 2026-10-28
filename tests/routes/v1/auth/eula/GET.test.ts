@@ -432,7 +432,6 @@ describe('GET /v1/auth/eula', () => {
 
       const req = createReq({ lang: 'es' });
       const res = createRes();
-
       await GET(req, res);
 
       expect(res.statusCode).toBe(200);
@@ -495,7 +494,13 @@ describe('GET /v1/auth/eula', () => {
       const req = createReq({ lang: 'es' });
       const res = createRes();
 
-      await GET(req, res);
+      const handler = makeGetEulaHandler(
+        undefined,
+        undefined,
+        vi.fn().mockResolvedValue('Texto EULA en español')
+      );
+
+      await handler(req, res);
 
       expect(res.statusCode).toBe(200);
       expect((res.body as any).lang).toBe('es');

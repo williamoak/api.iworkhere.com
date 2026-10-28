@@ -54,6 +54,12 @@ vi.mock('@db/schema', () => ({
     },
 }))
 
+vi.mock('@cache/cacheStore', () => ({
+    cacheStore: {
+        del: vi.fn().mockResolvedValue(undefined),
+    },
+}))
+
 /**
  * ------------------------------------------------------------
  * IMPORTS (AFTER MOCKS)

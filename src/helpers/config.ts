@@ -109,6 +109,27 @@ for (const file of envFiles) {
  */
 combined = { ...combined, ...process.env };
 
+/**
+ * Load one runtime secret per file from the deployment secret directory.
+ * Environment variables remain authoritative for deployment-specific values.
+ */
+const secretsDir = combined.SECRETS_DIR?.trim();
+if (secretsDir) {
+  if (!fs.existsSync(secretsDir) || !fs.statSync(secretsDir).isDirectory()) {
+    throw new Error(`SECRETS_DIR is not a readable directory: ${secretsDir}`);
+  }
+
+  for (const key of fs.readdirSync(secretsDir)) {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(key)) continue;
+
+    const secretPath = path.join(secretsDir, key);
+    if (!fs.statSync(secretPath).isFile()) continue;
+
+    const value = fs.readFileSync(secretPath, 'utf8').trim();
+    if (value) combined[key] = value;
+  }
+}
+
 const appKey = combined.APP_KEY?.trim();
 
 if (!appKey) {
@@ -165,7 +186,7 @@ export const config = combined;
  * Get required variable
  */
 export function configGet(key: string): string {
-  const value = config[key];
+  const value = process.env[key] ?? config[key];
 
   if (value === undefined || value.trim() === '') {
     throw new Error(`Missing required configuration variable: ${key}`);

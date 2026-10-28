@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 describe("helpers/config", () => {
     beforeEach(() => {
         process.env = {};
+        process.env.APP_KEY = "api-dev.iworkhere.com";
         vi.resetModules();
     });
 

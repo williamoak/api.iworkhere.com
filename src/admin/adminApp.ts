@@ -25,6 +25,7 @@ import { resolveAuthContext } from '@services/auth/authContext';
 import { resolveUserForApplication } from '@services/auth/authUserResolver';
 import { verifyPassword } from '@services/auth/passwordService';
 import { issueLoginTokens } from '@services/auth/tokenService';
+import { configGet } from '@helpers/config';
 
 import { webAuthMiddleware } from "@middleware/webAuthMiddleware";
 import { db } from "@services/dbService";
@@ -116,7 +117,7 @@ router.post('/login', async (req, res) => {
     logger.log('Login attempt received for:', req.body.identifier);
 
     if (!req.body.app_key) {
-        req.body.app_key = process.env.APP_KEY || process.env.APP_URL;
+        req.body.app_key = configGet('APP_KEY');
     }
     const { app_key, identifier, password } = req.body;
 

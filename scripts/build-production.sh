@@ -4,9 +4,17 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="${SOURCE_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-TARGET_DIR="${TARGET_DIR:-/data/websites/iworkhere/api-pro.iworkhere.com}"
+DEPLOY_DIR="${DEPLOY_DIR:-$SOURCE_DIR/deployment/api-pro}"
+BUILD_DIR=""
 APP_KEY="${APP_KEY:-api-pro.iworkhere.com}"
-CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-https://www.iworkhere.com}"
+CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-https://www.iworkhere.com,https://joinaunion-pro.iworkhere.com}"
+
+cleanup() {
+    if [[ -n "$BUILD_DIR" && -d "$BUILD_DIR" ]]; then
+        rm -rf "$BUILD_DIR"
+    fi
+}
+trap cleanup EXIT
 
 log() {
     printf '[build-production] %s\n' "$*"
@@ -39,23 +47,20 @@ docker compose version >/dev/null 2>&1 ||
 [[ -f "$SOURCE_DIR/package-lock.json" ]] ||
     fail "Source package-lock.json not found"
 
-[[ -d "$TARGET_DIR" ]] ||
-    fail "Production directory not found: $TARGET_DIR"
+[[ -f "$DEPLOY_DIR/Dockerfile" ]] ||
+    fail "Deployment Dockerfile not found: $DEPLOY_DIR/Dockerfile"
 
-[[ -f "$TARGET_DIR/Dockerfile" ]] ||
-    fail "Production Dockerfile not found: $TARGET_DIR/Dockerfile"
+[[ -f "$DEPLOY_DIR/compose.yaml" ]] ||
+    fail "Deployment Compose file not found: $DEPLOY_DIR/compose.yaml"
 
-[[ -f "$TARGET_DIR/compose.yaml" ]] ||
-    fail "Production Compose file not found: $TARGET_DIR/compose.yaml"
+[[ -d /data/secrets/production/api ]] ||
+    fail "API secrets directory not found: /data/secrets/production/api"
 
-[[ -d /data/secrets/api ]] ||
-    fail "API secrets directory not found: /data/secrets/api"
+[[ -d /data/secrets/production/cockroach ]] ||
+    fail "CockroachDB secrets directory not found: /data/secrets/production/cockroach"
 
-[[ -d /data/secrets/cockroach ]] ||
-    fail "CockroachDB secrets directory not found: /data/secrets/cockroach"
-
-[[ -f /data/secrets/redis-password ]] ||
-    fail "Redis password file not found: /data/secrets/redis-password"
+[[ -f /data/secrets/production/redis-password ]] ||
+    fail "Redis password file not found: /data/secrets/production/redis-password"
 
 # --------------------------------------------------
 # Build TypeScript
@@ -94,15 +99,16 @@ do
         fail "Required file missing: $file"
 done
 
-# --------------------------------------------------
-# Synchronize compiled application
-# --------------------------------------------------
+BUILD_DIR="$(mktemp -d /tmp/api-pro-build.XXXXXX)"
+log "Preparing temporary Docker build context"
+cp "$DEPLOY_DIR/Dockerfile" "$DEPLOY_DIR/compose.yaml" "$DEPLOY_DIR/.env.docker.public" "$BUILD_DIR/"
+mkdir -p "$BUILD_DIR/dist" "$BUILD_DIR/public" "$BUILD_DIR/admin" "$BUILD_DIR/readme"
 
 log "Synchronizing compiled JavaScript"
 
 rsync -a --delete \
     "$SOURCE_DIR/dist/" \
-    "$TARGET_DIR/dist/"
+    "$BUILD_DIR/dist/"
 
 # --------------------------------------------------
 # Synchronize static files
@@ -112,21 +118,21 @@ log "Synchronizing public assets"
 
 rsync -a --delete \
     "$SOURCE_DIR/public/" \
-    "$TARGET_DIR/public/"
+    "$BUILD_DIR/public/"
 
 log "Synchronizing administrative assets"
 
-mkdir -p "$TARGET_DIR/admin/assets"
+mkdir -p "$BUILD_DIR/admin/assets"
 
 rsync -a --delete \
     "$SOURCE_DIR/src/admin/client/assets/" \
-    "$TARGET_DIR/admin/assets/"
+    "$BUILD_DIR/admin/assets/"
 
 log "Synchronizing documentation"
 
 rsync -a --delete \
     "$SOURCE_DIR/readme/" \
-    "$TARGET_DIR/readme/"
+    "$BUILD_DIR/readme/"
 
 # --------------------------------------------------
 # Copy application manifests
@@ -138,7 +144,7 @@ cp "$SOURCE_DIR/package.json" \
    "$SOURCE_DIR/package-lock.json" \
    "$SOURCE_DIR/README.md" \
    "$SOURCE_DIR/swagger.json" \
-   "$TARGET_DIR/"
+   "$BUILD_DIR/"
 
 # --------------------------------------------------
 # Completed
@@ -146,7 +152,7 @@ cp "$SOURCE_DIR/package.json" \
 
 log "Production package synchronized successfully"
 
-du -sh "$TARGET_DIR"
+du -sh "$BUILD_DIR"
 
 # --------------------------------------------------
 # Build and start the production container stack
@@ -156,12 +162,12 @@ log "Building Docker image api-pro.iworkhere.com"
 
 docker build \
     --tag api-pro.iworkhere.com \
-    "$TARGET_DIR"
+    "$BUILD_DIR"
 
 log "Validating Docker Compose configuration"
 
 (
-    cd "$TARGET_DIR"
+    cd "$BUILD_DIR"
     APP_KEY="$APP_KEY" \
     CORS_ALLOWED_ORIGINS="$CORS_ALLOWED_ORIGINS" \
     docker compose -f compose.yaml config -q
@@ -170,7 +176,7 @@ log "Validating Docker Compose configuration"
 log "Starting api-pro.iworkhere.com with Docker Compose"
 
 (
-    cd "$TARGET_DIR"
+    cd "$BUILD_DIR"
     APP_KEY="$APP_KEY" \
     CORS_ALLOWED_ORIGINS="$CORS_ALLOWED_ORIGINS" \
     docker compose -f compose.yaml up -d --force-recreate api redis
@@ -179,7 +185,7 @@ log "Starting api-pro.iworkhere.com with Docker Compose"
 log "Production stack started"
 
 (
-    cd "$TARGET_DIR"
+    cd "$BUILD_DIR"
     APP_KEY="$APP_KEY" \
     CORS_ALLOWED_ORIGINS="$CORS_ALLOWED_ORIGINS" \
     docker compose -f compose.yaml ps
