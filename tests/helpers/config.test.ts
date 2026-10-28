@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 describe("helpers/config", () => {
     beforeEach(() => {
@@ -39,6 +42,46 @@ describe("helpers/config", () => {
         const { configGet } = await import("@helpers/config");
 
         expect(configGet("OVERRIDE_ME")).toBe("runtime");
+    });
+
+    it("loads non-empty uppercase secret files and skips unsupported entries", async () => {
+        const secretsDir = fs.mkdtempSync(path.join(os.tmpdir(), "config-secrets-"));
+        fs.writeFileSync(path.join(secretsDir, "FROM_SECRET"), " secret-value\n");
+        fs.writeFileSync(path.join(secretsDir, "EMPTY_SECRET"), "  \n");
+        fs.writeFileSync(path.join(secretsDir, "lowercase"), "ignored");
+        fs.mkdirSync(path.join(secretsDir, "DIRECTORY_SECRET"));
+        process.env.SECRETS_DIR = secretsDir;
+
+        const { configGet } = await import("@helpers/config");
+
+        expect(configGet("FROM_SECRET")).toBe("secret-value");
+        expect(() => configGet("EMPTY_SECRET")).toThrow(
+            "Missing required configuration variable: EMPTY_SECRET",
+        );
+        expect(() => configGet("lowercase")).toThrow(
+            "Missing required configuration variable: lowercase",
+        );
+    });
+
+    it("throws when SECRETS_DIR is not a directory", async () => {
+        process.env.SECRETS_DIR = path.join(os.tmpdir(), "missing-config-secrets");
+
+        await expect(import("@helpers/config")).rejects.toThrow(
+            `SECRETS_DIR is not a readable directory: ${process.env.SECRETS_DIR}`,
+        );
+    });
+
+    it("requires a hostname-only APP_KEY", async () => {
+        delete process.env.APP_KEY;
+        await expect(import("@helpers/config")).rejects.toThrow(
+            "Missing required environment variable: APP_KEY",
+        );
+
+        process.env.APP_KEY = "https://api.example.com/path";
+        vi.resetModules();
+        await expect(import("@helpers/config")).rejects.toThrow(
+            "APP_KEY must contain only a hostname, such as api-dev.iworkhere.com",
+        );
     });
 
     describe("configGetNumber", () => {
@@ -118,6 +161,42 @@ describe("helpers/config", () => {
                 stateSecret: "state-secret",
                 successRedirectUrl: "https://app.com/success",
                 failureRedirectUrl: "https://app.com/failure",
+            });
+        });
+    });
+
+    describe("getWebAuthnConfig", () => {
+        it("returns defaults and optional values", async () => {
+            process.env.WEBAUTHN_RP_NAME = " Example App ";
+            process.env.WEBAUTHN_CEREMONY_SECRET = "signing-secret";
+            process.env.WEBAUTHN_PREVIOUS_CEREMONY_SECRET = " previous-secret ";
+
+            const { getWebAuthnConfig } = await import("@helpers/config");
+
+            expect(getWebAuthnConfig()).toEqual({
+                rpId: undefined,
+                rpName: "Example App",
+                ceremonyTtlSeconds: 300,
+                signingSecret: "signing-secret",
+                previousSigningSecret: "previous-secret",
+            });
+        });
+
+        it("uses configured RP ID and TTL", async () => {
+            process.env.WEBAUTHN_RP_ID = "api.example.com";
+            process.env.WEBAUTHN_RP_NAME = "App";
+            process.env.WEBAUTHN_CEREMONY_TTL_SECONDS = "600";
+            process.env.WEBAUTHN_CEREMONY_SECRET = "signing-secret";
+            process.env.WEBAUTHN_PREVIOUS_CEREMONY_SECRET = " ";
+
+            const { getWebAuthnConfig } = await import("@helpers/config");
+
+            expect(getWebAuthnConfig()).toEqual({
+                rpId: "api.example.com",
+                rpName: "App",
+                ceremonyTtlSeconds: 600,
+                signingSecret: "signing-secret",
+                previousSigningSecret: undefined,
             });
         });
     });
