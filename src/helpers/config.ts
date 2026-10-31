@@ -170,11 +170,11 @@ combined = {
 
   GOOGLE_OAUTH_SUCCESS_REDIRECT_URL:
     combined.GOOGLE_OAUTH_SUCCESS_REDIRECT_URL?.trim() ||
-    `${apiOrigin}/auth/oauth/success`,
+    `${apiOrigin}/v1/auth/oauth/success`,
 
   GOOGLE_OAUTH_FAILURE_REDIRECT_URL:
     combined.GOOGLE_OAUTH_FAILURE_REDIRECT_URL?.trim() ||
-    `${apiOrigin}/auth/oauth/failure`,
+    `${apiOrigin}/v1/auth/oauth/failure`,
 };
 
 /**

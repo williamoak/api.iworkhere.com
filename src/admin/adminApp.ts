@@ -34,6 +34,20 @@ import { eq, desc } from "drizzle-orm";
 
 const router = express.Router();
 
+function authCookieDomain(req: express.Request): string | undefined {
+  const hostname = req.hostname.toLowerCase();
+
+  if (hostname === 'joinaunion.ca' || hostname.endsWith('.joinaunion.ca')) {
+    return '.joinaunion.ca';
+  }
+
+  if (hostname === 'iworkhere.com' || hostname.endsWith('.iworkhere.com')) {
+    return '.iworkhere.com';
+  }
+
+  return undefined;
+}
+
 router.get('/', webAuthMiddleware, async (req: any, res) => {
   if (!req.auth) {
     return res.redirect('/');
@@ -138,12 +152,13 @@ router.post('/login', async (req, res) => {
     logger.log('Tokens issued for:', identifier);
 
     // 5. Set cookie and redirect
+    const cookieDomain = authCookieDomain(req);
     res.cookie('auth_token', tokens.access.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: tokens.access.expiresAt.getTime() - Date.now(),
       path: '/',
-      domain: '.iworkhere.com',
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     });
 
     res.redirect('/admin');

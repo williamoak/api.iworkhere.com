@@ -34,12 +34,51 @@ type GoogleUserInfo = {
   email?: string;
 };
 
+function failureRedirectUrl(
+  baseUrl: string,
+  error: string,
+  description?: string,
+): string {
+  if (baseUrl.startsWith('/')) return baseUrl;
+
+  const url = new URL(baseUrl);
+  url.searchParams.set('error', error);
+  if (description) url.searchParams.set('error_description', description);
+  return url.toString();
+}
+
+function authCookieDomain(req: Request): string | undefined {
+  const hostname = req.hostname.toLowerCase();
+
+  if (hostname === 'joinaunion.ca' || hostname.endsWith('.joinaunion.ca')) {
+    return '.joinaunion.ca';
+  }
+
+  if (hostname === 'iworkhere.com' || hostname.endsWith('.iworkhere.com')) {
+    return '.iworkhere.com';
+  }
+
+  // A host-only cookie is safer than assigning a domain that does not match
+  // the API host when running an unrecognised or local deployment.
+  return undefined;
+}
+
 export default async function GET(req: Request, res: Response): Promise<void> {
   const googleConfig = getGoogleOAuthConfig();
   const { code, state, error } = req.query;
 
   if (error || typeof code !== "string" || typeof state !== "string") {
-    res.redirect(302, googleConfig.failureRedirectUrl);
+    logger.warn('[oauth-callback] provider rejected authorization', {
+      error,
+      error_description: req.query.error_description,
+    });
+    res.redirect(302, failureRedirectUrl(
+      googleConfig.failureRedirectUrl,
+      typeof error === 'string' ? error : 'oauth_callback_invalid',
+      typeof req.query.error_description === 'string'
+        ? req.query.error_description
+        : undefined,
+    ));
     return;
   }
 
@@ -71,7 +110,14 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
     const tokenJson = (await tokenResponse.json()) as GoogleTokenResponse;
     if (!tokenResponse.ok || !tokenJson.access_token) {
-      res.redirect(302, googleConfig.failureRedirectUrl);
+      logger.warn('[oauth-callback] Google token exchange failed', {
+        status: tokenResponse.status,
+        error: tokenJson.error,
+      });
+      res.redirect(302, failureRedirectUrl(
+        googleConfig.failureRedirectUrl,
+        tokenJson.error ?? 'token_exchange_failed',
+      ));
       return;
     }
 
@@ -143,17 +189,22 @@ export default async function GET(req: Request, res: Response): Promise<void> {
     res.locals.visitUserId = userRow.userId; // Set for logging middleware
 
     if (statePayload.flow === "popup") {
+        const cookieDomain = authCookieDomain(req);
         res.cookie('auth_token', tokens.access.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           maxAge: tokens.access.expiresAt.getTime() - Date.now(),
           path: '/',
-          domain: '.iworkhere.com',
+          ...(cookieDomain ? { domain: cookieDomain } : {}),
         });
         if (!statePayload.redirect_uri) {
             throw new Error("Missing redirect_uri for popup flow");
         }
         const targetOrigin = new URL(statePayload.redirect_uri).origin;
+        logger.log('[oauth-callback] popup handoff prepared', {
+          targetOrigin,
+          cookieDomain: cookieDomain ?? 'host-only',
+        });
         const popupPayload = JSON.stringify({
           access_token: tokens.access.token,
           refresh_token: tokens.refresh.token,
@@ -187,13 +238,14 @@ export default async function GET(req: Request, res: Response): Promise<void> {
 
     if (statePayload.redirect_uri) {
         const redirectUrl = new URL(statePayload.redirect_uri);
+        const cookieDomain = authCookieDomain(req);
 
         res.cookie('auth_token', tokens.access.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           maxAge: tokens.access.expiresAt.getTime() - Date.now(),
           path: '/',
-          domain: '.iworkhere.com',
+          ...(cookieDomain ? { domain: cookieDomain } : {}),
         });
 
         res.redirect(302, redirectUrl.toString());
