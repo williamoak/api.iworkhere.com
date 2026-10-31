@@ -85,8 +85,11 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     insertBuilderMock.returning.mockResolvedValue([{ userId: "user-123" }]);
 
     vi.mocked(getGoogleOAuthConfig).mockReturnValue({
+      clientId: "test-client-id",
+      clientSecret: "test-client-secret",
       tokenUrl: "https://token.url",
       userInfoUrl: "https://userinfo.url",
+      redirectUri: "https://bill.iworkhere.com/v1/auth/oauth/google/callback",
       failureRedirectUrl: "/error",
     } as any);
 
@@ -107,7 +110,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
 
     const res = createRes();
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toHaveProperty("tokens");
@@ -123,7 +126,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
 
     const res = createRes();
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(res.statusCode).toBe(200);
     expect(res.sentHtml).toContain("window.opener.postMessage");
@@ -139,7 +142,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(false);
 
     const res = createRes();
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(res.statusCode).toBe(400);
     expect(res.sentHtml).toBe("Invalid OAuth redirect URI");
@@ -155,7 +158,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
 
     const res = createRes();
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(res.statusCode).toBe(302);
     expect(res.redirectUrl).toBe("https://bill.iworkhere.com/auth?from=login");
@@ -173,7 +176,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     vi.mocked(db.query.userAuthOauth.findFirst).mockResolvedValue({ userId: "u123" } as any);
 
     const res = createRes();
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(res.sentHtml).toContain("window.opener.postMessage");
     expect(res.sentHtml).not.toContain("window.location.href");
@@ -189,7 +192,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     vi.mocked(isRegisteredWebRedirectUri).mockResolvedValue(false);
 
     const res = createRes();
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(res.statusCode).toBe(400);
     expect(issueLoginTokens).not.toHaveBeenCalled();
@@ -264,7 +267,7 @@ describe("GET /v1/auth/oauth/google/callback", () => {
     const res = createRes();
     const cookieSpy = vi.spyOn(res, 'cookie');
 
-    await GET({ query: { code: "c", state: "s" } } as any, res);
+    await GET({ query: { code: "c", state: "s" }, hostname: "bill.iworkhere.com" } as any, res);
 
     expect(cookieSpy).toHaveBeenCalledWith('auth_token', 'at', expect.any(Object));
     expect(res.statusCode).toBe(302);
