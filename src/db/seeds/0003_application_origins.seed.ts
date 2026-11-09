@@ -27,6 +27,16 @@ const CONSUMERS = [
     name: 'JoinAUnion Web',
   },
   {
+    app_key: 'joinaunion.ca',
+    origin: 'https://joinaunion.ca',
+    name: 'JoinAUnion Production Web',
+  },
+  {
+    app_key: 'joinaunion.ca',
+    origin: 'https://www.joinaunion.ca',
+    name: 'JoinAUnion Production Web (www)',
+  },
+  {
     app_key: configGet('APP_KEY'),
     origin: configGet('API_ORIGIN'),
     name: 'API Server',

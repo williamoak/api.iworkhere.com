@@ -135,6 +135,11 @@ describe('webauthnService', () => {
             challenge: Uint8Array.from(Buffer.from(ceremony.payload.challenge, 'base64url')),
             userDisplayName: 'bill@example.com',
             excludeCredentials: [{ id: 'existing', transports: ['usb'] }],
+            authenticatorSelection: {
+                authenticatorAttachment: 'platform',
+                residentKey: 'required',
+                userVerification: 'required',
+            },
         }));
     });
 
@@ -163,14 +168,17 @@ describe('webauthnService', () => {
             applicationKey: 'bill.iworkhere.com',
             origin: ceremony.payload.origin,
             rpId: ceremony.payload.rpId,
-        })).resolves.toEqual({ ceremonyToken: 'ceremony-token', publicKey: { challenge: 'authentication-options' } });
+        })).resolves.toEqual({
+            ceremonyToken: 'ceremony-token',
+            publicKey: { challenge: 'authentication-options', hints: ['client-device'] },
+        });
 
         expect(mocks.createCeremony).toHaveBeenCalledWith(expect.objectContaining({ operation: 'authentication' }));
         expect(mocks.generateAuthenticationOptions).toHaveBeenCalledWith({
             rpID: ceremony.payload.rpId,
             challenge: Uint8Array.from(Buffer.from(ceremony.payload.challenge, 'base64url')),
             timeout: 60000,
-            userVerification: 'preferred',
+            userVerification: 'required',
         });
     });
 

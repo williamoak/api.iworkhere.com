@@ -103,7 +103,11 @@ export async function createRegistrationOptions(input: {
             id: credential.credentialId,
             transports: credential.transports ?? undefined,
         })),
-        authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+        authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            residentKey: 'required',
+            userVerification: 'required',
+        },
     });
 
     return { ceremonyToken: ceremony.token, publicKey };
@@ -169,9 +173,17 @@ export async function createAuthenticationOptions(input: {
         rpID: ceremony.payload.rpId,
         challenge: decodeChallenge(ceremony.payload.challenge),
         timeout: 60000,
-        userVerification: 'preferred',
+        userVerification: 'required',
     });
-    return { ceremonyToken: ceremony.token, publicKey };
+    return {
+        ceremonyToken: ceremony.token,
+        publicKey: {
+            ...publicKey,
+            // WebAuthn Level 3 browsers use this hint to prefer Windows Hello
+            // or another built-in device authenticator over a USB key.
+            hints: ['client-device'],
+        },
+    };
 }
 
 export async function verifyAuthentication(input: {
